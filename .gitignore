@@ -2,3 +2,6 @@
 .idea
 .vscode
 poetry.lock
+dist
+Untitled.ipynb
+*checkpoint*
