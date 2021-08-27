@@ -13,63 +13,6 @@ config_table = pg[CONFIG_TABLE]
 relation_table = pg[RELATION_TABLE]
 
 
-def get_favor_pages():
-    """
-    获取收藏页面微博
-
-    Yields:
-        Weibo: [description]
-    """
-    page = 0
-    while True:
-        page += 1
-        js = get_json(containerid=230259, page=page)
-        mblogs = [w['mblog'] for w in js['data']['cards'] if w['card_type'] == 9]
-        if not mblogs:
-            break
-        for weibo_info in mblogs:
-            if weibo_info.get('retweeted_status'):
-                continue
-            yield Weibo.from_weibo_info(weibo_info)
-
-
-def relation_loop():
-    """
-    
-    """
-    _update_config_info()
-    config_filter = config_table.find(
-        tracing=True,
-        tracing_date={'lt': pendulum.now().subtract(days=15)},
-        order_by='tracing_date')
-    for user_config in config_filter:
-        user = User.from_user_id(user_config['id'])
-        for followed in user.following():
-            if follower['gender'] != 'female':
-                pass
-            if docu := relation_table.find(id=followed['id']):
-                followed = docu | followed
-            followed.setdefault('follower', {})[user['id']] = user['screen_name']
-            relation_table.upsert(followed, ['id'])
-        user_config.update(
-            tracing_date=pendulum.now(),
-        )
-        config_table.update(user_config, ['id'])
-        logger.success(f'{user["screen_name"]} 的关注已获取')
-
-
-def _relation_complete():
-    for user in relation_table.find():
-        offline = True
-        text = ['清华', 'PKU', 'THU', '大学']
-        if desc := user.get('description'):
-            if any(t in desc for t in text):
-                offline = False
-        user_complete = User.from_user_id(user['id'], offline=offline)
-        user |= user_complete or {}
-        relation_table.update(user, ['id'])
-
-
 def weibo_loop(download_dir):
     _update_config_info()
     config_filter = config_table.find(
@@ -107,6 +50,59 @@ def weibo_loop(download_dir):
         config_table.update(user_config, ['id'])
         logger.success(f'{user["screen_name"]}微博获取完毕')
 
+
+
+def get_favor_pages():
+    """
+    获取收藏页面微博
+
+    Yields:
+        Weibo: [description]
+    """
+    page = 0
+    while True:
+        page += 1
+        js = get_json(containerid=230259, page=page)
+        mblogs = [w['mblog'] for w in js['data']['cards'] if w['card_type'] == 9]
+        if not mblogs:
+            break
+        for weibo_info in mblogs:
+            if weibo_info.get('retweeted_status'):
+                continue
+            yield Weibo.from_weibo_info(weibo_info)
+
+
+def relation_loop():
+    _update_config_info()
+    config_filter = config_table.find(
+        tracing=True,
+        tracing_date={'lt': pendulum.now().subtract(days=15)},
+        order_by='tracing_date')
+    for user_config in config_filter:
+        user = User.from_user_id(user_config['id'])
+        for followed in user.following():
+            if follower['gender'] != 'female':
+                pass
+            if docu := relation_table.find(id=followed['id']):
+                followed = docu | followed
+            followed.setdefault('follower', {})[user['id']] = user['screen_name']
+            relation_table.upsert(followed, ['id'])
+        user_config.update(tracing_date=pendulum.now())
+        config_table.update(user_config, ['id'])
+        logger.success(f'{user["screen_name"]} 的关注已获取')
+    _relation_complete()
+
+
+def _relation_complete():
+    for user in relation_table.find():
+        offline = True
+        text = ['清华', 'PKU', 'THU', '大学']
+        if desc := user.get('description'):
+            if any(t in desc for t in text):
+                offline = False
+        user_complete = User.from_user_id(user['id'], offline=offline)
+        user |= user_complete or {}
+        relation_table.update(user, ['id'])
 
 def _update_config_info():
     for user_config in config_table.find():
