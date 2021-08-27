@@ -1,16 +1,43 @@
-import dataset
+import os
+import json
 import random
-import requests
 import sys
+from functools import partial
+from pathlib import Path
+from time import sleep
+import keyring
+
+import dataset
+import requests
 from baseconv import base62
 from loguru import logger
-from sinaspider.config import headers
-from time import sleep
 
 logger.remove()
 logger.add(sys.stdout, colorize=True)
 
 pg = dataset.connect('postgresql://localhost/weibo')
+
+
+
+headers = {
+    "User_Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
+    "Cookie": keyring.get_password("sinaspider", "cookie")
+}
+
+get_url = partial(requests.get, headers=headers)
+
+
+def get_json(**params):
+    url = 'https://m.weibo.cn/api/container/getIndex?'
+    while True:
+        try:
+            r = get_url(url, params=params)
+            break
+        except TimeoutError:
+            logger.error('Timeout sleep 600seconds and retry...')
+            sleep(10 * 60)
+
+    return r.json()
 
 
 class Pause:
@@ -42,7 +69,7 @@ class Pause:
     def __call__(self, mode):
         if mode == 'page':
             self._pause(self.page_config)
-        elif mode == 'following':
+        elif mode == 'user':
             self._pause(self.user_config)
         else:
             logger.critical(f'unsuppored pause mode {mode}')
@@ -69,19 +96,6 @@ class Pause:
         for i in range(sleep_time):
             print(f'sleep {i}/{sleep_time}', end='\r')
             sleep(1)
-
-
-def get_json(**params):
-    url = 'https://m.weibo.cn/api/container/getIndex?'
-    while True:
-        try:
-            r = requests.get(url, params=params, headers=headers)
-            break
-        except TimeoutError:
-            logger.error('Timeout sleep 600seconds and retry...')
-            sleep(10 * 60)
-
-    return r.json()
 
 
 def convert_wb_bid_to_id(bid):

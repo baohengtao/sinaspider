@@ -1,10 +1,9 @@
 import re
+from pathlib import Path
 
 import pendulum
-from loguru import logger
-from unipath import Path
 
-from sinaspider.helper import convert_wb_bid_to_id, pg
+from sinaspider.helper import convert_wb_bid_to_id, pg, logger
 from sinaspider.weibo import Weibo
 
 ARTIST_TABLE = 'artist'
@@ -17,7 +16,7 @@ class WeiboImage:
 
     def gen_meta_from_filename(self, filename, wb_id='', user_id=None, print_filename=''):
         self.print_filename = print_filename or filename
-        sn, ext = 0, Path(filename).ext
+        sn, ext = 0, Path(filename).suffix
         wb_info, user_info = {}, {}
         if match := re.match(r'^(\d+)_([^\W_]+)_?(\d*)(\.[A-Za-z1-9]+)$', filename):
             _, wb_id, sn, ext = match.groups()

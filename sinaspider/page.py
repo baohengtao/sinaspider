@@ -1,4 +1,3 @@
-import pickle
 
 import dataset
 import pendulum
@@ -15,6 +14,12 @@ relation_table = pg[RELATION_TABLE]
 
 
 def get_favor_pages():
+    """
+    获取收藏页面微博
+
+    Yields:
+        Weibo: [description]
+    """
     page = 0
     while True:
         page += 1
@@ -25,18 +30,13 @@ def get_favor_pages():
         for weibo_info in mblogs:
             if weibo_info.get('retweeted_status'):
                 continue
-            weibo = Weibo.from_weibo_info(weibo_info)
-            weibo['saved'] = True
-            if docu := weibo.docu_in_mongo():
-                if docu.get('saved') is True:
-                    logger.info(f'{weibo["id"]}已保存, 忽略...')
-                    continue
-            user_id = weibo['user_id']
-            User.from_user_id(user_id)
-            yield weibo
+            yield Weibo.from_weibo_info(weibo_info)
 
 
 def relation_loop():
+    """
+    
+    """
     _update_config_info()
     config_filter = config_table.find(
         tracing=True,
@@ -45,6 +45,8 @@ def relation_loop():
     for user_config in config_filter:
         user = User.from_user_id(user_config['id'])
         for followed in user.following():
+            if follower['gender'] != 'female':
+                pass
             if docu := relation_table.find(id=followed['id']):
                 followed = docu | followed
             followed.setdefault('follower', {})[user['id']] = user['screen_name']
@@ -94,7 +96,7 @@ def weibo_loop(download_dir):
             weibo.print()
             downloaded = weibo.save_media(download_dir=download_dir)
             if downloaded:
-                downloaded_list.append(downloaded)
+                downloaded_list.extend(downloaded)
                 _check_download_path_uniqueness(downloaded_list)
 
         """更新用户信息"""

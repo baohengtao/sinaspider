@@ -1,14 +1,11 @@
 import json
 import re
+from pathlib import Path
 
-import exiftool
 import pendulum
-import requests
 from lxml import etree
-from unipath import Path
 
-from sinaspider.config import headers
-from sinaspider.helper import logger, pg
+from sinaspider.helper import logger, pg, get_url
 
 WEIBO_TABLE = 'weibo'
 weibo_table = pg[WEIBO_TABLE]
@@ -18,7 +15,7 @@ class Weibo(dict):
     @classmethod
     def _fetch(cls, wb_id):
         url = f'https://m.weibo.cn/detail/{wb_id}'
-        html = requests.get(url, headers=headers).text
+        html = get_url(url).text
         html = html[html.find('"status"'):]
         html = html[:html.rfind('"hotScheme"')]
         html = html[:html.rfind(',')]
@@ -29,6 +26,7 @@ class Weibo(dict):
 
     @classmethod
     def from_weibo_info(cls, weibo_info):
+        weibo_info['id'] = int(weibo_info['id'])
         if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
             return cls.from_weibo_id(weibo_info['id'])
         else:
@@ -38,7 +36,8 @@ class Weibo(dict):
 
     @classmethod
     def from_weibo_id(cls, wb_id):
-        docu = weibo_table.find_one({'id': wb_id}) or {}
+        assert isinstance(wb_id, int), wb_id
+        docu = weibo_table.find_one(id=wb_id) or {}
         if not docu:
             weibo = cls._fetch(wb_id)
             weibo_table.upsert(weibo, ['id'])
@@ -59,7 +58,7 @@ class Weibo(dict):
 
     def save_media(self, download_dir):
         download_dir = Path(download_dir)
-        download_dir.mkdir(parents=True)
+        download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"
         download_list = []
         # add photos urls to list
@@ -84,10 +83,8 @@ class Weibo(dict):
             if filepath.exists():
                 logger.warning(f'{filepath} already exists..skip {url}')
                 continue
-            downloaded = requests.get(url, headers=headers)
-            filepath.write_file(downloaded.content, "wb")
-            with exiftool.ExifTool() as et:
-                et.set_tags({'XMP:ImageSupplierName': 'Weibo'}, filepath)
+            downloaded = get_url(url).content
+            filepath.write_bytes(downloaded)
 
         return download_list
 
@@ -124,7 +121,7 @@ def _parse_weibo(weibo_info):
         def basic_info(self):
             id_ = self.info['id']
             bid = self.info['bid']
-            user = self.info['following']
+            user = self.info['user']
             user_id = user['id']
             screen_name = user.get('remark') or user['screen_name']
             created_at = pendulum.parse(self.info['created_at'], strict=False)
