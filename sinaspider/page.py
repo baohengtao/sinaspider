@@ -2,7 +2,7 @@
 import dataset
 import pendulum
 
-from sinaspider.helper import logger, get_json
+from sinaspider.helper import logger, get_json, pause
 from sinaspider.user import User
 from sinaspider.weibo import Weibo
 
@@ -49,6 +49,7 @@ def weibo_loop(download_dir):
         })
         config_table.update(user_config, ['id'])
         logger.success(f'{user["screen_name"]}微博获取完毕')
+        pause(mode='user')
 
 
 
@@ -90,6 +91,7 @@ def relation_loop():
         user_config.update(tracing_date=pendulum.now())
         config_table.update(user_config, ['id'])
         logger.success(f'{user["screen_name"]} 的关注已获取')
+        pause(mode='user')
     _relation_complete()
 
 

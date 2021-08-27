@@ -58,7 +58,15 @@ class User(dict):
         logger.info('+' * 100)
 
     def save_avatar(self, download_dir=None):
+        """
+        保存用户头像
 
+        Args:
+            download_dir (Path, optional): 保存地址. Defaults to None.
+
+        Returns:
+            bytes: 图像内容 
+        """        
         url = self['avatar_hd']
         downloaded = get_url(url).content
         if download_dir:
