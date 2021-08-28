@@ -53,25 +53,6 @@ def weibo_loop(download_dir):
 
 
 
-def get_favor_pages():
-    """
-    获取收藏页面微博
-
-    Yields:
-        Weibo: [description]
-    """
-    page = 0
-    while True:
-        page += 1
-        js = get_json(containerid=230259, page=page)
-        mblogs = [w['mblog'] for w in js['data']['cards'] if w['card_type'] == 9]
-        if not mblogs:
-            break
-        for weibo_info in mblogs:
-            if weibo_info.get('retweeted_status'):
-                continue
-            yield Weibo.from_weibo_info(weibo_info)
-
 
 def relation_loop():
     _update_config_info()

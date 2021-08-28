@@ -26,6 +26,16 @@ class Weibo(dict):
 
     @classmethod
     def from_weibo_info(cls, weibo_info):
+        """
+        从weibo_info中获取信息
+
+        Args:
+            weibo_info (dict)
+
+        Returns:
+            Weibo(dict)
+        """        
+
         weibo_info['id'] = int(weibo_info['id'])
         if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
             return cls.from_weibo_id(weibo_info['id'])

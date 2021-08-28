@@ -10,6 +10,64 @@ USER_TABLE = 'user'
 user_table = pg[USER_TABLE]
 
 
+def get_weibo_pages(containerid, start_page=1):
+    page = start_page
+    while True:
+        js = get_json(containerid=containerid, page=page)
+        mblogs = [w['mblog']
+                  for w in js['data']['cards'] if w['card_type'] == 9]
+        if not js['ok']:
+            assert not mblogs
+            logger.warning(
+                f"not js['ok'], seems reached end, no wb return for page {page}")
+            break
+
+        for weibo_info in mblogs:
+            if weibo_info.get('retweeted_status'):
+                continue
+            weibo = Weibo.from_weibo_info(weibo_info)
+            yield weibo
+        logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+        pause(mode='page')
+        page += 1
+
+
+def get_follow_pages(containerid, start_page=1):
+    page = start_page
+    while True:
+        js = get_json(containerid=containerid, page=page)
+        if not js['ok']:
+            logger.success(f"关注信息已更新完毕")
+            break
+        cards_ = js['data']['cards'][0]['card_group']
+        users = [card['following']
+                 for card in cards_ if card['card_type'] == 10]
+        for user in users:
+            no_key = ['cover_image_phone',
+                      'profile_url', 'profile_image_url']
+            user = {k: v for k, v in user.items() if v and k not in no_key}
+            if user.get('remark'):
+                user['screen_name'] = user.pop('remark')
+            user['homepage'] = f'https://weibo.com/u/{user["id"]}'
+            if user['gender'] == 'f':
+                user['gender'] = 'female'
+            elif user['gender'] == 'm':
+                user['gender'] = 'male'
+            yield user
+        logger.success(f'页面 {page} 已获取完毕')
+        pause(mode='page')
+        page += 1
+
+
+class Owner:
+    @staticmethod
+    def get_favor_pages():
+        return get_weibo_pages(containerid=230259)
+    @staticmethod
+    def get_weibo_pages():
+
+
+
 class User(dict):
 
     @classmethod
@@ -44,6 +102,14 @@ class User(dict):
             user_table.upsert(user, ['id'])
             return cls(user)
 
+    def following(self, start_page=1):
+        containerid = f'231051_-_followers_-_{self["id"]}'
+        return get_follow_pages(containerid, start_page)
+
+    def weibos(self, start_page=1):
+        containerid = f"107603{self['id']}"
+        return get_weibo_pages(containerid, start_page)
+
     def print(self):
         """
         打印用户信息
@@ -66,7 +132,7 @@ class User(dict):
 
         Returns:
             bytes: 图像内容 
-        """        
+        """
         url = self['avatar_hd']
         downloaded = get_url(url).content
         if download_dir:
@@ -79,73 +145,6 @@ class User(dict):
             else:
                 filepath.write_bytes(downloaded)
         return downloaded
-
-    def following(self, start_page=1):
-        """
-        获取用户的关注信息
-
-        Args:
-            start_page (int, optional): 开始爬取的页面, 默认为1
-
-        Yields:
-            User(dict): 正在关注的用户
-        """
-        page = start_page
-        while True:
-            js = get_json(
-                containerid=f'231051_-_followers_-_{self["id"]}', page=page)
-            if not js['ok']:
-                logger.success(f"{self['screen_name']} 的关注信息已更新完毕")
-                break
-            cards_ = js['data']['cards'][0]['card_group']
-            users = [card['following']
-                     for card in cards_ if card['card_type'] == 10]
-            for user in users:
-                no_key = ['cover_image_phone',
-                          'profile_url', 'profile_image_url']
-                user = {k: v for k, v in user.items() if v and k not in no_key}
-                if user.get('remark'):
-                    user['screen_name'] = user.pop('remark')
-                user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-                if user['gender'] == 'f':
-                    user['gender'] = 'female'
-                elif user['gender'] == 'm':
-                    user['gender'] = 'male'
-                yield user
-            logger.success(f'{self["screen_name"]} 的页面 {page} 已获取完毕')
-            pause(mode='page')
-            page += 1
-
-    def weibos(self, start_page=1):
-        """
-        获取用户的原创微博
-
-        Args:
-            start_page (int, optional): 起始页面, 默认为1.
-
-
-        Yields:
-            [type]: [description]
-        """
-        page = start_page
-        while True:
-            js = get_json(containerid=f"107603{self['id']}", page=page)
-            mblogs = [w['mblog']
-                      for w in js['data']['cards'] if w['card_type'] == 9]
-            if not js['ok']:
-                assert not mblogs
-                logger.warning(
-                    f"not js['ok'], seems reached end, no wb return for page {page}")
-                break
-
-            for weibo_info in mblogs:
-                if weibo_info.get('retweeted_status'):
-                    continue
-                weibo = Weibo.from_weibo_info(weibo_info)
-                yield weibo
-            logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
-            pause(mode='page')
-            page += 1
 
     @classmethod
     def _fetch(cls, user_id):
