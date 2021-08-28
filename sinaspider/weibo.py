@@ -123,7 +123,7 @@ def get_weibo_pages(containerid, start_page=1):
 
 def _parse_weibo(weibo_info):
     class WeiboParser:
-        def __init__(self, weibo_info):
+        def __init__(self):
             self.info = weibo_info
             self.wb = {}
             self.basic_info()
@@ -224,5 +224,4 @@ def _parse_weibo(weibo_info):
             else:
                 self.wb['video_url'] = urls[0]
 
-    wp = WeiboParser(weibo_info)
-    return wp.wb
+    return WeiboParser().wb

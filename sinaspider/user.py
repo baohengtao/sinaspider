@@ -90,9 +90,7 @@ class User(dict):
         return get_weibo_pages(containerid, start_page)
 
     def print(self):
-        """
-        打印用户信息
-        """
+        """打印用户信息"""
         keys = ['id', 'screen_name', 'gender', 'birthday', 'location', 'homepage',
                 'description', 'statuses_count', 'followers_count', 'follow_count']
 
@@ -103,15 +101,7 @@ class User(dict):
         logger.info('+' * 100)
 
     def save_avatar(self, download_dir=None):
-        """
-        保存用户头像
-
-        Args:
-            download_dir (Path, optional): 保存地址. Defaults to None.
-
-        Returns:
-            bytes: 图像内容 
-        """
+        """保存用户头像"""
         url = self['avatar_hd']
         downloaded = get_url(url).content
         if download_dir:
@@ -127,15 +117,50 @@ class User(dict):
 
     @classmethod
     def _fetch(cls, user_id):
-        """
-        从 `m.weibo.cn` 获取用户信息
+        """从 `m.weibo.cn` 获取用户信息"""
+        def _user_info_fix(user_info: dict) -> dict:
+            """清洗用户信息."""
+            user_info = user_info.copy()
+            if '昵称' in user_info:
+                assert user_info.get('screen_name', '') == user_info.pop('昵称', '')
+            if '简介' in user_info:
+                assert user_info.get('description', '') == user_info.pop(
+                    '简介', '').replace('暂无简介', '')
+            if 'Tap to set alias' in user_info:
+                assert user_info.get('remark', '') == user_info.pop(
+                    'Tap to set alias', '')
+            if user_info.get('gender') == 'f':
+                assert user_info.pop('性别') == '女'
+                user_info['gender'] = 'female'
+            elif user_info.get('gender') == 'm':
+                assert user_info.pop('性别') == '男'
+                user_info['gender'] = 'female'
 
-        Args:
-            user_id (int)
+            if '所在地' in user_info:
+                assert 'location' not in user_info or user_info['location'] == user_info['所在地']
+                user_info['location'] = user_info.pop('所在地')
+            if '生日' in user_info:
+                assert 'birthday' not in user_info or user_info['birthday'] == user_info['生日']
+                user_info['birthday'] = user_info.pop('生日')
+            user_info.pop('cover_image_phone', '')
+            user_info.pop('profile_image_url', '')
+            user_info.pop('profile_url', '')
+            if birthday := user_info.get('birthday'):
+                birthday = birthday.split()[0].strip()
+                if re.match(r'\d{4}-\d{2}-\d{2}', birthday):
+                    age = pendulum.parse(birthday).diff().years
+                    user_info['birthday'] = birthday
+                    user_info['age'] = age
 
-        Returns:
-            User(dict)
-        """
+            if 'education' not in user_info:
+                keys = ['大学', '海外', '高中']
+                edu_info = [x for k in keys if (x := user_info.pop(k, ''))]
+                user_info['education'] = ';'.join(edu_info)
+
+            if not user_info.get('close_blue_v'):
+                user_info.pop('close_blue_v', '')
+
+            return user_info
 
         user_info = get_json(containerid=f"100505{user_id}")
         user_info = user_info['data']['userInfo']
@@ -156,55 +181,3 @@ class User(dict):
         pause(mode='page')
         return cls(user)
 
-
-def _user_info_fix(user_info: dict) -> dict:
-    """
-    清洗用户信息.
-
-    Args:
-        user_info (dict): 从网络获取的用户信息
-
-    Returns:
-        dict: 清洗后的用户信息
-    """
-    user_info = user_info.copy()
-    if '昵称' in user_info:
-        assert user_info.get('screen_name', '') == user_info.pop('昵称', '')
-    if '简介' in user_info:
-        assert user_info.get('description', '') == user_info.pop(
-            '简介', '').replace('暂无简介', '')
-    if 'Tap to set alias' in user_info:
-        assert user_info.get('remark', '') == user_info.pop(
-            'Tap to set alias', '')
-    if user_info.get('gender') == 'f':
-        assert user_info.pop('性别') == '女'
-        user_info['gender'] = 'female'
-    elif user_info.get('gender') == 'm':
-        assert user_info.pop('性别') == '男'
-        user_info['gender'] = 'female'
-
-    if '所在地' in user_info:
-        assert 'location' not in user_info or user_info['location'] == user_info['所在地']
-        user_info['location'] = user_info.pop('所在地')
-    if '生日' in user_info:
-        assert 'birthday' not in user_info or user_info['birthday'] == user_info['生日']
-        user_info['birthday'] = user_info.pop('生日')
-    user_info.pop('cover_image_phone', '')
-    user_info.pop('profile_image_url', '')
-    user_info.pop('profile_url', '')
-    if birthday := user_info.get('birthday'):
-        birthday = birthday.split()[0].strip()
-        if re.match(r'\d{4}-\d{2}-\d{2}', birthday):
-            age = pendulum.parse(birthday).diff().years
-            user_info['birthday'] = birthday
-            user_info['age'] = age
-
-    if 'education' not in user_info:
-        keys = ['大学', '海外', '高中']
-        edu_info = [x for k in keys if (x := user_info.pop(k, ''))]
-        user_info['education'] = ';'.join(edu_info)
-
-    if not user_info.get('close_blue_v'):
-        user_info.pop('close_blue_v', '')
-
-    return user_info
