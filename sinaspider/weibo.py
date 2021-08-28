@@ -1,16 +1,14 @@
 import json
 import re
 from pathlib import Path
-from typing import Union
+from typing import Union, Generator
 
 import pendulum
 from bs4 import BeautifulSoup
 from lxml import etree
 
-from sinaspider.helper import logger, pg, get_url, get_json, pause
-
-WEIBO_TABLE = 'weibo'
-weibo_table = pg[WEIBO_TABLE]
+from sinaspider.dataset import weibo_table
+from sinaspider.helper import logger, get_url, get_json, pause
 
 
 class Weibo(dict):
@@ -42,11 +40,11 @@ class Weibo(dict):
 
     def save_media(self, download_dir: Union[str, Path], write_xmp: bool = False) -> list:
         """
-        保存微博图片/视频到指定目录
+        保存微博图片 / 视频到指定目录
 
         Args:
             download_dir (Union[str|Path]): 文件保存目录
-            write_xmp (bool, optional): 是否将微博信息写入文件, 默认不写入. (该功能需安装exiftool)
+            write_xmp (bool, optional): 是否将微博信息写入文件, 默认不写入. (该功能需安装 exiftool)
 
         Returns:
             list: 返回下载列表
@@ -99,7 +97,7 @@ class Weibo(dict):
         生产图片元数据
 
         Args:
-            sn ( , optional): 图片序列SeriesNumber信息(即图片的次序)
+            sn (, optional): 图片序列 SeriesNumber 信息 (即图片的次序)
 
         Returns:
             dict: 图片元数据
@@ -125,15 +123,24 @@ class Weibo(dict):
         return xmp_info
 
 
-def get_weibo_pages(containerid: str, start_page: int = 1, fetch_retweeted=None):
+def get_weibo_pages(containerid: Union[str, int], start_page: int = 1,
+                    fetch_retweeted: Union[bool, None] = None) -> Generator[Weibo, None, None]:
     """
-    [summary]
+    爬取某一 containerid 类型的所有微博
 
-    Returns:
-        [type]: [description]
+    Args:
+        containerid (Union[str, int]): 
+            - 获取用户页面的微博: f"107603{user_id}"
+            - 获取收藏页面的微博: 230259
+        start_page (int, optional): 指定从哪一页开始爬取, 默认第一页.
+        fetch_retweeted (Union[bool, None], optional): 
+            - None(默认): 爬取所有微博
+            - True: 只爬取转发微博
+            - False: 只爬取原创微博
+
 
     Yields:
-        [type]: [description]
+        Generator[Weibo]: 生成微博实例
     """
     page = start_page
     while True:
@@ -150,7 +157,11 @@ def get_weibo_pages(containerid: str, start_page: int = 1, fetch_retweeted=None)
             is_retweeted = ('retweeted_status' in weibo_info)
             if (fetch_retweeted is not None) and not (is_retweeted ^ fetch_retweeted):
                 continue
-            weibo = _parse_weibo(weibo_info)
+            if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
+                assert not is_retweeted
+                weibo = get_weibo_by_id(weibo_info['id'])
+            else:
+                weibo = _parse_weibo(weibo_info)
             yield Weibo(weibo)
 
         logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
@@ -158,7 +169,16 @@ def get_weibo_pages(containerid: str, start_page: int = 1, fetch_retweeted=None)
         page += 1
 
 
-def get_weibo_by_id(wb_id):
+def get_weibo_by_id(wb_id: Union[int, str]) -> Weibo:
+    """
+    爬取指定id的微博
+
+    Args:
+        wb_id (Union[int, str]): 微博id
+
+    Returns:
+        Weibo: 微博实例
+    """
     url = f'https://m.weibo.cn/detail/{wb_id}'
     html = get_url(url).text
     html = html[html.find('"status"'):]
@@ -167,18 +187,31 @@ def get_weibo_by_id(wb_id):
     html = f'{{{html}}}'
     weibo_info = json.loads(html, strict=False)['status']
     weibo = _parse_weibo(weibo_info)
-    return weibo
+    return Weibo(weibo)
 
 
-def _parse_weibo(weibo_info):
+def _parse_weibo(weibo_info: dict) -> dict:
+    """
+    对从网页爬取到的微博进行解析. 
+    对于转发的微博, 若原微博为长微博, 则将爬取原微博并解析;
+    对于原创微博, 为了避免和 `py:func:get_weibo_by_id` 产生循环调用, 
+    将不做是否为长微博的判断.
+
+    Args:
+        weibo_info (dict): 原始微博信息
+
+    Returns:
+        dict: 解析后的微博信息
+    """
+
     if 'retweeted_status' not in weibo_info:
-        return WeiboParser(weibo_info).wb
+        return _WeiboParser(weibo_info).wb
     original = weibo_info['retweeted_status']
     if original['pic_num'] > 9 or original['isLongText']:
         original = Weibo.from_weibo_id(int(weibo_info['id']))
     else:
         original = _parse_weibo(original)
-    retweet = WeiboParser(weibo_info).wb
+    retweet = _WeiboParser(weibo_info).wb
     original.update(
         retweet_by=retweet['screen_name'],
         retweet_by_id=retweet['user_id'],
@@ -190,7 +223,9 @@ def _parse_weibo(weibo_info):
     return original
 
 
-class WeiboParser:
+class _WeiboParser:
+    """用于解析原始微博内容"""
+
     def __init__(self, weibo_info):
         self.info = weibo_info
         self.wb = {}

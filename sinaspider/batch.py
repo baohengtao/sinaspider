@@ -1,27 +1,57 @@
-
-import dataset
 import pendulum
 
-from sinaspider.helper import logger, get_json, pause
+from sinaspider.dataset import config_table, relation_table
+from sinaspider.helper import logger, pause
 from sinaspider.user import User
-from sinaspider.weibo import Weibo
 
-pg = dataset.connect('postgresql://localhost/weibo')
-CONFIG_TABLE = 'config'
-RELATION_TABLE = 'relation'
-config_table = pg[CONFIG_TABLE]
-relation_table = pg[RELATION_TABLE]
+
+class UserConfig(dict):
+    table = config_table
+
+    def update_info(self, update):
+        self.table.upsert(self | update, ['id'])
+
+    @classmethod
+    def downloading_list(cls, days=3):
+        config_filter = cls.table.find(
+            downloading=True,
+            order_by='since',
+            since={'lt': pendulum.now().subtract(days=days)}
+        )
+        for user in config_filter:
+            yield cls(user)
+
+    @classmethod
+    def tracing_list(cls, days=30):
+        config_filter = cls.table.find(
+            tracing=True,
+            order_by='tracing_date',
+            tracing_date={'lt': pendulum.now().subtract(days=days)}
+        )
+        for user in config_filter:
+            yield cls(user)
+
+    @classmethod
+    def update_config_info(cls):
+        for user_config in cls.table.find():
+            user = User.from_user_id(user_config['id'])
+            user_config.update(
+                nickname=user['screen_name'],
+                followers=user['followers_count'],
+                following=user['follow_count'],
+                birthday=user.get('birthday'),
+                homepage=user['homepage'],
+                is_following=user['following'],
+                age=user.get('age'),
+            )
+            config_table.upsert(user_config, ['id'])
 
 
 def weibo_loop(download_dir):
-    _update_config_info()
-    config_filter = config_table.find(
-        downloading=True,
-        order_by='since',
-        since={'lt': pendulum.now().subtract(days=3)}
-    )
+    UserConfig.update_config_info()
+
     downloaded_list = []
-    for user_config in config_filter:
+    for user_config in UserConfig.downloading_list(days=3):
         user = User.from_user_id(user_config['id'])
         user.print()
         """爬取页面"""
@@ -37,40 +67,32 @@ def weibo_loop(download_dir):
                         f"the time of wb {weibo[f'created_at']} is beyond {since:%y-%m-%d}...end reached")
                     break
             weibo.print()
-            downloaded = weibo.save_media(download_dir=download_dir)
+            downloaded = weibo.save_media(download_dir=download_dir, write_xmp=True)
             if downloaded:
                 downloaded_list.extend(downloaded)
                 _check_download_path_uniqueness(downloaded_list)
 
         """更新用户信息"""
-        user_config.update({
+        user_config.update_info({
             'since_previous': since,
             'since': now,
         })
-        config_table.update(user_config, ['id'])
         logger.success(f'{user["screen_name"]}微博获取完毕')
         pause(mode='user')
 
 
-
-
 def relation_loop():
-    _update_config_info()
-    config_filter = config_table.find(
-        tracing=True,
-        tracing_date={'lt': pendulum.now().subtract(days=15)},
-        order_by='tracing_date')
-    for user_config in config_filter:
+    UserConfig.update_config_info()
+    for user_config in UserConfig.tracing_list(days=30):
         user = User.from_user_id(user_config['id'])
         for followed in user.following():
-            if follower['gender'] != 'female':
+            if followed['gender'] != 'female':
                 pass
             if docu := relation_table.find(id=followed['id']):
                 followed = docu | followed
             followed.setdefault('follower', {})[user['id']] = user['screen_name']
             relation_table.upsert(followed, ['id'])
-        user_config.update(tracing_date=pendulum.now())
-        config_table.update(user_config, ['id'])
+        user_config.update_info({'tracing_date': pendulum.now()})
         logger.success(f'{user["screen_name"]} 的关注已获取')
         pause(mode='user')
     _relation_complete()
@@ -87,20 +109,6 @@ def _relation_complete():
         user |= user_complete or {}
         relation_table.update(user, ['id'])
 
-def _update_config_info():
-    for user_config in config_table.find():
-        user = User.from_user_id(user_config['id'])
-        user_config.update(
-            nickname=user['screen_name'],
-            followers=user['followers_count'],
-            following=user['follow_count'],
-            birthday=user.get('birthday'),
-            homepage=user['homepage'],
-            is_following=user['following'],
-            age=user.get('age'),
-        )
-        config_table.upsert(user_config, ['id'])
-
 
 def _check_download_path_uniqueness(download_list):
     filepath_list = {d['filepath'] for d in download_list}
@@ -108,5 +116,6 @@ def _check_download_path_uniqueness(download_list):
     length = len(download_list)
     if len(url_list) != length or len(filepath_list) != length:
         with open('download.list', "wb") as f:
+            import pickle
             pickle.dump(download_list, f)
         assert False

@@ -1,13 +1,9 @@
-import os
-import json
 import random
 import sys
 from functools import partial
-from pathlib import Path
 from time import sleep
-import keyring
 
-import dataset
+import keyring
 import requests
 from baseconv import base62
 from loguru import logger
@@ -15,12 +11,8 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, colorize=True)
 
-pg = dataset.connect('postgresql://localhost/weibo')
-
-
-
 headers = {
-    "User_Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
+    "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
     "Cookie": keyring.get_password("sinaspider", "cookie")
 }
 
