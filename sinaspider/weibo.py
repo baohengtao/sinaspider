@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Union
 
 import pendulum
 from bs4 import BeautifulSoup
@@ -16,8 +17,11 @@ class Weibo(dict):
 
     @classmethod
     def from_weibo_id(cls, wb_id):
+        """从数据库获取微博信息, 若不在其中, 则尝试从网络获取, 并将获取结果存入数据库"""
         assert isinstance(wb_id, int), wb_id
-        docu = weibo_table.find_one(id=wb_id) or {}
+        docu = (weibo_table.find_one(id=wb_id)
+                or weibo_table.find_one(retweet_id=id)
+                or {})
         if not docu:
             weibo = get_weibo_by_id(wb_id)
             weibo_table.upsert(weibo, ['id'])
@@ -26,7 +30,7 @@ class Weibo(dict):
             return cls(docu)
 
     def print(self):
-
+        """打印微博信息"""
         keys = [
             'screen_name', 'id', 'text', 'location',
             'created_at', 'at_users', 'url'
@@ -36,8 +40,20 @@ class Weibo(dict):
                 logger.info(f'{k}: {v}')
         print('\n')
 
-    def save_media(self, download_dir):
-        download_dir = Path(download_dir)
+    def save_media(self, download_dir: Union[str, Path], write_xmp: bool = False) -> list:
+        """
+        保存微博图片/视频到指定目录
+
+        Args:
+            download_dir (Union[str|Path]): 文件保存目录
+            write_xmp (bool, optional): 是否将微博信息写入文件, 默认不写入. (该功能需安装exiftool)
+
+        Returns:
+            list: 返回下载列表
+        """
+
+        subdir = 'retweet' if 'retweet_by' in self else 'original'
+        download_dir = Path(download_dir) / subdir
         download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"
         download_list = []
@@ -46,13 +62,18 @@ class Weibo(dict):
             for url in filter(bool, urls):
                 ext = url.split('.')[-1]
                 filepath = f'{prefix}_{sn}.{ext}'
-                download_list.append({'url': url, 'filepath': Path(filepath)})
+                download_list.append({
+                    'url': url,
+                    'filepath': Path(filepath),
+                    'xmp_info': self.to_xmp(sn)})
         # add video urls to list
         if url := self.get('video_url'):
             assert ';' not in url
             filepath = f'{prefix}.mp4'
-            download_list.append({'url': url, 'filepath': Path(
-                filepath), 'id': self['id'], 'user_id': self['user_id']})
+            download_list.append({
+                'url': url,
+                'filepath': Path(filepath),
+                'xmp_info': self.to_xmp()})
 
         # downloading...
         if download_list:
@@ -65,14 +86,29 @@ class Weibo(dict):
                 continue
             downloaded = get_url(url).content
             filepath.write_bytes(downloaded)
+            if write_xmp:
+                from exiftool import ExifTool
+                with ExifTool() as et:
+                    xmp_info = {'XMP:' + k: v for k, v in dl['xmp_info'].items()}
+                    et.set_tags(xmp_info, str(filepath))
 
         return download_list
 
-    def to_xmp(self):
+    def to_xmp(self, sn=0) -> dict:
+        """
+        生产图片元数据
+
+        Args:
+            sn ( , optional): 图片序列SeriesNumber信息(即图片的次序)
+
+        Returns:
+            dict: 图片元数据
+        """
         xmp_info = {}
         wb_map = [
             ('bid', 'ImageUniqueID'),
             ('user_id', 'ImageSupplierID'),
+            ('screen_name', 'ImageSupplierName'),
             ('text', 'BlogTitle'),
             ('url', 'BlogURL'),
             ('location', 'Location'),
@@ -83,10 +119,22 @@ class Weibo(dict):
                 xmp_info[xmp] = v
         xmp_info['DateCreated'] = xmp_info['DateCreated'].strftime(
             '%Y:%m:%d %H:%M:%S.%f')
+        if sn:
+            xmp_info['SeriesNumber'] = sn
+
         return xmp_info
 
 
-def get_weibo_pages(containerid, start_page=1, fetch_retweeted=None):
+def get_weibo_pages(containerid: str, start_page: int = 1, fetch_retweeted=None):
+    """
+    [summary]
+
+    Returns:
+        [type]: [description]
+
+    Yields:
+        [type]: [description]
+    """
     page = start_page
     while True:
         js = get_json(containerid=containerid, page=page)
