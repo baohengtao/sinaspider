@@ -5,7 +5,7 @@ from pathlib import Path
 import pendulum
 from lxml import etree
 
-from sinaspider.helper import logger, pg, get_url
+from sinaspider.helper import logger, pg, get_url, get_json, pause
 
 WEIBO_TABLE = 'weibo'
 weibo_table = pg[WEIBO_TABLE]
@@ -23,26 +23,6 @@ class Weibo(dict):
         weibo_info = json.loads(html, strict=False)['status']
         weibo = _parse_weibo(weibo_info)
         return cls(weibo)
-
-    @classmethod
-    def from_weibo_info(cls, weibo_info):
-        """
-        从weibo_info中获取信息
-
-        Args:
-            weibo_info (dict)
-
-        Returns:
-            Weibo(dict)
-        """        
-
-        weibo_info['id'] = int(weibo_info['id'])
-        if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
-            return cls.from_weibo_id(weibo_info['id'])
-        else:
-            weibo = _parse_weibo(weibo_info)
-            weibo_table.upsert(weibo, ['id'])
-            return cls(weibo)
 
     @classmethod
     def from_weibo_id(cls, wb_id):
@@ -113,6 +93,32 @@ class Weibo(dict):
                 xmp_info[xmp] = v
         xmp_info['DateCreated'] = xmp_info['DateCreated'].strftime('%Y:%m:%d %H:%M:%S.%f')
         return xmp_info
+
+
+def get_weibo_pages(containerid, start_page=1):
+    page = start_page
+    while True:
+        js = get_json(containerid=containerid, page=page)
+        mblogs = [w['mblog']
+                  for w in js['data']['cards'] if w['card_type'] == 9]
+        if not js['ok']:
+            assert not mblogs
+            logger.warning(
+                f"not js['ok'], seems reached end, no wb return for page {page}")
+            break
+
+        for weibo_info in mblogs:
+            if weibo_info.get('retweeted_status'):
+                continue
+            if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
+                yield Weibo.from_weibo_id(int(weibo_info['id']))
+            else:
+                weibo = _parse_weibo(weibo_info)
+                weibo_table.upsert(weibo, ['id'])
+                yield Weibo(weibo)
+        logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+        pause(mode='page')
+        page += 1
 
 
 def _parse_weibo(weibo_info):

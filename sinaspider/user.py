@@ -4,32 +4,10 @@ from pathlib import Path
 import pendulum
 
 from sinaspider.helper import get_json, get_url, logger, pause, pg
-from sinaspider.weibo import Weibo
+from sinaspider.weibo import get_weibo_pages
 
 USER_TABLE = 'user'
 user_table = pg[USER_TABLE]
-
-
-def get_weibo_pages(containerid, start_page=1):
-    page = start_page
-    while True:
-        js = get_json(containerid=containerid, page=page)
-        mblogs = [w['mblog']
-                  for w in js['data']['cards'] if w['card_type'] == 9]
-        if not js['ok']:
-            assert not mblogs
-            logger.warning(
-                f"not js['ok'], seems reached end, no wb return for page {page}")
-            break
-
-        for weibo_info in mblogs:
-            if weibo_info.get('retweeted_status'):
-                continue
-            weibo = Weibo.from_weibo_info(weibo_info)
-            yield weibo
-        logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
-        pause(mode='page')
-        page += 1
 
 
 def get_follow_pages(containerid, start_page=1):
@@ -63,9 +41,10 @@ class Owner:
     @staticmethod
     def get_favor_pages():
         return get_weibo_pages(containerid=230259)
+
     @staticmethod
     def get_weibo_pages():
-
+        pass
 
 
 class User(dict):
