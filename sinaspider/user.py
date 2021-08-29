@@ -5,49 +5,10 @@ from typing import Union, Generator
 import pendulum
 from bs4 import BeautifulSoup
 
+from sinaspider.dataset import user_table
 from sinaspider.helper import get_json, get_url, logger, pause
 from sinaspider.weibo import get_weibo_pages
-from sinaspider.dataset import user_table
 
-
-def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Generator[dict, None, None]:
-    """
-    获取关注列表
-
-    Args:
-        containerid (Union[str, int]):
-            - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
-            - 自己的关注列表: f'231093_-_selffollowed'
-        
-        start_page (int, optional): 起始爬取页面
-
-    Yields:
-        Generator[dict]: 返回用户字典
-    """
-    page = start_page
-    while True:
-        js = get_json(containerid=containerid, page=page)
-        if not js['ok']:
-            logger.success(f"关注信息已更新完毕")
-            break
-        cards_ = js['data']['cards'][0]['card_group']
-        users = [card.get('following') or card.get('user')
-                 for card in cards_ if card['card_type'] == 10]
-        for user in users:
-            no_key = ['cover_image_phone',
-                      'profile_url', 'profile_image_url']
-            user = {k: v for k, v in user.items() if v and k not in no_key}
-            if user.get('remark'):
-                user['screen_name'] = user.pop('remark')
-            user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-            if user['gender'] == 'f':
-                user['gender'] = 'female'
-            elif user['gender'] == 'm':
-                user['gender'] = 'male'
-            yield user
-        logger.success(f'页面 {page} 已获取完毕')
-        pause(mode='page')
-        page += 1
 
 
 class Owner:
@@ -106,16 +67,14 @@ class User(dict):
         containerid = f"107603{self['id']}"
         return get_weibo_pages(containerid, start_page)
 
-    def print(self):
-        """打印用户信息"""
+    def __str__(self):
+        text = ''
         keys = ['id', 'screen_name', 'gender', 'birthday', 'location', 'homepage',
                 'description', 'statuses_count', 'followers_count', 'follow_count']
-
-        logger.info('+' * 100)
         for k in keys:
             if v := self.get(k):
-                logger.info(f'{k}: {v}')
-        logger.info('+' * 100)
+                text += f'{k}: {v}\n'
+        return text
 
     def save_avatar(self, download_dir=None):
         """保存用户头像"""
@@ -132,7 +91,44 @@ class User(dict):
                 filepath.write_bytes(downloaded)
         return downloaded
 
+def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Generator[dict, None, None]:
+    """
+    获取关注列表
 
+    Args:
+        containerid (Union[str, int]):
+            - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
+            - 自己的关注列表: f'231093_-_selffollowed'
+        
+        start_page (int, optional): 起始爬取页面
+
+    Yields:
+        Generator[dict]: 返回用户字典
+    """
+    page = start_page
+    while True:
+        js = get_json(containerid=containerid, page=page)
+        if not js['ok']:
+            logger.success(f"关注信息已更新完毕")
+            break
+        cards_ = js['data']['cards'][0]['card_group']
+        users = [card.get('following') or card.get('user')
+                 for card in cards_ if card['card_type'] == 10]
+        for user in users:
+            no_key = ['cover_image_phone',
+                      'profile_url', 'profile_image_url']
+            user = {k: v for k, v in user.items() if v and k not in no_key}
+            if user.get('remark'):
+                user['screen_name'] = user.pop('remark')
+            user['homepage'] = f'https://weibo.com/u/{user["id"]}'
+            if user['gender'] == 'f':
+                user['gender'] = 'female'
+            elif user['gender'] == 'm':
+                user['gender'] = 'male'
+            yield user
+        logger.success(f'页面 {page} 已获取完毕')
+        pause(mode='page')
+        page += 1
 
 
 def fetch_user_info(user_id: int) -> User:

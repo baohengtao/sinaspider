@@ -26,17 +26,17 @@ class Weibo(dict):
             return weibo
         else:
             return cls(docu)
-
-    def print(self):
-        """打印微博信息"""
+    
+    def __str__(self):
+        text = ''
         keys = [
             'screen_name', 'id', 'text', 'location',
             'created_at', 'at_users', 'url'
         ]
         for k in keys:
             if v := self.get(k):
-                logger.info(f'{k}: {v}')
-        print('\n')
+                text+=f'{k}: {v}\n'
+        return text
 
     def save_media(self, download_dir: Union[str, Path], write_xmp: bool = False) -> list:
         """
