@@ -1,11 +1,12 @@
 import pendulum
+from collections import OrderedDict
 
 from sinaspider.dataset import config_table, relation_table
 from sinaspider.helper import logger, pause
 from sinaspider.user import User
 
 
-class UserConfig(dict):
+class UserConfig(OrderedDict):
     table = config_table
 
     def update_table(self):
