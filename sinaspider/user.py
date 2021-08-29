@@ -6,25 +6,33 @@ from typing import Union, Generator
 import pendulum
 from bs4 import BeautifulSoup
 
-from sinaspider.helper import get_json, get_url, logger, pause
+from sinaspider.helper import get_json, get_url, logger, pause, settings
 from sinaspider.weibo import get_weibo_pages
-
+from sinaspider.database import user_table
 
 class Owner:
-    myid=6619193364
-    info=User.from_user_id(myid)
+    def __init__(self):
+        myid = settings()['myid']
+        info = User.from_user_id(int(_myid))
+        
     @staticmethod
-    def weibos_favor():
+    def collection():
         """爬取收藏页面"""
         return get_weibo_pages(containerid=230259)
 
-    @staticmethod
-    def following(start_page=1):
-        return self.info.following()
+    @classmethod
+    def following(cls, start_page=1):
+        return cls.info.following(start_page)
+
+    @classmethod
+    def weibos(cls, start_page=1):
+        return cls.info.weibos(start_page)
+
 
 
 class User(OrderedDict):
-    from sinaspider.dataset import user_table as table
+    table = user_table
+
     @classmethod
     def from_user_id(cls, user_id, offline=None):
         """
@@ -114,7 +122,7 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Gener
             logger.success(f"关注信息已更新完毕")
             break
         cards_ = js['data']['cards'][0]['card_group']
-            
+
         users = [card.get('following') or card.get('user')
                  for card in cards_ if card['card_type'] == 10]
         for user in users:
@@ -147,7 +155,6 @@ def fetch_user_info(user_id: int) -> User:
     logger.info(f"{user['screen_name']} 信息已获取.")
     pause(mode='page')
     return User(user)
-
 
 
 def _user_info_fix(user_info: dict) -> OrderedDict:
@@ -215,18 +222,13 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
     return user_info_ordered
 
 
-
 def _get_user_extra(user_id):
     """获取额外的用户信息"""
-
 
     x, y = _get_user_cards(user_id), _get_user_cn(user_id)
     assert x | y == y | x
 
     return x | y
-
-
-
 
 
 def _get_user_cn(uid):
@@ -243,7 +245,7 @@ def _get_user_cn(uid):
                 continue
             elif tip.text == '基本信息':
                 for line in str(c).split('<br/>'):
-                    if text := BeautifulSoup(line).text:
+                    if text := BeautifulSoup(line, 'lxml').text:
                         infos.update([text.split(':')])
             elif tip.text == '学习经历' or '工作经历':
                 education = c.text.replace('\xa0', ' ').split('·')
@@ -252,6 +254,7 @@ def _get_user_cn(uid):
                 infos[tip.text] = c.text
     return infos
 
+
 def _get_user_cards(uid):
     """从m.weibo.com获取用户信息"""
     logger.info(f'fetching extra user info for {uid}')
@@ -259,7 +262,7 @@ def _get_user_cards(uid):
     user_cards = user_cards['data']['cards']
     user_cards = sum([c['card_group'] for c in user_cards], [])
     user_cards = {card['item_name']: card['item_content']
-                    for card in user_cards if 'item_name' in card}
+                  for card in user_cards if 'item_name' in card}
     if '生日' in user_cards:
         user_cards['生日'] = user_cards['生日'].split()[0]
     return user_cards

@@ -7,7 +7,7 @@ import pendulum
 from bs4 import BeautifulSoup
 from lxml import etree
 
-from sinaspider.dataset import weibo_table
+from sinaspider.database import weibo_table
 from sinaspider.helper import logger, get_url, get_json, pause
 
 
@@ -26,7 +26,7 @@ class Weibo(dict):
             return weibo
         else:
             return cls(docu)
-    
+
     def __str__(self):
         text = ''
         keys = [
@@ -35,7 +35,7 @@ class Weibo(dict):
         ]
         for k in keys:
             if v := self.get(k):
-                text+=f'{k}: {v}\n'
+                text += f'{k}: {v}\n'
         return text
 
     def save_media(self, download_dir: Union[str, Path], write_xmp: bool = False) -> list:

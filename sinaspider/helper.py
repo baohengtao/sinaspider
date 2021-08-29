@@ -2,8 +2,8 @@ import random
 import sys
 from functools import partial
 from time import sleep
+from typing import Union
 
-import keyring
 import requests
 from baseconv import base62
 from loguru import logger
@@ -11,9 +11,37 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, colorize=True)
 
+
+def settings(cookie: str = None, myid: Union[str, int] = None, database_name: str = None) -> dict:
+    """
+    将相关配置写入至 keyring 并返回当前的配置信息
+
+    Args:
+        cookie: m.weibo.com的cookie
+        myid: 自己微博账号id
+        database_name: 数据库名称
+
+    Returns:
+        [dict]: 当前的配置信息
+    """
+    import keyring
+    if cookie is not None:
+        keyring.set_password('sinaspider', 'cookie', cookie)
+    if myid is not None:
+        keyring.set_password('sinaspider', 'myid', str(myid))
+    if database_name is not None:
+        keyring.set_password('sinaspider', 'database_name', database_name)
+    # read current settings
+    s = dict()
+    for k in ['cookie', 'myid', 'database_name']:
+        if v := keyring.get_password('sinaspider', k):
+            s[k] = v
+    return s
+
+
 headers = {
     "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
-    "Cookie": keyring.get_password("sinaspider", "cookie")
+    "Cookie": settings()['cookie']
 }
 
 get_url = partial(requests.get, headers=headers)

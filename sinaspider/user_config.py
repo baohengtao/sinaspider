@@ -1,7 +1,7 @@
 import pendulum
 from collections import OrderedDict
 
-from sinaspider.dataset import config_table, relation_table
+from sinaspider.database import config_table, relation_table
 from sinaspider.helper import logger, pause
 from sinaspider.user import User
 
