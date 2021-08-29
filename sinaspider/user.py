@@ -1,29 +1,30 @@
 import re
+from collections import OrderedDict
 from pathlib import Path
 from typing import Union, Generator
 
 import pendulum
 from bs4 import BeautifulSoup
 
-from sinaspider.dataset import user_table
 from sinaspider.helper import get_json, get_url, logger, pause
 from sinaspider.weibo import get_weibo_pages
 
 
-
 class Owner:
+    myid=6619193364
+    info=User.from_user_id(myid)
     @staticmethod
     def weibos_favor():
         """爬取收藏页面"""
         return get_weibo_pages(containerid=230259)
 
     @staticmethod
-    def following():
-        return get_follow_pages(containerid=f'231093_-_selffollowed')
+    def following(start_page=1):
+        return self.info.following()
 
 
-class User(dict):
-
+class User(OrderedDict):
+    from sinaspider.dataset import user_table as table
     @classmethod
     def from_user_id(cls, user_id, offline=None):
         """
@@ -41,8 +42,8 @@ class User(dict):
             User(dict): 用户信息
         """
 
-        docu = user_table.find_one(id=user_id) or {}
-        docu = {k: v for k, v in docu.items() if v}
+        docu = cls.table.find_one(id=user_id) or {}
+        docu = cls((k, v) for k, v in docu.items() if v)
         if offline is None:
             offline = False
             if docu and (updated := docu.get('updated')):
@@ -52,9 +53,9 @@ class User(dict):
         if offline is True:
             return cls(docu)
         else:
-            assert offline is False
+            logger.info('update online...')
             user = fetch_user_info(user_id)
-            user_table.upsert(user, ['id'])
+            cls.table.upsert(user, ['id'])
             return cls(user)
 
     def following(self, start_page=1):
@@ -91,6 +92,7 @@ class User(dict):
                 filepath.write_bytes(downloaded)
         return downloaded
 
+
 def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Generator[dict, None, None]:
     """
     获取关注列表
@@ -99,7 +101,7 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Gener
         containerid (Union[str, int]):
             - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
             - 自己的关注列表: f'231093_-_selffollowed'
-        
+
         start_page (int, optional): 起始爬取页面
 
     Yields:
@@ -112,6 +114,7 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Gener
             logger.success(f"关注信息已更新完毕")
             break
         cards_ = js['data']['cards'][0]['card_group']
+            
         users = [card.get('following') or card.get('user')
                  for card in cards_ if card['card_type'] == 10]
         for user in users:
@@ -135,7 +138,7 @@ def fetch_user_info(user_id: int) -> User:
     """获取用户信息"""
     user_info = get_json(containerid=f"100505{user_id}")
     user_info = user_info['data']['userInfo']
-    user_info.pop('toolbar_menus')
+    user_info.pop('toolbar_menus', '')
     extra = _get_user_extra(user_id)
     assert extra | user_info == user_info | extra
     user = _user_info_fix(extra | user_info)
@@ -146,48 +149,8 @@ def fetch_user_info(user_id: int) -> User:
     return User(user)
 
 
-def _get_user_extra(user_id):
-    """获取额外的用户信息"""
 
-    def _get_user_cn(uid):
-        """从weibo.cn获取用户信息"""
-        html = get_url(f'https://weibo.cn/{uid}/info')
-        soup = BeautifulSoup(html.text, 'lxml')
-        divs = soup.find_all('div')
-        infos = dict()
-        for tip, c in zip(divs[:-1], divs[1:]):
-            if tip.attrs['class'] == ['tip']:
-                assert c.attrs['class'] == ['c']
-                if tip.text == '其他信息':
-                    continue
-                elif tip.text == '基本信息':
-                    basic_info = c.get_text(separator='\n').splitlines()
-                    basic_info = [item.split(':') for item in basic_info]
-                    infos.update(v for v in basic_info if len(v) == 2)
-                elif tip.text == '学习经历' or '工作经历':
-                    education = c.text.replace('\xa0', ' ').split('·')
-                    infos[tip.text] = [e.strip() for e in education if e]
-                else:
-                    infos[tip.text] = c.text
-        return infos
-
-    def _get_user_cards(uid):
-        """从m.weibo.com获取用户信息"""
-        user_cards = get_json(containerid=f"230283{uid}_-_INFO")
-        user_cards = user_cards['data']['cards']
-        user_cards = sum([c['card_group'] for c in user_cards], [])
-        user_cards = {card['item_name']: card['item_content']
-                      for card in user_cards if 'item_name' in card}
-        user_cards['生日'] = user_cards['生日'].split()[0]
-        return user_cards
-
-    x, y = _get_user_cards(user_id), _get_user_cn(user_id)
-    assert x | y == y | x
-
-    return x | y
-
-
-def _user_info_fix(user_info: dict) -> dict:
+def _user_info_fix(user_info: dict) -> OrderedDict:
     """清洗用户信息."""
     user_info = user_info.copy()
     if '昵称' in user_info:
@@ -223,11 +186,12 @@ def _user_info_fix(user_info: dict) -> dict:
         user_info['birthday'] = user_info.pop('生日')
     if birthday := user_info.get('birthday'):
         birthday = birthday.split()[0].strip()
-        if re.match(r'\d{4}-\d{2}-\d{2}', birthday):
+        if birthday == '0001-00-00':
+            pass
+        elif re.match(r'\d{4}-\d{2}-\d{2}', birthday):
             age = pendulum.parse(birthday).diff().years
             user_info['birthday'] = birthday
             user_info['age'] = age
-
     if education := user_info.pop('学习经历', ''):
         assert 'education' not in user_info
         for key in ['大学', '海外', '高中']:
@@ -236,4 +200,66 @@ def _user_info_fix(user_info: dict) -> dict:
 
     user_info['homepage'] = f'https://weibo.com/u/{user_info["id"]}'
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
-    return user_info
+
+    key_order = [
+        'id', 'screen_name', 'remark', 'birthday', 'age', 'education', 'gender',
+        'location', 'description', 'homepage', 'statuses_count',
+        'following', 'follow_me', 'followers_count', 'follow_count'
+    ]
+    user_info_ordered = OrderedDict()
+    for key in key_order:
+        if key in user_info:
+            user_info_ordered[key] = user_info.pop(key)
+    user_info_ordered.update(user_info)
+
+    return user_info_ordered
+
+
+
+def _get_user_extra(user_id):
+    """获取额外的用户信息"""
+
+
+    x, y = _get_user_cards(user_id), _get_user_cn(user_id)
+    assert x | y == y | x
+
+    return x | y
+
+
+
+
+
+def _get_user_cn(uid):
+    """从weibo.cn获取用户信息"""
+    logger.info(f'fetching user {uid} from weibo.cn')
+    html = get_url(f'https://weibo.cn/{uid}/info')
+    soup = BeautifulSoup(html.text, 'lxml')
+    divs = soup.find_all('div')
+    infos = dict()
+    for tip, c in zip(divs[:-1], divs[1:]):
+        if tip.attrs['class'] == ['tip']:
+            assert c.attrs['class'] == ['c']
+            if tip.text == '其他信息':
+                continue
+            elif tip.text == '基本信息':
+                for line in str(c).split('<br/>'):
+                    if text := BeautifulSoup(line).text:
+                        infos.update([text.split(':')])
+            elif tip.text == '学习经历' or '工作经历':
+                education = c.text.replace('\xa0', ' ').split('·')
+                infos[tip.text] = [e.strip() for e in education if e]
+            else:
+                infos[tip.text] = c.text
+    return infos
+
+def _get_user_cards(uid):
+    """从m.weibo.com获取用户信息"""
+    logger.info(f'fetching extra user info for {uid}')
+    user_cards = get_json(containerid=f"230283{uid}_-_INFO")
+    user_cards = user_cards['data']['cards']
+    user_cards = sum([c['card_group'] for c in user_cards], [])
+    user_cards = {card['item_name']: card['item_content']
+                    for card in user_cards if 'item_name' in card}
+    if '生日' in user_cards:
+        user_cards['生日'] = user_cards['生日'].split()[0]
+    return user_cards

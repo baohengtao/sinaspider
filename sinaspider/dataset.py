@@ -1,4 +1,5 @@
 import dataset
+from sqlalchemy import ARRAY, Text
 import keyring
 import os
 from sinaspider.helper import logger
@@ -19,7 +20,14 @@ DATABASE = db or db_default
 
 
 pg = dataset.connect(f'postgresql://localhost/{DATABASE}')
-user_table = pg[USER_TABLE]
-weibo_table = pg[WEIBO_TABLE]
-config_table = pg[CONFIG_TABLE]
-relation_table = pg[RELATION_TABLE]
+_table_para = dict(
+    primary_id='id', 
+    primary_type=pg.types.bigint, 
+    primary_increment=False)
+user_table = pg.create_table(USER_TABLE, **_table_para)
+weibo_table = pg.create_table(WEIBO_TABLE, **_table_para)
+config_table = pg.create_table(CONFIG_TABLE, **_table_para)
+relation_table = pg.create_table(RELATION_TABLE, **_table_para)
+
+# create columns of list type:
+user_table.create_column('education', ARRAY(Text))
