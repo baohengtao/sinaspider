@@ -10,7 +10,7 @@ class UserConfig(OrderedDict):
     from sinaspider.database import config_table as table
 
     def update_table(self):
-        user = User.from_user_id(self['id'])
+        user = User(self['id'])
         self.update(
             nickname=user['screen_name'],
             followers=user['followers_count'],
@@ -54,33 +54,23 @@ class UserConfig(OrderedDict):
         self.update_table()
         return is_fetch
 
-    def weibo_fetch(self, download_dir, write_xmp=False, days=None):
-        downloaded_list = []
+    def weibo_fetch(self, download_dir, days=5):
         if not self.is_weibo_fetch():
             print('skipping....for weibo_fetch is set to False')
             return
-        days = days or 5
         weibo_since, now = pendulum.instance(self['weibo_since']), pendulum.now()
         if weibo_since.diff().days < days:
             print(f'skipping...for fetched at recent {days} days')
+            return
         logger.info(f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
-        user = User.from_user_id(self['id'])
+        user = User(self['id'])
+        weibos = user.weibos(retweet=True,
+                             since=weibo_since, 
+                             download_dir=download_dir)
         print(user)
-        for weibo in user.weibos():
-            if weibo['created_at'] < weibo_since:
-                if weibo['is_pinned']:
-                    logger.warning(f"发现置顶微博, 跳过...")
-                    continue
-                else:
-                    logger.info(
-                        f"时间{weibo['created_at']} 在 {weibo_since:%y-%m-%d}之前, 获取完毕")
-                    break
+        for weibo in weibos:
             print(weibo)
 
-            downloaded = weibo.save_media(
-                download_dir=download_dir, write_xmp=write_xmp)
-            downloaded_list.extend(downloaded)
-            _check_download_path_uniqueness(downloaded_list)
         self.update(weibo_since=now, weibo_since_previous=weibo_since)
         self.update_table()
         logger.success(f'{user["screen_name"]}微博获取完毕')
@@ -95,7 +85,7 @@ class UserConfig(OrderedDict):
         if follow_since.diff().days < days:
             print(f'skipping...for fetched at recent {days} days')
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')
-        user = User.from_user_id(self['id'])
+        user = User(self['id'])
         print(user)
         list(user.following())
         self.update(follow_since=now)
@@ -137,14 +127,3 @@ def _relation_complete():
         user_complete = User.from_user_id(user['id'], offline=offline)
         user |= user_complete or {}
         User.relation_table.update(user, ['id'])
-
-
-def _check_download_path_uniqueness(download_list):
-    filepath_list = {d['filepath'] for d in download_list}
-    url_list = {d['url'] for d in download_list}
-    length = len(download_list)
-    if len(url_list) != length or len(filepath_list) != length:
-        with open('download.list', "wb") as f:
-            import pickle
-            pickle.dump(download_list, f)
-        assert False

@@ -1,5 +1,6 @@
 import re
 from collections import OrderedDict
+from functools import partial
 from pathlib import Path
 from typing import Union, Generator
 
@@ -13,23 +14,23 @@ from sinaspider.weibo import get_weibo_pages
 class Owner:
     def __init__(self):
         myid = config()['account_id']
-        self.info = User.from_user_id(int(myid))
-
-    @staticmethod
-    def collection():
-        """爬取收藏页面"""
-        return get_weibo_pages(containerid=230259)
-
-    def following(self, start_page=1):
-        return self.info.following(start_page)
-
-    def weibos(self, start_page=1):
-        return self.info.weibos(start_page)
+        self.info = User(int(myid))
+        self.weibos = self.info.weibos
+        self.following = self.info.following
+        self.collection = partial(get_weibo_pages, containerid=230259)
 
 
 class User(OrderedDict):
     from sinaspider.database import user_table as table
     from sinaspider.database import relation_table
+
+    def __init__(self, *args, **kwargs):
+        if kwargs or args[1:] or not isinstance(args[0], int):
+            super().__init__(*args, **kwargs)
+        else:
+            super().__init__(self.from_user_id(args[0]))
+        containerid = f"107603{self['id']}"
+        self.weibos = partial(get_weibo_pages, containerid=f"107603{self['id']}")
 
     @classmethod
     def from_user_id(cls, user_id, offline=None):
@@ -73,10 +74,6 @@ class User(OrderedDict):
             self.relation_table.upsert(followed, ['id'])
             yield followed
 
-    def weibos(self, start_page=1):
-        """爬取用户的微博页面"""
-        containerid = f"107603{self['id']}"
-        return get_weibo_pages(containerid, start_page)
 
     def __str__(self):
         text = ''

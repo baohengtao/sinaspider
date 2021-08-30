@@ -21,8 +21,15 @@ class Weibo(OrderedDict):
     else:
         et = None
 
+    def __init__(self, *args, **kwargs):
+        """可使用 Weibo(weibo_id)获得微博信息"""
+        if kwargs or args[1:] or not isinstance(args[0], int):
+            super().__init__(*args, **kwargs)
+        else:
+            super().__init__(self._from_weibo_id(args[0]))
+
     @classmethod
-    def from_weibo_id(cls, wb_id):
+    def _from_weibo_id(cls, wb_id):
         """从数据库获取微博信息, 若不在其中, 则尝试从网络获取, 并将获取结果存入数据库"""
         assert isinstance(wb_id, int), wb_id
         docu = cls.table.find_one(id=wb_id) or {}
@@ -44,17 +51,17 @@ class Weibo(OrderedDict):
 
     def save_media(self, download_dir: Union[str, Path]) -> list:
         """
-        保存微博图片 / 视频到指定目录
+        保存微博图片 / 视频到指定目录. 若为转发微博, 则保持到`retweet`子文件夹中
 
         Args:
             download_dir (Union[str|Path]): 文件保存目录
-
         Returns:
             list: 返回下载列表
         """
-
-        subdir = 'retweet' if 'retweet_by' in self else 'original'
-        download_dir = Path(download_dir) / subdir
+        download_dir = Path(download_dir)
+        if original_id := self.get('original_id'):
+            download_dir /= 'retweet'
+            return self._from_weibo_id(original_id).save_media(download_dir)
         download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"
         download_list = []
@@ -87,8 +94,7 @@ class Weibo(OrderedDict):
                 continue
             downloaded = get_url(url).content
             filepath.write_bytes(downloaded)
-            if self.et:
-                self.et.set_tags(dl['xmp_info'], str(filepath))
+            if self.et: self.et.set_tags(dl['xmp_info'], str(filepath))
 
         return download_list
 
@@ -126,8 +132,13 @@ class Weibo(OrderedDict):
             return {'XMP:' + k: v for k, v in xmp_info.items()}
 
 
-def get_weibo_pages(containerid: str, start_page: int = 1, retweet: bool = True) -> Generator[
-    Weibo, None, None]:
+def get_weibo_pages(containerid: str,
+                    retweet: bool = True,
+                    start_page: int = 1,
+                    end_page=None,
+                    since=None,
+                    download_dir=None
+                    ) -> Generator[Weibo, None, None]:
     """
     爬取某一 containerid 类型的所有微博
 
@@ -135,39 +146,63 @@ def get_weibo_pages(containerid: str, start_page: int = 1, retweet: bool = True)
         containerid(str): 
             - 获取用户页面的微博: f"107603{user_id}"
             - 获取收藏页面的微博: 230259
-        start_page(int): 指定从哪一页开始爬取, 默认第一页.
         retweet (bool): 是否爬取转发微博
+        start_page(int): 指定从哪一页开始爬取, 默认第一页.
+        end_page: 最大获取页数, 默认所有页面
+        since: 从哪天开始爬取, 默认所有时间
+        download_dir: 下载目录, 若为空, 则不下载
 
 
     Yields:
         Generator[Weibo]: 生成微博实例
     """
-    page = start_page
+    page = max(start_page, 1)
     while True:
         js = get_json(containerid=containerid, page=page)
-        if not js['ok'] and js['msg'] == '请求过于频繁，歇歇吧':
-            logger.critical('be banned')
-            return js
+        if not js['ok']:
+            if js['msg'] == '请求过于频繁，歇歇吧':
+                logger.critical('be banned')
+                return js
+            else:
+                logger.warning(
+                    f"not js['ok'], seems reached end, no wb return for page {page}")
+                break
+
         mblogs = [w['mblog']
                   for w in js['data']['cards'] if w['card_type'] == 9]
-        if not js['ok']:
-            assert not mblogs
-            logger.warning(
-                f"not js['ok'], seems reached end, no wb return for page {page}")
-            break
 
         for weibo_info in mblogs:
+            weibo = None
             if 'retweeted_status' in weibo_info:
-                if retweet and (weibo := _parse_weibo(weibo_info)):
-                    yield weibo
+                if retweet:
+                    # 若原微博已删除, 返回None
+                    # 否则分别将原微博和转发微博分别解析并写入数据库
+                    weibo = _parse_weibo(weibo_info)
             elif weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
-                yield get_weibo_by_id(weibo_info['id'])
+                # 若为原创长微博, 则爬取原链接
+                weibo = get_weibo_by_id(weibo_info['id'])
             else:
-                yield _parse_weibo(weibo_info)
+                weibo = _parse_weibo(weibo_info)
+            if not weibo:
+                continue
+            if weibo['created_at'] < since:
+                if weibo['is_pinned']:
+                    logger.warning(f"发现置顶微博, 跳过...")
+                    continue
+                else:
+                    logger.info(
+                        f"时间{weibo['created_at']} 在 {since:%y-%m-%d}之前, 获取完毕")
+                    end_page = page
+                    break
+                    
+            if download_dir:
+                weibo.save_media(download_dir)
 
         logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
-        pause(mode='page')
         page += 1
+        if end_page  and page > end_page:
+            break
+        pause(mode='page')
 
 
 def get_weibo_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
@@ -200,6 +235,7 @@ def _parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
         若原微博已删除, 返回 None;
         若原微博为长微博, 则爬取原微博并解析
     若为原创微博, 则直接解析 
+    
 
     Args:
         weibo_info (dict): 原始微博信息
@@ -221,15 +257,15 @@ def _parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
             return
 
     if original['pic_num'] > 9 or original['isLongText']:
-        original = Weibo.from_weibo_id(int(original['id']))
+        original = Weibo(int(original['id']))
     else:
         original = _parse_weibo(original)
     retweet = _WeiboParser(weibo_info).weibo
     retweet.update(
-        original_id = original['id'],
-        original_bid = original['bid'],
-        original_uid = original['user_id'],
-        original_text = original['text']
+        original_id=original['id'],
+        original_bid=original['bid'],
+        original_uid=original['user_id'],
+        original_text=original['text']
     )
     retweet.update_table()
     return retweet
