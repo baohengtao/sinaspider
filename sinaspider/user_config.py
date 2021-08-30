@@ -1,13 +1,13 @@
-import pendulum
 from collections import OrderedDict
 
-from sinaspider.database import config_table, relation_table
+import pendulum
+
 from sinaspider.helper import logger, pause
 from sinaspider.user import User
 
 
 class UserConfig(OrderedDict):
-    table = config_table
+    from sinaspider.database import config_table as table
 
     def update_table(self):
         user = User.from_user_id(self['id'])
@@ -97,13 +97,7 @@ class UserConfig(OrderedDict):
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')
         user = User.from_user_id(self['id'])
         print(user)
-        for followed in user.following():
-            if docu := relation_table.find(id=followed['id']):
-                followed = docu | followed
-            followed.setdefault('follower', {})[
-                user['id']] = user['screen_name']
-            relation_table.upsert(followed, ['id'])
-
+        list(user.following())
         self.update(follow_since=now)
         self.update_table()
         logger.success(f'{user["screen_name"]} 的关注已获取')
@@ -134,7 +128,7 @@ class UserConfig(OrderedDict):
 
 
 def _relation_complete():
-    for user in relation_table.find():
+    for user in User.relation_table.find():
         offline = True
         text = ['清华', 'PKU', 'THU', '大学']
         if desc := user.get('description'):
@@ -142,7 +136,7 @@ def _relation_complete():
                 offline = False
         user_complete = User.from_user_id(user['id'], offline=offline)
         user |= user_complete or {}
-        relation_table.update(user, ['id'])
+        User.relation_table.update(user, ['id'])
 
 
 def _check_download_path_uniqueness(download_list):

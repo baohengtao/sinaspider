@@ -1,13 +1,13 @@
 from sqlalchemy import ARRAY, Text
 import dataset
 
-from sinaspider.helper import settings
+from sinaspider.helper import config
 
 USER_TABLE = 'user'
 WEIBO_TABLE = 'weibo'
 CONFIG_TABLE = 'config'
 RELATION_TABLE = 'relation'
-DATABASE = settings()['database_name']
+DATABASE = config()['database_name']
 
 pg = dataset.connect(f'postgresql://localhost/{DATABASE}')
 _table_para = dict(

@@ -1,47 +1,49 @@
+import os
 import random
 import sys
 from functools import partial
 from time import sleep
-from typing import Union
 
+import keyring
 import requests
 from baseconv import base62
+from configobj import ConfigObj
 from loguru import logger
 
 logger.remove()
 logger.add(sys.stdout, colorize=True)
 
+_configpath = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
+CONFIG_FILE = os.path.join(_configpath, 'sinaspider.ini')
 
-def settings(cookie: str = None, myid: Union[str, int] = None, database_name: str = None) -> dict:
+
+def config(account_id=None, database_name=None, write_xmp=None):
     """
-    将相关配置写入至 keyring 并返回当前的配置信息
-
+    写入并读取配置
     Args:
-        cookie: m.weibo.com的cookie
-        myid: 自己微博账号id
+        account_id: 自己微博账号id
         database_name: 数据库名称
-
+        write_xmp: 是否将微博信息写入照片
     Returns:
         [dict]: 当前的配置信息
     """
-    import keyring
-    if cookie is not None:
-        keyring.set_password('sinaspider', 'cookie', cookie)
-    if myid is not None:
-        keyring.set_password('sinaspider', 'myid', str(myid))
+    default = {'database_name': 'sina', 'write_xmp': False}
+    config = ConfigObj(CONFIG_FILE)
+    config.update(default | config)
+    if account_id is not None:
+        config['account_id'] = account_id
     if database_name is not None:
-        keyring.set_password('sinaspider', 'database_name', database_name)
-    # read current settings
-    s = dict()
-    for k in ['cookie', 'myid', 'database_name']:
-        if v := keyring.get_password('sinaspider', k):
-            s[k] = v
-    return s
+        config['database_name'] = database_name
+    if write_xmp is not None:
+        assert isinstance(write_xmp, bool)
+        config['write_xmp'] = write_xmp
+    config.write()
+    return config
 
 
 headers = {
     "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
-    "Cookie": settings()['cookie']
+    "Cookie": keyring.get_password('sinaspider', 'cookie')
 }
 
 get_url = partial(requests.get, headers=headers)

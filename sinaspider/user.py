@@ -6,32 +6,30 @@ from typing import Union, Generator
 import pendulum
 from bs4 import BeautifulSoup
 
-from sinaspider.helper import get_json, get_url, logger, pause, settings
+from sinaspider.helper import get_json, get_url, logger, pause, config
 from sinaspider.weibo import get_weibo_pages
-from sinaspider.database import user_table
+
 
 class Owner:
     def __init__(self):
-        myid = settings()['myid']
-        info = User.from_user_id(int(_myid))
-        
+        myid = config()['account_id']
+        self.info = User.from_user_id(int(myid))
+
     @staticmethod
     def collection():
         """爬取收藏页面"""
         return get_weibo_pages(containerid=230259)
 
-    @classmethod
-    def following(cls, start_page=1):
-        return cls.info.following(start_page)
+    def following(self, start_page=1):
+        return self.info.following(start_page)
 
-    @classmethod
-    def weibos(cls, start_page=1):
-        return cls.info.weibos(start_page)
-
+    def weibos(self, start_page=1):
+        return self.info.weibos(start_page)
 
 
 class User(OrderedDict):
-    table = user_table
+    from sinaspider.database import user_table as table
+    from sinaspider.database import relation_table
 
     @classmethod
     def from_user_id(cls, user_id, offline=None):
@@ -49,7 +47,6 @@ class User(OrderedDict):
         Returns:
             User(dict): 用户信息
         """
-
         docu = cls.table.find_one(id=user_id) or {}
         docu = cls((k, v) for k, v in docu.items() if v)
         if offline is None:
@@ -69,7 +66,12 @@ class User(OrderedDict):
     def following(self, start_page=1):
         """爬取用户的关注"""
         containerid = f'231051_-_followers_-_{self["id"]}'
-        return get_follow_pages(containerid, start_page)
+        for followed in get_follow_pages(containerid, start_page):
+            if docu := self.relation_table.find(id=followed['id']):
+                followed = docu | followed
+            followed.setdefault('follower', {})[self['id']] = self['screen_name']
+            self.relation_table.upsert(followed, ['id'])
+            yield followed
 
     def weibos(self, start_page=1):
         """爬取用户的微博页面"""
@@ -108,7 +110,6 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Gener
     Args:
         containerid (Union[str, int]):
             - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
-            - 自己的关注列表: f'231093_-_selffollowed'
 
         start_page (int, optional): 起始爬取页面
 
@@ -173,7 +174,7 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
         user_info['gender'] = 'female'
     elif user_info.get('gender') == 'm':
         assert user_info.pop('性别') == '男'
-        user_info['gender'] = 'female'
+        user_info['gender'] = 'male'
 
     # pop items
     keys = ['cover_image_phone', 'profile_image_url', 'profile_url']
@@ -243,15 +244,16 @@ def _get_user_cn(uid):
             assert c.attrs['class'] == ['c']
             if tip.text == '其他信息':
                 continue
-            elif tip.text == '基本信息':
+            if tip.text == '基本信息':
                 for line in str(c).split('<br/>'):
                     if text := BeautifulSoup(line, 'lxml').text:
+                        text = text.replace('\xa0', ' ')
                         infos.update([text.split(':')])
             elif tip.text == '学习经历' or '工作经历':
                 education = c.text.replace('\xa0', ' ').split('·')
                 infos[tip.text] = [e.strip() for e in education if e]
             else:
-                infos[tip.text] = c.text
+                infos[tip.text] = c.text.replace('\xa0', ' ')
     return infos
 
 
