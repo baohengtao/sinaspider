@@ -9,34 +9,38 @@ from sinaspider.user import User
 class UserConfig(OrderedDict):
     from sinaspider.database import config_table as table
 
+    def __init__(self, *args, **kwargs):
+        if kwargs or args[1:] or not isinstance(args[0], int):
+            super().__init__(*args, **kwargs)
+        else:
+            super().__init__(self._from_user_id(args[0]))
+
     def update_table(self):
         user = User(self['id'])
-        self.update(
-            nickname=user['screen_name'],
-            followers=user['followers_count'],
-            following=user['follow_count'],
-            birthday=user.get('birthday'),
-            homepage=user['homepage'],
-            is_following=user['following'],
-            age=user.get('age'),
-        )
+        keys = ['screen_name', 'remark', 'birthday', 'age', 'homepage',
+                'followers_count', 'follow_count', 'following']
+        for key in keys:
+            self[key] = user.get(key)
         self.table.upsert(self, ['id'])
 
     @classmethod
-    def from_user_id(cls, user_id):
-        user = cls.table.find_one(id=user_id)
-        if not user:
-            user = cls(
-                id=user_id,
-                weibo_fetch=False,
-                follow_fetch=False,
-                weibo_since=pendulum.from_timestamp(0, tz='local'),
-                follow_since=pendulum.from_timestamp(0, tz='local')
-            )
+    def _from_user_id(cls, user_id):
+        init_user = cls(
+            id=user_id,
+            weibo_fetch=False,
+            retweet_fetch=False,
+            media_download=True,
+            follow_fetch=False,
+            weibo_since=pendulum.from_timestamp(0, tz='local'),
+            follow_update=pendulum.from_timestamp(0, tz='local')
+        )
+        if user := cls.table.find_one(id=user_id):
+            cls(user).update_table()
         else:
-            user = cls(user)
-        user.update_table()
-        return user
+            init_user.update_table()
+
+        user = cls.table.find_one(id=user_id)
+        return cls(user)
 
     def is_weibo_fetch(self, value=None) -> bool:
         if value is not None:
@@ -65,7 +69,7 @@ class UserConfig(OrderedDict):
         logger.info(f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
         user = User(self['id'])
         weibos = user.weibos(retweet=True,
-                             since=weibo_since, 
+                             since=weibo_since,
                              download_dir=download_dir)
         print(user)
         for weibo in weibos:
@@ -81,14 +85,14 @@ class UserConfig(OrderedDict):
             print('skipping....for follow_fetch is set to False')
             return
         days = days or 15
-        follow_since, now = pendulum.instance(self['follow_since']), pendulum.now()
-        if follow_since.diff().days < days:
+        follow_update, now = pendulum.instance(self['follow_update']), pendulum.now()
+        if follow_update.diff().days < days:
             print(f'skipping...for fetched at recent {days} days')
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')
         user = User(self['id'])
         print(user)
         list(user.following())
-        self.update(follow_since=now)
+        self.update(follow_update=now)
         self.update_table()
         logger.success(f'{user["screen_name"]} 的关注已获取')
         pause(mode='user')

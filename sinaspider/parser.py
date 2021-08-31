@@ -73,7 +73,7 @@ def parse_weibo_card(weibo_card):
     class _WeiboCardParser:
         """用于解析原始微博内容"""
 
-        def __init__(self, weibo_card):
+        def __init__(self):
             self.card = weibo_card
             self.wb = OrderedDict()
             self.parse_card()
@@ -237,4 +237,4 @@ def parse_weibo_card(weibo_card):
             'location': location
         }
 
-    return _WeiboCardParser(weibo_card).weibo()
+    return _WeiboCardParser().weibo()

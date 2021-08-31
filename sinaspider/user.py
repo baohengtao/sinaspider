@@ -29,8 +29,8 @@ class User(OrderedDict):
             super().__init__(*args, **kwargs)
         else:
             super().__init__(self.from_user_id(args[0]))
-        containerid = f"107603{self['id']}"
-        self.weibos = partial(get_weibo_pages, containerid=f"107603{self['id']}")
+        self.weibos = partial(
+            get_weibo_pages, containerid=f"107603{self['id']}")
 
     @classmethod
     def from_user_id(cls, user_id, offline=None):
@@ -49,31 +49,30 @@ class User(OrderedDict):
             User(dict): 用户信息
         """
         docu = cls.table.find_one(id=user_id) or {}
-        docu = cls((k, v) for k, v in docu.items() if v)
         if offline is None:
             offline = False
             if docu and (updated := docu.get('updated')):
                 # 若最近15天更新过, 则 offline 为 True
                 offline = (pendulum.instance(updated).diff().days < 15)
-
-        if offline is True:
-            return cls(docu)
-        else:
+        if offline is False:
             logger.info('update online...')
             user = fetch_user_info(user_id)
             cls.table.upsert(user, ['id'])
-            return cls(user)
+            docu = cls(cls.table.find_one(id=user_id))
+            print(docu)
+        docu = cls((k, v) for k, v in docu.items() if v)
+        return docu
 
-    def following(self, start_page=1):
+    def following(self, *args, **kwargs):
         """爬取用户的关注"""
         containerid = f'231051_-_followers_-_{self["id"]}'
-        for followed in get_follow_pages(containerid, start_page):
-            if docu := self.relation_table.find(id=followed['id']):
+        for followed in get_follow_pages(containerid, *args, **kwargs):
+            if docu := self.relation_table.find_one(id=followed['id']):
                 followed = docu | followed
-            followed.setdefault('follower', {})[self['id']] = self['screen_name']
+            followed.setdefault('follower', {})[
+                self['id']] = self['screen_name']
             self.relation_table.upsert(followed, ['id'])
             yield followed
-
 
     def __str__(self):
         text = ''
@@ -100,7 +99,7 @@ class User(OrderedDict):
         return downloaded
 
 
-def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Generator[dict, None, None]:
+def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page=None) -> Generator[dict, None, None]:
     """
     获取关注列表
 
@@ -109,11 +108,14 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Gener
             - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
 
         start_page (int, optional): 起始爬取页面
+        end_page: 结束页面, 默认所有
 
     Yields:
         Generator[dict]: 返回用户字典
     """
     page = start_page
+    if end_page:
+        assert start_page <= end_page
     while True:
         js = get_json(containerid=containerid, page=page)
         if not js['ok']:
@@ -134,10 +136,13 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1) -> Gener
                 user['gender'] = 'female'
             elif user['gender'] == 'm':
                 user['gender'] = 'male'
+
             yield user
         logger.success(f'页面 {page} 已获取完毕')
         pause(mode='page')
         page += 1
+        if page > end_page:
+            break
 
 
 def fetch_user_info(user_id: int) -> User:
@@ -146,7 +151,10 @@ def fetch_user_info(user_id: int) -> User:
     user_info = user_info['data']['userInfo']
     user_info.pop('toolbar_menus', '')
     extra = _get_user_extra(user_id)
-    assert extra | user_info == user_info | extra
+    if not extra | user_info == user_info | extra:
+        logger.info(extra)
+        logger.info(user_info)
+        assert False
     user = _user_info_fix(extra | user_info)
     user['updated'] = pendulum.now()
     # 获取用户数据
@@ -179,12 +187,20 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
         user_info.pop(key, '')
 
     # merge location
-    keys = ['地区', 'location', '所在地']
+    keys = ['location', '地区', '所在地']
     values = [user_info.pop(k, '') for k in keys]
     values = [v for v in values if v]
     if values:
         assert len(set(values)) == 1
-        user_info['location'] = values[0]
+        user_info[keys[0]] = values[0]
+
+    # merge verified_reason
+    keys = ['verified_reason', '认证', '认证信息']
+    values = [user_info.pop(k, '') for k in keys]
+    values = [v for v in values if v]
+    if values:
+        assert len(set(values)) == 1
+        user_info[keys[0]] = values[0]
 
     if '生日' in user_info:
         assert 'birthday' not in user_info or user_info['birthday'] == user_info['生日']
@@ -205,6 +221,7 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
 
     user_info['homepage'] = f'https://weibo.com/u/{user_info["id"]}'
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
+    user_info['hometown'] = user_info.pop('家乡', '')
 
     key_order = [
         'id', 'screen_name', 'remark', 'birthday', 'age', 'education', 'gender',
@@ -224,7 +241,12 @@ def _get_user_extra(user_id):
     """获取额外的用户信息"""
 
     x, y = _get_user_cards(user_id), _get_user_cn(user_id)
-    assert x | y == y | x
+    if y.get('生日') == '01-01':
+        y.pop('生日')
+    if not x | y == y | x:
+        logger.info(f'x:==>{x}')
+        logger.info(f'y:==>{y}')
+        assert False
 
     return x | y
 
@@ -245,7 +267,10 @@ def _get_user_cn(uid):
                 for line in str(c).split('<br/>'):
                     if text := BeautifulSoup(line, 'lxml').text:
                         text = text.replace('\xa0', ' ')
-                        infos.update([text.split(':')])
+                        if text[:2] == '简介':
+                            infos['简介'] = text[3:]
+                        else:
+                            infos.update([text.replace('：', ':').split(':')])
             elif tip.text == '学习经历' or '工作经历':
                 education = c.text.replace('\xa0', ' ').split('·')
                 infos[tip.text] = [e.strip() for e in education if e]

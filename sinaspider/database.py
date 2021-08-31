@@ -1,5 +1,5 @@
-from sqlalchemy import ARRAY, Text
 import dataset
+from sqlalchemy import ARRAY, Text, Integer, Boolean, DateTime
 
 from sinaspider.helper import config
 
@@ -19,5 +19,46 @@ weibo_table = pg.create_table(WEIBO_TABLE, **_table_para)
 config_table = pg.create_table(CONFIG_TABLE, **_table_para)
 relation_table = pg.create_table(RELATION_TABLE, **_table_para)
 
-# create columns of list type:
-user_table.create_column('education', ARRAY(Text))
+user_columns = (
+    ('screen_name', Text),
+    ('remark', Text),
+    ('birthday', Text),
+    ('age', Integer),
+    ('gender', Text),
+    ('education', ARRAY(Text)),
+    ('location', Text),
+    ('hometown', Text),
+    ('description', Text),
+    ('homepage', Text),
+    ('statuses_count', Integer),
+    ('followers_count', Integer),
+    ('follow_count', Integer),
+    ('following', Boolean),
+    ('follow_me', Boolean),
+)
+
+config_columns = (
+    ('screen_name', Text),
+    ('remark', Text),
+    ('age', Integer),
+    ('gender', Text),
+    ('education', ARRAY(Text)),
+    ('location', Text),
+    ('weibo_fetch', Boolean),
+    ('retweet_fetch', Boolean),
+    ('media_download', Boolean),
+    ('follow_fetch', Boolean),
+    ('homepage', Text),
+    ('statuses_count', Integer),
+    ('followers_count', Integer),
+    ('follow_count', Integer),
+    ('following', Boolean),
+    ('weibo_since', DateTime(timezone=True)),
+    ('follow_update', DateTime(timezone=True))
+)
+
+for column_key, column_type in user_columns:
+    user_table.create_column(column_key, column_type)
+
+for column_key, column_type in config_columns:
+    config_table.create_column(column_key, column_type)

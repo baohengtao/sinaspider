@@ -1,5 +1,5 @@
 
-##  准备工作
+## 准备工作
 1. 安装 postgresql 数据库(仅确保适用于mac用户):
     ```zsh
     brew install postgresql
@@ -28,6 +28,14 @@
    cookie = '...your cookie get from www.m.weibo.cn ...' # 需要m.weibo.cn网页的cookie
    keyring.set_password('sinaspider', 'cookie', cookie)
    ```
+
+## Quick Start
+```python
+```
+
+
+
+
 
 ## 微博保存与下载
 可通过微博id或bid获取某条微博, 若微博不存在, 则返回 None.

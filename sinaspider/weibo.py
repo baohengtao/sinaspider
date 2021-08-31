@@ -6,7 +6,6 @@ from typing import Union, Generator
 import pendulum
 
 from sinaspider.helper import logger, get_url, get_json, pause, convert_wb_bid_to_id
-from sinaspider.parser import parse_weibo, get_weibo_by_id
 
 
 class Weibo(OrderedDict):
@@ -41,6 +40,7 @@ class Weibo(OrderedDict):
         """从数据库获取微博信息, 若不在其中, 则尝试从网络获取, 并将获取结果存入数据库"""
         assert isinstance(wb_id, int), wb_id
         docu = cls.table.find_one(id=wb_id) or {}
+        from sinaspider.parser import get_weibo_by_id
         return cls(docu) or get_weibo_by_id(wb_id)
 
     def update_table(self):
@@ -191,6 +191,7 @@ def get_weibo_pages(containerid: str,
         for weibo_info in mblogs:
             if weibo_info.get('retweeted_status') and not retweet:
                 continue
+            from sinaspider.parser import parse_weibo
             weibo = parse_weibo(weibo_info)
             if not weibo:
                 continue
