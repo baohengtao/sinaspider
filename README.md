@@ -1,6 +1,6 @@
 
 ## 准备工作
-1. 安装 postgresql 数据库(仅确保适用于mac用户):
+1. 安装 postgresql 数据库:
     ```zsh
     brew install postgresql
     brew services start postgresql
