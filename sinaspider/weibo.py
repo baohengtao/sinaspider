@@ -1,6 +1,7 @@
 import json
 import re
 from collections import OrderedDict
+from datetime import datetime
 from pathlib import Path
 from typing import Union, Generator
 
@@ -8,7 +9,7 @@ import pendulum
 from bs4 import BeautifulSoup
 from lxml import etree
 
-from sinaspider.helper import logger, get_url, get_json, pause
+from sinaspider.helper import logger, get_url, get_json, pause, convert_wb_bid_to_id
 
 
 class Weibo(OrderedDict):
@@ -22,20 +23,35 @@ class Weibo(OrderedDict):
         et = None
 
     def __init__(self, *args, **kwargs):
-        """可使用 Weibo(weibo_id)获得微博信息"""
-        if kwargs or args[1:] or not isinstance(args[0], int):
+        """
+        可通过微博id获取某条微博, 同时支持数字id和bid.
+        读取结果将保存在数据库中.
+        若微博不存在, 返回 None
+        """
+        wb_id = args[0]
+        if isinstance(wb_id, str):
+            if wb_id.isdigit():
+                wb_id = int(wb_id)
+            else:
+                wb_id = convert_wb_bid_to_id(args[0])
+        if kwargs or args[1:] or not isinstance(wb_id, int):
             super().__init__(*args, **kwargs)
         else:
-            super().__init__(self._from_weibo_id(args[0]))
+            super().__init__(self._from_weibo_id(wb_id))
 
     @classmethod
     def _from_weibo_id(cls, wb_id):
         """从数据库获取微博信息, 若不在其中, 则尝试从网络获取, 并将获取结果存入数据库"""
         assert isinstance(wb_id, int), wb_id
         docu = cls.table.find_one(id=wb_id) or {}
-        return cls(docu) or get_weibo_by_id(wb_id)
+        if docu:
+            return cls(docu)
+        else:
+            weibo_info = _get_weibo_info_by_id(wb_id)
+            return _parse_weibo(weibo_info)
 
     def update_table(self):
+        """更新数据信息"""
         self.table.upsert(self, ['id'])
 
     def __str__(self):
@@ -51,8 +67,7 @@ class Weibo(OrderedDict):
 
     def save_media(self, download_dir: Union[str, Path]) -> list:
         """
-        保存微博图片 / 视频到指定目录. 若为转发微博, 则保持到`retweet`子文件夹中
-
+        保存文件到指定目录. 若为转发微博, 则保持到`retweet`子文件夹中
         Args:
             download_dir (Union[str|Path]): 文件保存目录
         Returns:
@@ -94,7 +109,9 @@ class Weibo(OrderedDict):
                 continue
             downloaded = get_url(url).content
             filepath.write_bytes(downloaded)
-            if self.et: self.et.set_tags(dl['xmp_info'], str(filepath))
+            if self.et:
+                self.et.set_tags(dl['xmp_info'], str(filepath))
+                filepath.with_name(filepath.name + '_original').unlink()
 
         return download_list
 
@@ -136,7 +153,7 @@ def get_weibo_pages(containerid: str,
                     retweet: bool = True,
                     start_page: int = 1,
                     end_page=None,
-                    since=None,
+                    since: Union[int, str, datetime] = '1970-01-01',
                     download_dir=None
                     ) -> Generator[Weibo, None, None]:
     """
@@ -148,14 +165,21 @@ def get_weibo_pages(containerid: str,
             - 获取收藏页面的微博: 230259
         retweet (bool): 是否爬取转发微博
         start_page(int): 指定从哪一页开始爬取, 默认第一页.
-        end_page: 最大获取页数, 默认所有页面
-        since: 从哪天开始爬取, 默认所有时间
+        end_page: 终止页面, 默认爬取到最后一页
+        since: 若为整数, 从哪天开始爬取, 默认所有时间
         download_dir: 下载目录, 若为空, 则不下载
 
 
     Yields:
         Generator[Weibo]: 生成微博实例
     """
+    if isinstance(since, int):
+        assert since > 0
+        since = pendulum.now().subtract(since)
+    elif isinstance(since, str):
+        since = pendulum.parse(since)
+    else:
+        since = pendulum.instance(since)
     page = max(start_page, 1)
     while True:
         js = get_json(containerid=containerid, page=page)
@@ -172,17 +196,9 @@ def get_weibo_pages(containerid: str,
                   for w in js['data']['cards'] if w['card_type'] == 9]
 
         for weibo_info in mblogs:
-            weibo = None
-            if 'retweeted_status' in weibo_info:
-                if retweet:
-                    # 若原微博已删除, 返回None
-                    # 否则分别将原微博和转发微博分别解析并写入数据库
-                    weibo = _parse_weibo(weibo_info)
-            elif weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
-                # 若为原创长微博, 则爬取原链接
-                weibo = get_weibo_by_id(weibo_info['id'])
-            else:
-                weibo = _parse_weibo(weibo_info)
+            if weibo_info.get('retweeted_status') and not retweet:
+                continue
+            weibo = _parse_weibo(weibo_info)
             if not weibo:
                 continue
             if weibo['created_at'] < since:
@@ -194,18 +210,19 @@ def get_weibo_pages(containerid: str,
                         f"时间{weibo['created_at']} 在 {since:%y-%m-%d}之前, 获取完毕")
                     end_page = page
                     break
-                    
+
             if download_dir:
                 weibo.save_media(download_dir)
+            yield weibo
 
         logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
         page += 1
-        if end_page  and page > end_page:
+        if end_page and page > end_page:
             break
         pause(mode='page')
 
 
-def get_weibo_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
+def _get_weibo_info_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
     """
     爬取指定id的微博, 若原微博已删除, 返回None
 
@@ -225,7 +242,7 @@ def get_weibo_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
         return
     html = f'{{{html}}}'
     weibo_info = json.loads(html, strict=False)['status']
-    return _parse_weibo(weibo_info)
+    return weibo_info
 
 
 def _parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
@@ -235,59 +252,50 @@ def _parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
         若原微博已删除, 返回 None;
         若原微博为长微博, 则爬取原微博并解析
     若为原创微博, 则直接解析 
-    
-
     Args:
         weibo_info (dict): 原始微博信息
-
     Returns:
         解析后的微博信息. 若为转发的原微博已删除, 返回None
     """
-
-    if 'retweeted_status' not in weibo_info:
-        return _WeiboParser(weibo_info).weibo
-    original = weibo_info['retweeted_status']
-    delete_text = [
-        "该账号因被投诉违反法律法规和《微博社区公约》的相关规定，现已无法查看。查看帮助",
-        "抱歉，作者已设置仅展示半年内微博，此微博已不可见。",
-        "抱歉，此微博已被作者删除。查看帮助"
-    ]
-    for d in delete_text:
-        if d in original['text']:
+    if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
+        weibo_info = _get_weibo_info_by_id(weibo_info['id'])
+        assert 'retweeted_status' not in weibo_info
+    if original := weibo_info.get('retweeted_status'):
+        delete_text = [
+            "该账号因被投诉违反法律法规和《微博社区公约》的相关规定，现已无法查看。查看帮助",
+            "抱歉，作者已设置仅展示半年内微博，此微博已不可见。",
+            "抱歉，此微博已被作者删除。查看帮助"
+        ]
+        if any(d in original['text'] for d in delete_text):
             return
+        if original['pic_num'] > 9 or original['isLongText']:
+            original = _get_weibo_info_by_id(original['id'])
+        parse_weibo_card(original)
 
-    if original['pic_num'] > 9 or original['isLongText']:
-        original = Weibo(int(original['id']))
-    else:
-        original = _parse_weibo(original)
-    retweet = _WeiboParser(weibo_info).weibo
-    retweet.update(
-        original_id=original['id'],
-        original_bid=original['bid'],
-        original_uid=original['user_id'],
-        original_text=original['text']
-    )
-    retweet.update_table()
-    return retweet
+    return parse_weibo_card(weibo_info)
 
 
-class _WeiboParser:
+def parse_weibo_card(weibo_card):
+    return _WeiboCardParser(weibo_card).weibo()
+
+
+
+class _WeiboCardParser:
     """用于解析原始微博内容"""
 
-    def __init__(self, weibo_info):
-        self.info = weibo_info
+    def __init__(self, weibo_card):
+        self.card = weibo_card
         self.wb = OrderedDict()
-        self.parse_info()
+        self.parse_card()
 
-    def parse_info(self):
+    def parse_card(self):
         self.basic_info()
         self.photos_info()
         self.video_info()
-        text = self.info['text'].strip()
-        self.wb |= text_info(text)
+        self.wb |= text_info(self.card['text'])
+        self.retweet_info()
         self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
-    @property
     def weibo(self) -> Weibo:
         """
         return Weibo object and also update weibo table
@@ -302,32 +310,41 @@ class _WeiboParser:
         weibo.update_table()
         return weibo
 
+    def retweet_info(self):
+        if original := self.card.get('retweeted_status'):
+            self.wb.update(
+                original_id=original['id'],
+                original_bid=original['bid'],
+                original_uid=original['user']['id'],
+                original_text=text_info(original['text'])
+            )
+
     def basic_info(self):
-        id_ = self.info['id']
-        bid = self.info['bid']
-        user = self.info['user']
+        id_ = self.card['id']
+        bid = self.card['bid']
+        user = self.card['user']
         user_id = user['id']
         screen_name = user.get('remark') or user['screen_name']
-        created_at = pendulum.parse(self.info['created_at'], strict=False)
+        created_at = pendulum.parse(self.card['created_at'], strict=False)
         assert created_at.is_local()
         self.wb.update(
             user_id=user_id,
             screen_name=screen_name,
-            id=int(self.info['id']),
+            id=int(self.card['id']),
             bid=bid,
             url=f'https://weibo.com/{user_id}/{bid}',
             url_m=f'https://m.weibo.cn/detail/{id_}',
             created_at=created_at,
-            source=self.info['source'],
-            is_pinned=(self.info.get('title', {}).get('text') == '置顶')
+            source=self.card['source'],
+            is_pinned=(self.card.get('title', {}).get('text') == '置顶')
         )
 
     def photos_info(self):
-        pics = self.info.get('pics', [])
+        pics = self.card.get('pics', [])
         pics = [p['large']['url'] for p in pics]
         live_photo = {}
         live_photo_prefix = 'https://video.weibo.com/media/play?livephoto=//us.sinaimg.cn/'
-        if pic_video := self.info.get('pic_video'):
+        if pic_video := self.card.get('pic_video'):
             live_photo = pic_video.split(',')
             live_photo = [p.split(':') for p in live_photo]
             live_photo = {
@@ -337,7 +354,7 @@ class _WeiboParser:
                              for i, pic in enumerate(pics)}
 
     def video_info(self):
-        page_info = self.info.get('page_info', {})
+        page_info = self.card.get('page_info', {})
         if not page_info.get('type') == "video":
             return
         media_info = page_info['urls'] or page_info['media_info']
