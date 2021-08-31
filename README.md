@@ -14,100 +14,100 @@
    from sinaspider import config
    # 写入配置信息
    config(
-      account_id = 'your accout id'
-      database_name = 'your_database_name'
-      write_xmp=True
+      account_id = 'your accout id' # 你的微博账号
+      database_name = 'your_database_name' # 微博和用户信息将保存在该数据库
+      write_xmp=True # 是否将微博信息写入图片(可选, 需安装Exiftool)
    )
    # 读取配置信息
    config()
+   >>> ConfigObj({'database_name': 'sina_test', 'write_xmp': 'True', 'account_id': '6619193364'})
    ```
 4. 设置cookie
    ```python
    import keyring
-   cookie = '...your cookie get from www.m.weibo.cn ...'
+   cookie = '...your cookie get from www.m.weibo.cn ...' # 需要m.weibo.cn网页的cookie
    keyring.set_password('sinaspider', 'cookie', cookie)
    ```
 
-## 使用
+## 微博保存与下载
+可通过微博id或bid获取某条微博, 若微博不存在, 则返回 None.
+所有获取到的结果都将保存在数据库中.
+```python
+>>> from sinaspider import *
+>>> wb_id, wb_bid = 'IqktuyFki', 4462752368262014
+>>> assert Weibo(wb_id) == Weibo(wb_bid)
+```
+下载图片和视频到指定目录:
+```python
+>>> Weibo(wb_id).save_media(download_dir='path/to/download')
+```
+
+### 微博页面
+微博页面可通过 `get_weibo_pages`函数获取, 函数签名如下:
+```python
+
+def get_weibo_pages(containerid: str,
+                    retweet: bool = True,
+                    start_page: int = 1,
+                    end_page=None,
+                    since=None,
+                    download_dir=None
+                    ) -> Generator[Weibo, None, None]:
+    """
+    爬取某一 containerid 类型的所有微博
+
+    Args:
+        containerid(str): 
+            - 获取用户页面的微博: f"107603{user_id}"
+            - 获取收藏页面的微博: 230259
+        retweet (bool): 是否爬取转发微博
+        start_page(int): 指定从哪一页开始爬取, 默认第一页.
+        end_page: 终止页面, 默认爬取到最后一页
+        since: 从哪天开始爬取, 默认所有时间
+        download_dir: 下载目录, 若为空, 则不下载
+
+
+    Yields:
+        Generator[Weibo]: 生成微博实例
+    """
+
+```
+获取的结果都将保存在数据库中. 若为转发微博, 则数据库中将同时产生原微博和转发微博的两条记录
+
+   
+### User
+获取用户信息
+```python
+>>> from sinaspider import User
+>>> uid = 6619193364 # 填写 用户id
+>>> user = User(uid)
+```
+可通过`user.weibos`获取微博页面, 其具体参数参加`get_weibo_pages`
+```python
+# 获取第3页到第10页的所有微博, 并将文件保存在`path/to/download`
+weibos=user.weibos(retweet=True, star_page=3, end_page=10, 
+                  download_dir='path/to/download')
+# 返回下一条微博
+next(weibos)
+```
+
+
+
 
 ### Owner
 
 ```python
->>> from sinaspider import Owner
->>> owner = Owner()
->>> #获取自己的资料
->>> print(owner.info)
-id: 6619193364
-screen_name: cooper_math
-gender: female
-...
-
-
+from sinaspider import Owner
+from pathlib import Path
+owner = Owner()
+#获取自己的资料
+owner.info
 # 获取自己的关注信息
->>> myfollow = owner.following()
->>> next(myfollow)
-{'id': 3486415705,
- 'screen_name': '工程师日常',
- 'statuses_count': 12799,
- 'verified': True,
- ...
-}
-
+myfollow = owner.following()
 # 获取自己的微博
->>> myweibo = owner.weibos()
->>> next(myweibo)
-{'user_id': 6619193364,
- 'screen_name': 'cooper_math',
- 'id': 4675511417047078,
- 'bid': 'KvGoBtzgy',
- 'url': 'https://weibo.com/6619193364/KvGoBtzgy',
- 'url_m': 'https://m.weibo.cn/detail/4675511417047078',
- 'created_at': DateTime(2021, 8, 29, 12, 44, 11, tzinfo=Timezone('+08:00')),
- 'source': 'iPhone',
- 'is_pinned': False,
- 'photos': {'1': ['https://wx2.sinaimg.cn/large/007dXszily1gtxk6impftj30wi1ycdl9.jpg',
-   None]},
- 'text': '千万别给我跌到两位数……'}
-
+myweibo = owner.weibos(download_dir='path/to/dir')
 # 获取收藏页面
->>> mycollection=owner.collections()
+>>> mycollection=owner.collections(download_dir='path/to/dir)
 >>> next(mycollection)
-
-```
-   
-### User
-
-```python
->>> from sinaspider import User
->>> uid = 3945696543
->>> user = User.form_user_id(uid)
->>> user
-User([('id', 3945696543),
-      ('screen_name', '朝阳区第一懒癌选手怼怼酱'),
-      ('birthday', '1997-02-12'),
-      ('age', 24),
-      ('gender', 'female'),
-      ('location', '北京 朝阳区'),
-      ('homepage', 'https://weibo.com/u/3945696543'),
-      ...
-      ])
-
->>> weibos = user.weibos()
-{'user_id': 5668580668,
- 'screen_name': 'PoemsForYou',
- 'id': 4653741938576323,
- 'bid': 'Kmy4xzZ5N',
- 'url': 'https://weibo.com/5668580668/Kmy4xzZ5N',
- 'url_m': 'https://m.weibo.cn/detail/4653741938576323',
- 'created_at': DateTime(2021, 6, 30, 11, 0, 3, tzinfo=Timezone('+08:00')),
- 'source': '微博 weibo.com',
- 'is_pinned': False,
- 'text': '请成为永远疯狂永远浪漫永远清澈的存在。太一 | 大幸运术',
- 'retweet_by': '朝阳区第一懒癌选手怼怼酱',
- 'retweet_by_id': 3945696543,
- 'retweet_id': 4653920125456290,
- 'retweet_bid': 'KmCHWmTqG',
- 'retweet_url': 'https://weibo.com/3945696543/KmCHWmTqG',
- 'retweet_text': '好'}
 
 ```
