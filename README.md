@@ -30,57 +30,50 @@
    ```
 
 ## Quick Start
+将关注者放入配置列表中:
 ```python
+from sinaspider.user import Owner
+from sinaspider.user_config import UserConfig
+owner = Owner()
+for following in owner.following():
+    UserConfig(following)
 ```
+
+读取配置列表中的用户:
+
+```python
+>>> for user_config in UserConfig.yield_config_user():
+>>>     pring(user_config)
+>>>     break
+# 打开所有配置选项
+>>> user_config.toggle_all()
+Fetch Weibo: True
+Fetch Retweet: True
+Download Media: True
+Fetch following: True
+# 获取所有微博
+>>> user_config.fetch_weibo()
+Fetching Retweet: True
+Media Saving: ~/Downloads/sinaspider
+Update Config: True
+```
+每个用户提供如下配置选项:
+1. `weibo_fetch`: 是否下载微博
+4. `weibo_since`: 只获取该日期后的微博(默认为`1970-01-01`, 即获取所有微博)
+2. `retweet_fetch`: 是否下载转发微博
+3. `media_download`: 是否下载图片和视频
+
+
+
 
 
 
 
 
 ## 微博保存与下载
-可通过微博id或bid获取某条微博, 若微博不存在, 则返回 None.
-所有获取到的结果都将保存在数据库中.
-```python
->>> from sinaspider import *
->>> wb_id, wb_bid = 'IqktuyFki', 4462752368262014
->>> assert Weibo(wb_id) == Weibo(wb_bid)
-```
-下载图片和视频到指定目录:
-```python
->>> Weibo(wb_id).save_media(download_dir='path/to/download')
-```
-
-### 微博页面
-微博页面可通过 `get_weibo_pages`函数获取, 函数签名如下:
-```python
-
-def get_weibo_pages(containerid: str,
-                    retweet: bool = True,
-                    start_page: int = 1,
-                    end_page=None,
-                    since=None,
-                    download_dir=None
-                    ) -> Generator[Weibo, None, None]:
-    """
-    爬取某一 containerid 类型的所有微博
-
-    Args:
-        containerid(str): 
-            - 获取用户页面的微博: f"107603{user_id}"
-            - 获取收藏页面的微博: 230259
-        retweet (bool): 是否爬取转发微博
-        start_page(int): 指定从哪一页开始爬取, 默认第一页.
-        end_page: 终止页面, 默认爬取到最后一页
-        since: 从哪天开始爬取, 默认所有时间
-        download_dir: 下载目录, 若为空, 则不下载
 
 
-    Yields:
-        Generator[Weibo]: 生成微博实例
-    """
 
-```
-获取的结果都将保存在数据库中. 若为转发微博, 则数据库中将同时产生原微博和转发微博的两条记录
 
    
 ### User

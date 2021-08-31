@@ -190,6 +190,7 @@ def get_weibo_pages(containerid: str,
 
         for weibo_info in mblogs:
             if weibo_info.get('retweeted_status') and not retweet:
+                logger.info('过滤转发微博...')
                 continue
             from sinaspider.parser import parse_weibo
             weibo = parse_weibo(weibo_info)

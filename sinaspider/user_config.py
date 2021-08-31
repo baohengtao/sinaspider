@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from pathlib import Path
 
 import pendulum
 
@@ -29,7 +30,7 @@ class UserConfig(OrderedDict):
             id=user_id,
             weibo_fetch=False,
             retweet_fetch=False,
-            media_download=True,
+            media_download=False,
             follow_fetch=False,
             weibo_since=pendulum.from_timestamp(0, tz='local'),
             follow_update=pendulum.from_timestamp(0, tz='local')
@@ -42,46 +43,80 @@ class UserConfig(OrderedDict):
         user = cls.table.find_one(id=user_id)
         return cls(user)
 
-    def is_weibo_fetch(self, value=None) -> bool:
+    def toggle_weibo_fetch(self, value=None) -> bool:
         if value is not None:
             assert isinstance(value, bool)
             self['weibo_fetch'] = value
         is_fetch = self.setdefault('weibo_fetch', False)
         self.update_table()
+        logger.info(f'Fetch Weibo: {is_fetch}')
         return is_fetch
 
-    def is_follow_fetch(self, value=None):
+    def toggle_retweet_fetch(self, value=None):
+        if value is not None:
+            assert isinstance(value, bool)
+            self['retweet_fetch'] = value
+        is_fetch = self.setdefault('retweet_fetch', False)
+        self.update_table()
+        logger.info(f'Fetch Retweet: {is_fetch}')
+        return is_fetch
+
+    def toggle_media_download(self, value=None):
+        if value is not None:
+            assert isinstance(value, bool)
+            self['media_download'] = value
+        is_download = self.setdefault('media_download', False)
+        self.update_table()
+        logger.info(f'Download Media: {is_download}')
+        return is_download
+    
+    def toggle_follow_fetch(self, value=None):
         if value is not None:
             assert isinstance(value, bool)
             self['follow_fetch'] = value
         is_fetch = self.setdefault('follow_fetch', False)
         self.update_table()
+        logger.info(f'Fetch following: {is_fetch}')
         return is_fetch
 
-    def weibo_fetch(self, download_dir, days=5):
-        if not self.is_weibo_fetch():
+    def toggle_all(self, value):
+        self.toggle_weibo_fetch(value)
+        self.toggle_retweet_fetch(value)
+        self.toggle_media_download(value)
+        self.toggle_follow_fetch(value)
+
+    def fetch_weibo(self, download_dir=None, update_interval=5, update=True):
+        if not self.toggle_weibo_fetch():
             print('skipping....for weibo_fetch is set to False')
             return
         weibo_since, now = pendulum.instance(self['weibo_since']), pendulum.now()
-        if weibo_since.diff().days < days:
-            print(f'skipping...for fetched at recent {days} days')
+        if weibo_since.diff().days < update_interval:
+            print(f'skipping...for fetched at recent {update_interval} days')
             return
-        logger.info(f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
         user = User(self['id'])
-        weibos = user.weibos(retweet=True,
+        if self.toggle_media_download():
+            download_dir = download_dir or Path.home() / 'Downloads/sinaspider'
+        else:
+            download_dir = None
+        
+        weibos = user.weibos(retweet=self.toggle_retweet_fetch(),
                              since=weibo_since,
                              download_dir=download_dir)
         print(user)
+        logger.info(f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
+        logger.info(f"Fetching Retweet: {self.toggle_retweet_fetch()}")
+        logger.info(f"Media Saving: {download_dir or False}")
+        logger.info(f"Update Config: {update}")
         for weibo in weibos:
             print(weibo)
-
-        self.update(weibo_since=now, weibo_since_previous=weibo_since)
-        self.update_table()
+        if update:
+            self.update(weibo_since=now, weibo_since_previous=weibo_since)
+            self.update_table()
         logger.success(f'{user["screen_name"]}微博获取完毕')
         pause(mode='user')
 
-    def follow_fetch(self, days=None):
-        if not self.is_follow_fetch():
+    def fetch_follow(self, days=None):
+        if not self.toggle_follow_fetch():
             print('skipping....for follow_fetch is set to False')
             return
         days = days or 15

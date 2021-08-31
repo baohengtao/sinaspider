@@ -1,5 +1,5 @@
 import dataset
-from sqlalchemy import ARRAY, Text, Integer, Boolean, DateTime
+from sqlalchemy import ARRAY, Text, Integer, Boolean, DateTime, JSON, BigInteger
 
 from sinaspider.helper import config
 
@@ -12,7 +12,7 @@ DATABASE = config()['database_name']
 pg = dataset.connect(f'postgresql://localhost/{DATABASE}')
 _table_para = dict(
     primary_id='id',
-    primary_type=pg.types.bigint,
+    primary_type=BigInteger,
     primary_increment=False)
 user_table = pg.create_table(USER_TABLE, **_table_para)
 weibo_table = pg.create_table(WEIBO_TABLE, **_table_para)
@@ -57,8 +57,36 @@ config_columns = (
     ('follow_update', DateTime(timezone=True))
 )
 
-for column_key, column_type in user_columns:
-    user_table.create_column(column_key, column_type)
+weibo_columns = (
+    ('bid', Text),
+    ('user_id', BigInteger),
+    ('screen_name', Text),
+    ('text', Text),
+    ('location', Text),
+    ('created_at', DateTime(timezone=True)),
+    ('at_users', ARRAY(Text)),
+    ('topics', ARRAY(Text)),
+    ('source', Text),
+    ('original_id', BigInteger),
+    ('original_bid', Text),
+    ('original_uid', BigInteger),
+    ('original_text', Text),
+    ('reposts_count', Integer),
+    ('comments_count', Integer),
+    ('attitudes_count', Integer),
+    ('url', Text),
+    ('url_m', Text),
+    ('photos', JSON),
+    ('video_url', Text),
+    ('is_pinned', Boolean),
+)
 
-for column_key, column_type in config_columns:
-    config_table.create_column(column_key, column_type)
+
+def create_table_columns(table, columns):
+    for column_key, column_type in columns:
+        table.create_column(column_key, column_type)
+
+
+create_table_columns(user_table, user_columns)
+create_table_columns(config_table, config_columns)
+create_table_columns(weibo_table, weibo_columns)

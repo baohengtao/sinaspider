@@ -181,6 +181,7 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
         assert user_info.pop('性别') == '男'
         user_info['gender'] = 'male'
 
+
     # pop items
     keys = ['cover_image_phone', 'profile_image_url', 'profile_url']
     for key in keys:

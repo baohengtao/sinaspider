@@ -106,7 +106,7 @@ def parse_weibo_card(weibo_card):
                     original_id=original['id'],
                     original_bid=original['bid'],
                     original_uid=original['user']['id'],
-                    original_text=text_info(original['text'])
+                    original_text=text_info(original['text'])['text']
                 )
 
         def basic_info(self):
@@ -128,6 +128,8 @@ def parse_weibo_card(weibo_card):
                 source=self.card['source'],
                 is_pinned=(self.card.get('title', {}).get('text') == '置顶')
             )
+            for key in ['reposts_count', 'comments_count', 'attitudes_count']:
+                self.wb[key]=self.card[key]
 
         def photos_info(self):
             pics = self.card.get('pics', [])

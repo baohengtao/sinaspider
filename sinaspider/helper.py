@@ -70,7 +70,7 @@ class Pause:
             stop=random.randint(3, 5),
             visited=0,
             level={
-                'short': 5,
+                'short': 3,
                 'break': 20,
                 'long': 50
             },
@@ -114,6 +114,7 @@ class Pause:
     @staticmethod
     def _sleep(sleep_time):
         sleep_time = random.randint(int(0.5 * sleep_time), int(1.5 * sleep_time))
+        logger.info(f'sleeping {sleep_time} second(s)')
 
         for i in range(sleep_time):
             print(f'sleep {i}/{sleep_time}', end='\r')
