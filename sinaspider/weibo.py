@@ -70,6 +70,7 @@ class Weibo(OrderedDict):
         if original_id := self.get('original_id'):
             download_dir /= 'retweet'
             return self._from_weibo_id(original_id).save_media(download_dir)
+        
         download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"
         download_list = []

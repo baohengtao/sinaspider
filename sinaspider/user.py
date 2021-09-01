@@ -51,28 +51,37 @@ class User(OrderedDict):
         docu = cls.table.find_one(id=user_id) or {}
         if offline is None:
             offline = False
-            if docu and (updated := docu.get('updated')):
+            if docu and (updated := docu.get('info_updated_at')):
                 # 若最近15天更新过, 则 offline 为 True
                 offline = (pendulum.instance(updated).diff().days < 15)
         if offline is False:
             logger.info('update online...')
-            user = fetch_user_info(user_id)
-            cls.table.upsert(user, ['id'])
+            fetch_user_info(user_id)
             docu = cls(cls.table.find_one(id=user_id))
             print(docu)
         docu = cls((k, v) for k, v in docu.items() if v)
         return docu
+    
+    def update_table(self):
+        self.table.upsert(self, ['id'])
+        
 
-    def following(self, *args, **kwargs):
-        """爬取用户的关注"""
-        containerid = f'231051_-_followers_-_{self["id"]}'
-        for followed in get_follow_pages(containerid, *args, **kwargs):
-            if docu := self.relation_table.find_one(id=followed['id']):
-                followed = docu | followed
-            followed.setdefault('follower', {})[
-                self['id']] = self['screen_name']
-            self.relation_table.upsert(followed, ['id'])
-            yield followed
+    def following(self, frineds_info=True, **kwargs):
+        followings = get_follow_pages(f'231051_-_followers_-_{self["id"]}', **kwargs)
+        fans = get_follow_pages(f'231051_-_fans_-_{self["id"]}')
+        logger.info('正在获取关注页面')
+        for following in followings:
+            following = self.__class__(following['id'])
+            following['follower'] = self['id']
+            following['follower_name'] = self['screen_name']
+            following['following'] = following.pop('id')
+            self.relation_table.upsert(following, ['follower', 'following'])
+        if frineds_info:
+            for fan in fans:
+                if row := self.relation_table.find_one(follower=self['id'], following=fan['id']):
+                    row['is_friends'] = True
+                    logger.info(f'Friends: {fan}')
+                    self.relation_table.upsert(row, ['follower', 'following'])
 
     def __str__(self):
         text = ''
@@ -117,7 +126,11 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page
     if end_page:
         assert start_page <= end_page
     while True:
-        js = get_json(containerid=containerid, page=page)
+        if 'fans' in containerid:
+            js = get_json(containerid=containerid, page=page, since_id=21 * page - 1)
+        else:
+            js = get_json(containerid=containerid, page=page)
+
         if not js['ok']:
             logger.success(f"关注信息已更新完毕")
             break
@@ -141,7 +154,7 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page
         logger.success(f'页面 {page} 已获取完毕')
         pause(mode='page')
         page += 1
-        if page > end_page:
+        if end_page and page > end_page:
             break
 
 
@@ -156,11 +169,14 @@ def fetch_user_info(user_id: int) -> User:
         logger.info(user_info)
         assert False
     user = _user_info_fix(extra | user_info)
-    user['updated'] = pendulum.now()
+    user['info_updated_at'] = pendulum.now()
+    user = User(user)
+    user.update_table()
+    
     # 获取用户数据
     logger.info(f"{user['screen_name']} 信息已获取.")
     pause(mode='page')
-    return User(user)
+    return user
 
 
 def _user_info_fix(user_info: dict) -> OrderedDict:
@@ -181,7 +197,6 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
         assert user_info.pop('性别') == '男'
         user_info['gender'] = 'male'
 
-
     # pop items
     keys = ['cover_image_phone', 'profile_image_url', 'profile_url']
     for key in keys:
@@ -200,7 +215,9 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
     values = [user_info.pop(k, '') for k in keys]
     values = [v for v in values if v]
     if values:
-        assert len(set(values)) == 1
+        if not len(set(values)) == 1:
+            logger.error(set(values))
+            assert  False
         user_info[keys[0]] = values[0]
 
     if '生日' in user_info:
@@ -211,12 +228,15 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
         if birthday == '0001-00-00':
             pass
         elif re.match(r'\d{4}-\d{2}-\d{2}', birthday):
-            age = pendulum.parse(birthday).diff().years
+            try:
+                age = pendulum.parse(birthday).diff().years
+                user_info['age'] = age
+            except pendulum.parsing.ParserError:
+                logger.warning(f'Cannot parse birthday {birthday}')
             user_info['birthday'] = birthday
-            user_info['age'] = age
     if education := user_info.pop('学习经历', ''):
         assert 'education' not in user_info
-        for key in ['大学', '海外', '高中']:
+        for key in ['大学', '海外', '高中', '初中', '中专技校']:
             assert user_info.pop(key, '') in ' '.join(education)
         user_info['education'] = education
 
@@ -268,10 +288,13 @@ def _get_user_cn(uid):
                 for line in str(c).split('<br/>'):
                     if text := BeautifulSoup(line, 'lxml').text:
                         text = text.replace('\xa0', ' ')
-                        if text[:2] == '简介':
-                            infos['简介'] = text[3:]
-                        else:
-                            infos.update([text.replace('：', ':').split(':')])
+                        try:
+                            key, value = re.split('[:：]', text, maxsplit=1)
+                            infos[key]=value
+                        except ValueError as e:
+                            logger.error(f'{text} cannot parsed')
+                            raise e
+                    
             elif tip.text == '学习经历' or '工作经历':
                 education = c.text.replace('\xa0', ' ').split('·')
                 infos[tip.text] = [e.strip() for e in education if e]

@@ -15,14 +15,14 @@ class UserConfig(OrderedDict):
             super().__init__(*args, **kwargs)
         else:
             super().__init__(self._from_user_id(args[0]))
+            self.update_table()
 
     def update_table(self):
         user = User(self['id'])
-        keys = ['screen_name', 'remark', 'birthday', 'age', 'homepage',
-                'followers_count', 'follow_count', 'following']
-        for key in keys:
-            self[key] = user.get(key)
-        self.table.upsert(self, ['id'])
+        if remark := user.pop('remark'):
+            user['screen_name'] = remark
+        self.table.upsert(user, ['id'], ensure=False)
+        self.table.upsert(self, ['id'], ensure=True)
 
     @classmethod
     def _from_user_id(cls, user_id):
@@ -32,14 +32,9 @@ class UserConfig(OrderedDict):
             retweet_fetch=False,
             media_download=False,
             follow_fetch=False,
-            weibo_since=pendulum.from_timestamp(0, tz='local'),
-            follow_update=pendulum.from_timestamp(0, tz='local')
         )
-        if user := cls.table.find_one(id=user_id):
-            cls(user).update_table()
-        else:
-            init_user.update_table()
-
+        user = cls.table.find_one(id=user_id) or init_user
+        cls(user).update_table()
         user = cls.table.find_one(id=user_id)
         return cls(user)
 
@@ -69,7 +64,7 @@ class UserConfig(OrderedDict):
         self.update_table()
         logger.info(f'Download Media: {is_download}')
         return is_download
-    
+
     def toggle_follow_fetch(self, value=None):
         if value is not None:
             assert isinstance(value, bool)
@@ -89,28 +84,34 @@ class UserConfig(OrderedDict):
         if not self.toggle_weibo_fetch():
             print('skipping....for weibo_fetch is set to False')
             return
-        weibo_since, now = pendulum.instance(self['weibo_since']), pendulum.now()
-        if weibo_since.diff().days < update_interval:
-            print(f'skipping...for fetched at recent {update_interval} days')
-            return
+        weibo_since, now = self['weibo_update_at'], pendulum.now()
+        if weibo_since:
+            weibo_since = pendulum.instance(weibo_since)
+            if weibo_since.diff().days < update_interval:
+                print(f'skipping...for fetched at recent {update_interval} days')
+                return
         user = User(self['id'])
         if self.toggle_media_download():
-            download_dir = download_dir or Path.home() / 'Downloads/sinaspider'
+            if download_dir:
+                download_dir = Path(download_dir) / self['screen_name']
+            else:
+                download_dir = Path.home() / 'Downloads/sinaspider' / self['screen_name']
         else:
             download_dir = None
-        
+
         weibos = user.weibos(retweet=self.toggle_retweet_fetch(),
                              since=weibo_since,
                              download_dir=download_dir)
         print(user)
-        logger.info(f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
+        logger.info(
+            f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
         logger.info(f"Fetching Retweet: {self.toggle_retweet_fetch()}")
         logger.info(f"Media Saving: {download_dir or False}")
         logger.info(f"Update Config: {update}")
         for weibo in weibos:
             print(weibo)
         if update:
-            self.update(weibo_since=now, weibo_since_previous=weibo_since)
+            self.update(weibo_update_at=now, weibo_previous_update=weibo_since)
             self.update_table()
         logger.success(f'{user["screen_name"]}微博获取完毕')
         pause(mode='user')
@@ -120,14 +121,16 @@ class UserConfig(OrderedDict):
             print('skipping....for follow_fetch is set to False')
             return
         days = days or 15
-        follow_update, now = pendulum.instance(self['follow_update']), pendulum.now()
-        if follow_update.diff().days < days:
-            print(f'skipping...for fetched at recent {days} days')
+        follow_update_at = self['follow_update_at']
+        if follow_update_at:
+            follow_update_at = pendulum.instance(follow_update_at)
+            if follow_update_at.diff().days < days:
+                print(f'skipping...for fetched at recent {days} days')
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')
         user = User(self['id'])
         print(user)
-        list(user.following())
-        self.update(follow_update=now)
+        user.following()
+        self.update(follow_update_at=pendulum.now())
         self.update_table()
         logger.success(f'{user["screen_name"]} 的关注已获取')
         pause(mode='user')
