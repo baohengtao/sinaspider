@@ -3,7 +3,7 @@
 .vscode
 poetry.lock
 dist
-Untitled*.ipynb
+*.ipynb
 *checkpoint*
 __pycache__
 docs
