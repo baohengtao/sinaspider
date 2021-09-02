@@ -3,17 +3,14 @@ import re
 from collections import OrderedDict
 from datetime import timedelta
 from functools import partial
+from itertools import chain
 from pathlib import Path
-from time import sleep
-from typing import Union, Generator
-from itertools import  chain
 
 import pendulum
 from bs4 import BeautifulSoup
-from tqdm import trange
 
 from sinaspider.helper import get_url, logger, pause, get_config, weibo_api_url, write_xmp
-from sinaspider.weibo import get_weibo_pages
+from sinaspider.page import get_weibo_pages, get_follow_pages
 
 
 class Owner:
@@ -28,7 +25,7 @@ class Owner:
 class User(OrderedDict):
     from sinaspider.database import user_table as table
     from sinaspider.database import relation_table
- 
+
     def __init__(self, *args, **kwargs):
         if kwargs or args[1:] or not isinstance(args[0], int):
             super().__init__(*args, **kwargs)
@@ -116,63 +113,10 @@ class User(OrderedDict):
             logger.warning(f'{filepath} already exists')
         else:
             filepath.write_bytes(downloaded)
-            tags = {'XMP:Artist': self['screen_name'], 'XMP:BlogURL':self['homepage']}
+            tags = {'XMP:Artist': self['screen_name'], 'XMP:BlogURL': self['homepage']}
             write_xmp(tags, filepath)
             logger.success(f'save avatar at  {filepath}')
         return downloaded
-
-
-def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Generator[dict, None, None]:
-    """
-    获取关注列表
-
-    Args:
-        containerid (Union[str, int]):
-            - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
-        cache_days: 页面缓冲时间时间, 若为0, 则不缓存
-
-    Yields:
-        Generator[dict]: 返回用户字典
-    """
-    page = 1
-    while True:
-        url = weibo_api_url.set(args={'containerid': containerid})
-        if 'fans' in containerid:
-            url.args['since_id'] = 21 * page - 1
-        else:
-            url.args['page'] = page
-        response = get_url(url, expire_after=timedelta(days=cache_days))
-        js = response.json()
-        if not js['ok']:
-            if js['msg'] == '请求过于频繁，歇歇吧':
-                response.revalidate(0)
-                for i in trange(1800, desc='sleeping...'):
-                    sleep(i / 4)
-            else:
-                logger.success(f"关注信息已更新完毕")
-                logger.info(f'js==>{js}')
-                break
-        cards_ = js['data']['cards'][0]['card_group']
-
-        users = [card.get('following') or card.get('user')
-                 for card in cards_ if card['card_type'] == 10]
-        for user in users:
-            no_key = ['cover_image_phone',
-                      'profile_url', 'profile_image_url']
-            user = {k: v for k, v in user.items() if v and k not in no_key}
-            if user.get('remark'):
-                user['screen_name'] = user.pop('remark')
-            user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-            if user['gender'] == 'f':
-                user['gender'] = 'female'
-            elif user['gender'] == 'm':
-                user['gender'] = 'male'
-
-            yield user
-        logger.success(f'页面 {page} 已获取完毕')
-        if not response.from_cache:
-            pause(mode='page')
-        page += 1
 
 
 def fetch_user_info(uid: int, cache_days=30) -> User:
@@ -200,7 +144,7 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
 
     # 合并信息
     user = user_card | user_cn | user_info
-    s = {(k, str(v)) for k, v in  chain.from_iterable([user_card.items(), user_cn.items(), user_info.items()])}
+    s = {(k, str(v)) for k, v in chain.from_iterable([user_card.items(), user_cn.items(), user_info.items()])}
     assert s.issubset({(k, str(v)) for k, v in user.items()})
     user = _user_info_fix(user)
     user['info_updated_at'] = pendulum.now()

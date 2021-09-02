@@ -1,11 +1,8 @@
 from collections import OrderedDict
-from datetime import datetime
 from pathlib import Path
-from typing import Union, Generator
+from typing import Union
 
-import pendulum
-
-from sinaspider.helper import logger, get_url, pause, convert_wb_bid_to_id, weibo_api_url
+from sinaspider.helper import logger, get_url, convert_wb_bid_to_id
 
 
 class Weibo(OrderedDict):
@@ -141,81 +138,3 @@ class Weibo(OrderedDict):
             return xmp_info
         else:
             return {'XMP:' + k: v for k, v in xmp_info.items()}
-
-
-def get_weibo_pages(containerid: str,
-                    retweet: bool = True,
-                    start_page: int = 1,
-                    end_page=None,
-                    since: Union[int, str, datetime] = '1970-01-01',
-                    download_dir=None
-                    ) -> Generator[Weibo, None, None]:
-    """
-    爬取某一 containerid 类型的所有微博
-
-    Args:
-        containerid(str): 
-            - 获取用户页面的微博: f"107603{user_id}"
-            - 获取收藏页面的微博: 230259
-        retweet (bool): 是否爬取转发微博
-        start_page(int): 指定从哪一页开始爬取, 默认第一页.
-        end_page: 终止页面, 默认爬取到最后一页
-        since: 若为整数, 从哪天开始爬取, 默认所有时间
-        download_dir: 下载目录, 若为空, 则不下载
-
-
-    Yields:
-        Generator[Weibo]: 生成微博实例
-    """
-    if isinstance(since, int):
-        assert since > 0
-        since = pendulum.now().subtract(since)
-    elif isinstance(since, str):
-        since = pendulum.parse(since)
-    else:
-        since = pendulum.instance(since)
-    page = max(start_page, 1)
-    while True:
-        url = weibo_api_url.copy()
-        url.args = {'containerid': containerid, 'page': page}
-        response = get_url(url)
-        js = response.json()
-        if not js['ok']:
-            if js['msg'] == '请求过于频繁，歇歇吧':
-                logger.critical('be banned')
-                return js
-            else:
-                logger.warning(
-                    f"not js['ok'], seems reached end, no wb return for page {page}")
-                break
-
-        mblogs = [w['mblog']
-                  for w in js['data']['cards'] if w['card_type'] == 9]
-
-        for weibo_info in mblogs:
-            if weibo_info.get('retweeted_status') and not retweet:
-                logger.info('过滤转发微博...')
-                continue
-            from sinaspider.parser import parse_weibo
-            weibo = parse_weibo(weibo_info)
-            if not weibo:
-                continue
-            if weibo['created_at'] < since:
-                if weibo['is_pinned']:
-                    logger.warning(f"发现置顶微博, 跳过...")
-                    continue
-                else:
-                    logger.info(
-                        f"时间{weibo['created_at']} 在 {since:%y-%m-%d}之前, 获取完毕")
-                    end_page = page
-                    break
-
-            if download_dir:
-                weibo.save_media(download_dir)
-            yield weibo
-
-        logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
-        page += 1
-        if end_page and page > end_page:
-            break
-        pause(mode='page')
