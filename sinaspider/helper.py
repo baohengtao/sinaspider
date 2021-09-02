@@ -18,7 +18,10 @@ xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
 CONFIG_FILE = os.path.join(xdg_cache_home, 'sinaspider.ini')
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
-
+headers = {
+    "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
+    "Cookie": keyring.get_password('sinaspider', 'cookie')
+}
 
 def get_config(account_id=None, database_name=None, write_xmp=None, download_dir=None):
     """
@@ -30,35 +33,13 @@ def get_config(account_id=None, database_name=None, write_xmp=None, download_dir
     Returns:
         [dict]: 当前的配置信息
     """
-    overwrite = {k:v for k, v in locals().items() if v is not None}
-    default = {'database_name': 'sina', 'write_xmp': False, 'download_dir':Path.home()/'Downloads/sinaspider'}
+    overwrite = {k: v for k, v in locals().items() if v is not None}
+    default = {'database_name': 'sina', 'write_xmp': False,
+               'download_dir': Path.home()/'Downloads/sinaspider'}
     config = ConfigObj(CONFIG_FILE)
     config.update(default | config | overwrite)
     config.write()
     return config
-
-    
-
-def write_xmp(tags, img):
-    if get_config().as_bool('write_xmp'):
-        try:
-            import exiftool
-        except ModuleNotFoundError as e:
-            logger.warning('exiftool not installed, cannot write xmp info to img')
-            return
-    else:
-        return
-    
-    with exiftool.ExifTool() as et:
-        et.set_tags(tags, str(img))
-        Path(img).with_name(Path(img).name+'_original').unlink()
-        
-    
-
-headers = {
-    "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
-    "Cookie": keyring.get_password('sinaspider', 'cookie')
-}
 
 
 def get_url(url, expire_after=0):
@@ -77,8 +58,20 @@ def get_url(url, expire_after=0):
 
 
 
+def write_xmp(tags, img):
+    if get_config().as_bool('write_xmp'):
+        try:
+            import exiftool
+        except ModuleNotFoundError as e:
+            logger.warning(
+                'exiftool not installed, cannot write xmp info to img')
+            return
+    else:
+        return
 
-
+    with exiftool.ExifTool() as et:
+        et.set_tags(tags, str(img))
+        Path(img).with_name(Path(img).name+'_original').unlink()
 
 
 class Pause:
