@@ -62,7 +62,7 @@ def write_xmp(tags, img):
     if get_config().as_bool('write_xmp'):
         try:
             import exiftool
-        except ModuleNotFoundError as e:
+        except ModuleNotFoundError:
             logger.warning(
                 'exiftool not installed, cannot write xmp info to img')
             return

@@ -7,7 +7,6 @@ from sinaspider.helper import logger, get_url, convert_wb_bid_to_id, write_xmp
 
 class Weibo(OrderedDict):
     from sinaspider.database import weibo_table as table
-    from sinaspider.helper import get_config as _config
     def __init__(self, *args, **kwargs):
         """
         可通过微博id获取某条微博, 同时支持数字id和bid.
