@@ -58,7 +58,10 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
 
     """
     url = f'https://m.weibo.cn/detail/{wb_id}'
-    html = get_url(url).text
+    response = get_url(url, expire_after=-1)
+    if response.from_cache:
+        logger.info(f'fetching {wb_id} from cache')
+    html = response.text
     html = html[html.find('"status"'):]
     html = html[:html.rfind('"hotScheme"')]
     html = html[:html.rfind(',')]

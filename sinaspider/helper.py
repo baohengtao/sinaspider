@@ -1,23 +1,24 @@
 import os
 import random
 import sys
-from functools import partial
 from time import sleep
 
 import keyring
-import requests
 from baseconv import base62
 from configobj import ConfigObj
+from furl import furl
 from loguru import logger
+from requests_cache import CachedSession
 
 logger.remove()
 logger.add(sys.stdout, colorize=True)
 
 _configpath = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
 CONFIG_FILE = os.path.join(_configpath, 'sinaspider.ini')
+weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
 
-def config(account_id=None, database_name=None, write_xmp=None):
+def get_config(account_id=None, database_name=None, write_xmp=None):
     """
     写入并读取配置
     Args:
@@ -46,20 +47,24 @@ headers = {
     "Cookie": keyring.get_password('sinaspider', 'cookie')
 }
 
-get_url = partial(requests.get, headers=headers)
 
+def get_url(url, expire_after=0):
+    session = CachedSession(expire_after=expire_after)
 
-def get_json(**params):
-    url = 'https://m.weibo.cn/api/container/getIndex?'
     while True:
         try:
-            r = get_url(url, params=params)
+            r = session.get(url, headers=headers)
             break
         except TimeoutError:
             logger.error('Timeout sleep 600seconds and retry...')
             sleep(10 * 60)
 
-    return r.json()
+    return r
+
+
+
+
+
 
 
 class Pause:
@@ -113,7 +118,8 @@ class Pause:
 
     @staticmethod
     def _sleep(sleep_time):
-        sleep_time = random.randint(int(0.5 * sleep_time), int(1.5 * sleep_time))
+        sleep_time = random.randint(
+            int(0.5 * sleep_time), int(1.5 * sleep_time))
         logger.info(f'sleeping {sleep_time} second(s)')
 
         for i in range(sleep_time):

@@ -1,20 +1,24 @@
+import json
 import re
 from collections import OrderedDict
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
+from time import sleep
 from typing import Union, Generator
 
 import pendulum
 from bs4 import BeautifulSoup
+from tqdm import trange
 
-from sinaspider.helper import get_json, get_url, logger, pause, config
+from sinaspider.helper import get_url, logger, pause, get_config, weibo_api_url
 from sinaspider.weibo import get_weibo_pages
 
 
 class Owner:
     def __init__(self):
-        myid = config()['account_id']
-        self.info = User(int(myid))
+        account_id = get_config().as_int('account_id')
+        self.info = User(account_id)
         self.weibos = self.info.weibos
         self.following = self.info.following
         self.collection = partial(get_weibo_pages, containerid=230259)
@@ -31,6 +35,8 @@ class User(OrderedDict):
             super().__init__(self.from_user_id(args[0]))
         self.weibos = partial(
             get_weibo_pages, containerid=f"107603{self['id']}")
+        self.following = partial(
+            get_follow_pages, f'231051_-_followers_-_{self["id"]}')
 
     @classmethod
     def from_user_id(cls, user_id, offline=None):
@@ -61,27 +67,30 @@ class User(OrderedDict):
             print(docu)
         docu = cls((k, v) for k, v in docu.items() if v)
         return docu
-    
+
     def update_table(self):
         self.table.upsert(self, ['id'])
-        
 
-    def following(self, frineds_info=True, **kwargs):
-        followings = get_follow_pages(f'231051_-_followers_-_{self["id"]}', **kwargs)
-        fans = get_follow_pages(f'231051_-_fans_-_{self["id"]}')
+    def relation(self, frineds_only=True, **kwargs):
         logger.info('正在获取关注页面')
-        for following in followings:
-            following = self.__class__(following['id'])
+        follow = get_follow_pages(
+            f'231051_-_followers_-_{self["id"]}', **kwargs)
+        follow = {u['id'] for u in follow}
+        logger.info(f"共获取 {len(follow)}/{self['follow_count']} 个关注")
+
+        fans = get_follow_pages(f'231051_-_fans_-_{self["id"]}')
+        fans = {u['id'] for u in fans}
+        logger.info(f"共获取 {len(fans)}/{self['followers_count']} 个粉丝")
+        friends = fans & follow
+        for uid in follow:
+            if frineds_only and uid not in friends:
+                continue
+            following = self.__class__(uid)
             following['follower'] = self['id']
             following['follower_name'] = self['screen_name']
             following['following'] = following.pop('id')
+            following['is_friends'] = uid in friends
             self.relation_table.upsert(following, ['follower', 'following'])
-        if frineds_info:
-            for fan in fans:
-                if row := self.relation_table.find_one(follower=self['id'], following=fan['id']):
-                    row['is_friends'] = True
-                    logger.info(f'Friends: {fan}')
-                    self.relation_table.upsert(row, ['follower', 'following'])
 
     def __str__(self):
         text = ''
@@ -108,7 +117,7 @@ class User(OrderedDict):
         return downloaded
 
 
-def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page=None) -> Generator[dict, None, None]:
+def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page=None, cache_days=30) -> Generator[dict, None, None]:
     """
     获取关注列表
 
@@ -118,6 +127,7 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page
 
         start_page (int, optional): 起始爬取页面
         end_page: 结束页面, 默认所有
+        cache_days: 页面缓冲时间时间, 若为0, 则不缓存
 
     Yields:
         Generator[dict]: 返回用户字典
@@ -126,14 +136,22 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page
     if end_page:
         assert start_page <= end_page
     while True:
+        url = weibo_api_url.set(args={'containerid': containerid})
         if 'fans' in containerid:
-            js = get_json(containerid=containerid, page=page, since_id=21 * page - 1)
+            url.args['since_id'] = 21 * page - 1
         else:
-            js = get_json(containerid=containerid, page=page)
-
+            url.args['page'] = page
+        response = get_url(url, expire_after=timedelta(days=cache_days))
+        js = response.json()
         if not js['ok']:
-            logger.success(f"关注信息已更新完毕")
-            break
+            if js['msg'] == '请求过于频繁，歇歇吧':
+                response.revalidate(0)
+                for i in trange(1800, desc='sleeping...'):
+                    sleep(i / 4)
+            else:
+                logger.success(f"关注信息已更新完毕")
+                logger.info(f'js==>{js}')
+                break
         cards_ = js['data']['cards'][0]['card_group']
 
         users = [card.get('following') or card.get('user')
@@ -152,33 +170,56 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page
 
             yield user
         logger.success(f'页面 {page} 已获取完毕')
-        pause(mode='page')
-        page += 1
+        if not response.from_cache:
+            pause(mode='page')
+            page += 1
         if end_page and page > end_page:
             break
 
 
-def fetch_user_info(user_id: int) -> User:
-    """获取用户信息"""
-    user_info = get_json(containerid=f"100505{user_id}")
-    user_info = user_info['data']['userInfo']
+def fetch_user_info(uid: int, cache_days=30) -> User:
+    expire_after = timedelta(days=cache_days)
+    url = weibo_api_url.copy()
+
+    # 获取来自m.weibo.com的信息
+    logger.info(f'fetching extra user info for {uid}')
+    url.args = {'containerid': f"230283{uid}_-_INFO"}
+    respond_card = get_url(url, expire_after)
+    user_card = _parse_user_card(respond_card)
+
+    # 获取主信息
+    logger.info(f'fetching  user info for {uid}')
+    url.args = {'containerid': f"100505{uid}"}
+    respond_info = get_url(url, expire_after)
+    js = json.loads(respond_info.content)
+    logger.info(url)
+    user_info = js['data']['userInfo']
     user_info.pop('toolbar_menus', '')
-    extra = _get_user_extra(user_id)
-    if not extra | user_info == user_info | extra:
-        logger.info(extra)
-        logger.info(user_info)
-        assert False
-    user = _user_info_fix(extra | user_info)
+
+    # 获取来自cn的信息
+    respond_cn = get_url(f'https://weibo.cn/{uid}/info', expire_after)
+    user_cn = _parse_user_cn(respond_cn)
+
+    # 合并信息
+    user = user_card | user_cn | user_info
+    s = set(user_card.items()) | set(user_cn.items()) | set(user_info.items())
+    assert s in set(user.items())
+    user = _user_info_fix(user)
     user['info_updated_at'] = pendulum.now()
     user = User(user)
     user.update_table()
-    
-    # 获取用户数据
-    logger.info(f"{user['screen_name']} 信息已获取.")
-    pause(mode='page')
+
+    from_cache = [r.from_cache for r in [respond_card, respond_cn, respond_cn]]
+    assert min(from_cache) is max(from_cache)
+    if not all(from_cache):
+        logger.info(f"{user['screen_name']} 信息已从网络获取.")
+        pause(mode='page')
+    else:
+        logger.info(f"{user['screen_name']} 信息已从缓存读取.")
     return user
 
 
+# noinspection PyUnresolvedReferences
 def _user_info_fix(user_info: dict) -> OrderedDict:
     """清洗用户信息."""
     user_info = user_info.copy()
@@ -217,7 +258,7 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
     if values:
         if not len(set(values)) == 1:
             logger.error(set(values))
-            assert  False
+            assert False
         user_info[keys[0]] = values[0]
 
     if '生日' in user_info:
@@ -258,25 +299,9 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
     return user_info_ordered
 
 
-def _get_user_extra(user_id):
-    """获取额外的用户信息"""
-
-    x, y = _get_user_cards(user_id), _get_user_cn(user_id)
-    if y.get('生日') == '01-01':
-        y.pop('生日')
-    if not x | y == y | x:
-        logger.info(f'x:==>{x}')
-        logger.info(f'y:==>{y}')
-        assert False
-
-    return x | y
-
-
-def _get_user_cn(uid):
-    """从weibo.cn获取用户信息"""
-    logger.info(f'fetching user {uid} from weibo.cn')
-    html = get_url(f'https://weibo.cn/{uid}/info')
-    soup = BeautifulSoup(html.text, 'lxml')
+def _parse_user_cn(respond):
+    """解析weibo.cn的内容"""
+    soup = BeautifulSoup(respond.text, 'lxml')
     divs = soup.find_all('div')
     infos = dict()
     for tip, c in zip(divs[:-1], divs[1:]):
@@ -290,27 +315,27 @@ def _get_user_cn(uid):
                         text = text.replace('\xa0', ' ')
                         try:
                             key, value = re.split('[:：]', text, maxsplit=1)
-                            infos[key]=value
+                            infos[key] = value
                         except ValueError as e:
                             logger.error(f'{text} cannot parsed')
                             raise e
-                    
+
             elif tip.text == '学习经历' or '工作经历':
                 education = c.text.replace('\xa0', ' ').split('·')
                 infos[tip.text] = [e.strip() for e in education if e]
             else:
                 infos[tip.text] = c.text.replace('\xa0', ' ')
+
+    if infos.get('生日') == '01-01':
+        infos.pop('生日')
     return infos
 
 
-def _get_user_cards(uid):
-    """从m.weibo.com获取用户信息"""
-    logger.info(f'fetching extra user info for {uid}')
-    user_cards = get_json(containerid=f"230283{uid}_-_INFO")
-    user_cards = user_cards['data']['cards']
-    user_cards = sum([c['card_group'] for c in user_cards], [])
-    user_cards = {card['item_name']: card['item_content']
-                  for card in user_cards if 'item_name' in card}
-    if '生日' in user_cards:
-        user_cards['生日'] = user_cards['生日'].split()[0]
-    return user_cards
+def _parse_user_card(respond_card):
+    user_card = respond_card.json()['data']['cards']
+    user_card = sum([c['card_group'] for c in user_card], [])
+    user_card = {card['item_name']: card['item_content']
+                 for card in user_card if 'item_name' in card}
+    if '生日' in user_card:
+        user_card['生日'] = user_card['生日'].split()[0]
+    return user_card

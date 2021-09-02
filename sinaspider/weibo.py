@@ -5,12 +5,12 @@ from typing import Union, Generator
 
 import pendulum
 
-from sinaspider.helper import logger, get_url, get_json, pause, convert_wb_bid_to_id
+from sinaspider.helper import logger, get_url, pause, convert_wb_bid_to_id, weibo_api_url
 
 
 class Weibo(OrderedDict):
     from sinaspider.database import weibo_table as table
-    from sinaspider.helper import config as _config
+    from sinaspider.helper import get_config as _config
     if _config().as_bool('write_xmp'):
         from exiftool import ExifTool
         et = ExifTool()
@@ -70,7 +70,7 @@ class Weibo(OrderedDict):
         if original_id := self.get('original_id'):
             download_dir /= 'retweet'
             return self._from_weibo_id(original_id).save_media(download_dir)
-        
+
         download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"
         download_list = []
@@ -176,7 +176,10 @@ def get_weibo_pages(containerid: str,
         since = pendulum.instance(since)
     page = max(start_page, 1)
     while True:
-        js = get_json(containerid=containerid, page=page)
+        url = weibo_api_url.copy()
+        url.args = {'containerid': containerid, 'page': page}
+        response = get_url(url)
+        js = response.json()
         if not js['ok']:
             if js['msg'] == '请求过于频繁，歇歇吧':
                 logger.critical('be banned')
