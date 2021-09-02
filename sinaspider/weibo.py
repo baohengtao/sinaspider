@@ -2,19 +2,12 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Union
 
-from sinaspider.helper import logger, get_url, convert_wb_bid_to_id
+from sinaspider.helper import logger, get_url, convert_wb_bid_to_id, write_xmp
 
 
 class Weibo(OrderedDict):
     from sinaspider.database import weibo_table as table
     from sinaspider.helper import get_config as _config
-    if _config().as_bool('write_xmp'):
-        from exiftool import ExifTool
-        et = ExifTool()
-        et.start()
-    else:
-        et = None
-
     def __init__(self, *args, **kwargs):
         """
         可通过微博id获取某条微博, 同时支持数字id和bid.
@@ -100,9 +93,7 @@ class Weibo(OrderedDict):
                 continue
             downloaded = get_url(url).content
             filepath.write_bytes(downloaded)
-            if self.et:
-                self.et.set_tags(dl['xmp_info'], str(filepath))
-                filepath.with_name(filepath.name + '_original').unlink()
+            write_xmp(dl['xmp_info'], filepath)
 
         return download_list
 
