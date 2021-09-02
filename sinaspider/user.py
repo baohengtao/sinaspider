@@ -6,12 +6,13 @@ from functools import partial
 from pathlib import Path
 from time import sleep
 from typing import Union, Generator
+from itertools import  chain
 
 import pendulum
 from bs4 import BeautifulSoup
 from tqdm import trange
 
-from sinaspider.helper import get_url, logger, pause, get_config, weibo_api_url
+from sinaspider.helper import get_url, logger, pause, get_config, weibo_api_url, write_xmp
 from sinaspider.weibo import get_weibo_pages
 
 
@@ -27,7 +28,7 @@ class Owner:
 class User(OrderedDict):
     from sinaspider.database import user_table as table
     from sinaspider.database import relation_table
-
+ 
     def __init__(self, *args, **kwargs):
         if kwargs or args[1:] or not isinstance(args[0], int):
             super().__init__(*args, **kwargs)
@@ -82,6 +83,7 @@ class User(OrderedDict):
         fans = {u['id'] for u in fans}
         logger.info(f"共获取 {len(fans)}/{self['followers_count']} 个粉丝")
         friends = fans & follow
+        logger.info(f'共发现{len(friends)}个好友')
         for uid in follow:
             if friends_only and uid not in friends:
                 continue
@@ -105,15 +107,18 @@ class User(OrderedDict):
         """保存用户头像"""
         url = self['avatar_hd']
         downloaded = get_url(url).content
-        if download_dir:
-            download_dir.mkdir(parents=True)
-            basename = f"{self['id']}-{self['screen_name']}"
-            ext = Path(url).suffix
-            filepath = Path(download_dir) / (basename + ext)
-            if filepath.exists():
-                logger.warning(f'{filepath} already exists')
-            else:
-                filepath.write_bytes(downloaded)
+        download_dir = Path(download_dir) if download_dir else get_config()['download_dir']
+        download_dir.mkdir(parents=True, exist_ok=True)
+        basename = f"{self['id']}-{self['screen_name']}"
+        ext = Path(url).suffix
+        filepath = Path(download_dir) / (basename + ext)
+        if filepath.exists():
+            logger.warning(f'{filepath} already exists')
+        else:
+            filepath.write_bytes(downloaded)
+            tags = {'XMP:Artist': self['screen_name'], 'XMP:BlogURL':self['homepage']}
+            write_xmp(tags, filepath)
+            logger.success(f'save avatar at  {filepath}')
         return downloaded
 
 
@@ -195,8 +200,8 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
 
     # 合并信息
     user = user_card | user_cn | user_info
-    s = set(user_card.items()) | set(user_cn.items()) | set(user_info.items())
-    assert s.issubset(user.items())
+    s = {(k, str(v)) for k, v in  chain.from_iterable([user_card.items(), user_cn.items(), user_info.items()])}
+    assert s.issubset({(k, str(v)) for k, v in user.items()})
     user = _user_info_fix(user)
     user['info_updated_at'] = pendulum.now()
     user = User(user)

@@ -9,6 +9,7 @@ from configobj import ConfigObj
 from furl import furl
 from loguru import logger
 from requests_cache import CachedSession
+from pathlib import Path
 
 logger.remove()
 logger.add(sys.stdout, colorize=True)
@@ -19,7 +20,7 @@ weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
 
 
-def get_config(account_id=None, database_name=None, write_xmp=None):
+def get_config(account_id=None, database_name=None, write_xmp=None, download_dir=None):
     """
     写入并读取配置
     Args:
@@ -29,19 +30,30 @@ def get_config(account_id=None, database_name=None, write_xmp=None):
     Returns:
         [dict]: 当前的配置信息
     """
-    default = {'database_name': 'sina', 'write_xmp': False}
+    overwrite = {k:v for k, v in locals().items() if v is not None}
+    default = {'database_name': 'sina', 'write_xmp': False, 'download_dir':Path.home()/'Downloads/sinaspider'}
     config = ConfigObj(CONFIG_FILE)
-    config.update(default | config)
-    if account_id is not None:
-        config['account_id'] = account_id
-    if database_name is not None:
-        config['database_name'] = database_name
-    if write_xmp is not None:
-        assert isinstance(write_xmp, bool)
-        config['write_xmp'] = write_xmp
+    config.update(default | config | overwrite)
     config.write()
     return config
 
+    
+
+def write_xmp(tags, img):
+    if get_config().as_bool('write_xmp'):
+        try:
+            import exiftool
+        except ModuleNotFoundError as e:
+            logger.warning('exiftool not installed, cannot write xmp info to img')
+            return
+    else:
+        return
+    
+    with exiftool.ExifTool() as et:
+        et.set_tags(tags, str(img))
+        Path(img).with_name(Path(img).name+'_original').unlink()
+        
+    
 
 headers = {
     "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",

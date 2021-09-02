@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pendulum
 
-from sinaspider.helper import logger, pause
+from sinaspider.helper import logger, pause, get_config
 from sinaspider.user import User
 
 
@@ -88,14 +88,16 @@ class UserConfig(OrderedDict):
         if weibo_since:
             weibo_since = pendulum.instance(weibo_since)
             if weibo_since.diff().days < update_interval:
-                print(f'skipping...for fetched at recent {update_interval} days')
+                print(
+                    f'skipping...for fetched at recent {update_interval} days')
                 return
         user = User(self['id'])
         if self.toggle_media_download():
             if download_dir:
                 download_dir = Path(download_dir) / self['screen_name']
             else:
-                download_dir = Path.home() / 'Downloads/sinaspider' / self['screen_name']
+                download_dir = Path.home() / 'Downloads/sinaspider' / \
+                    self['screen_name']
         else:
             download_dir = None
 
@@ -123,7 +125,7 @@ class UserConfig(OrderedDict):
         user = User(self['id'])
         print(user)
         user.relation()
-        logger.success(f'{user["screen_name"]} 的关注已获取')
+        logger.success(f'{self["screen_name"]} 的关注已获取')
 
     @classmethod
     def yield_config_user(cls, **params):
