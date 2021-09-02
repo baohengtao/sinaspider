@@ -2,15 +2,13 @@ import dataset
 from sqlalchemy import ARRAY, Text, Integer, Boolean, DateTime, JSON, BigInteger
 from sqlalchemy_utils import database_exists, create_database
 
-from sinaspider.helper import config
-from sqlalchemy import create_engine
-
+from sinaspider.helper import get_config
 
 USER_TABLE = 'user'
 WEIBO_TABLE = 'weibo'
 CONFIG_TABLE = 'config'
 RELATION_TABLE = 'relation'
-DATABASE = config()['database_name']
+DATABASE = get_config()['database_name']
 
 database_url = f'postgresql://localhost/{DATABASE}'
 if not database_exists(database_url):
@@ -79,7 +77,7 @@ config_columns = (
     ('media_download', Boolean),
     ('weibo_update_at', DateTime(timezone=True)),
     ('statuses_count', Integer),
-    ('follow_fetch', Boolean),
+    ('relation_fetch', Boolean),
     ('followers_count', Integer),
     ('follow_count', Integer),
     ('following', Boolean),
@@ -113,4 +111,3 @@ weibo_columns = (
     ('is_pinned', Boolean),
 )
 create_table_columns(weibo_table, weibo_columns)
-

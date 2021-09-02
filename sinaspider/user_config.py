@@ -19,7 +19,7 @@ class UserConfig(OrderedDict):
 
     def update_table(self):
         user = User(self['id'])
-        if remark := user.pop('remark'):
+        if remark := user.pop('remark', ''):
             user['screen_name'] = remark
         self.table.upsert(user, ['id'], ensure=False)
         self.table.upsert(self, ['id'], ensure=True)
@@ -31,7 +31,7 @@ class UserConfig(OrderedDict):
             weibo_fetch=False,
             retweet_fetch=False,
             media_download=False,
-            follow_fetch=False,
+            relation_fetch=False,
         )
         user = cls.table.find_one(id=user_id) or init_user
         cls(user).update_table()
@@ -65,20 +65,20 @@ class UserConfig(OrderedDict):
         logger.info(f'Download Media: {is_download}')
         return is_download
 
-    def toggle_follow_fetch(self, value=None):
+    def toggle_relation_fetch(self, value=None):
         if value is not None:
             assert isinstance(value, bool)
-            self['follow_fetch'] = value
-        is_fetch = self.setdefault('follow_fetch', False)
+            self['relation_fetch'] = value
+        is_fetch = self.setdefault('relation_fetch', False)
         self.update_table()
-        logger.info(f'Fetch following: {is_fetch}')
+        logger.info(f'Fetch Relation: {is_fetch}')
         return is_fetch
 
     def toggle_all(self, value):
         self.toggle_weibo_fetch(value)
         self.toggle_retweet_fetch(value)
         self.toggle_media_download(value)
-        self.toggle_follow_fetch(value)
+        self.toggle_relation_fetch(value)
 
     def fetch_weibo(self, download_dir=None, update_interval=5, update=True):
         if not self.toggle_weibo_fetch():
@@ -116,8 +116,8 @@ class UserConfig(OrderedDict):
         logger.success(f'{user["screen_name"]}微博获取完毕')
         pause(mode='user')
 
-    def fetch_follow(self, days=None):
-        if not self.toggle_follow_fetch():
+    def fetch_relation(self, days=None):
+        if not self.toggle_relation_fetch():
             print('skipping....for follow_fetch is set to False')
             return
         days = days or 15
@@ -125,11 +125,12 @@ class UserConfig(OrderedDict):
         if follow_update_at:
             follow_update_at = pendulum.instance(follow_update_at)
             if follow_update_at.diff().days < days:
-                print(f'skipping...for fetched at recent {days} days')
+                logger.info(f'skipping {self["screen_name"]}...for fetched at recent {days} days')
+                return
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')
         user = User(self['id'])
         print(user)
-        user.following()
+        user.relation()
         self.update(follow_update_at=pendulum.now())
         self.update_table()
         logger.success(f'{user["screen_name"]} 的关注已获取')
@@ -146,7 +147,6 @@ class UserConfig(OrderedDict):
         :return:
         """
         for user in cls.table.find(**params):
-            user = {k: v for k, v in user.items() if v is not None}
             yield cls(user)
 
     def __str__(self):
