@@ -13,9 +13,10 @@ from requests_cache import CachedSession
 logger.remove()
 logger.add(sys.stdout, colorize=True)
 
-_configpath = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
-CONFIG_FILE = os.path.join(_configpath, 'sinaspider.ini')
+xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
+CONFIG_FILE = os.path.join(xdg_cache_home, 'sinaspider.ini')
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
+
 
 
 def get_config(account_id=None, database_name=None, write_xmp=None):
@@ -49,7 +50,8 @@ headers = {
 
 
 def get_url(url, expire_after=0):
-    session = CachedSession(expire_after=expire_after)
+    session = CachedSession(cache_name=f'{xdg_cache_home}/sinaspider/http_cache',
+                            expire_after=expire_after)
 
     while True:
         try:

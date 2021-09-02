@@ -116,25 +116,14 @@ class UserConfig(OrderedDict):
         logger.success(f'{user["screen_name"]}微博获取完毕')
         pause(mode='user')
 
-    def fetch_relation(self, days=None):
+    def fetch_relation(self, cache_days=30):
         if not self.toggle_relation_fetch():
-            print('skipping....for follow_fetch is set to False')
             return
-        days = days or 15
-        follow_update_at = self['follow_update_at']
-        if follow_update_at:
-            follow_update_at = pendulum.instance(follow_update_at)
-            if follow_update_at.diff().days < days:
-                logger.info(f'skipping {self["screen_name"]}...for fetched at recent {days} days')
-                return
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')
         user = User(self['id'])
         print(user)
         user.relation()
-        self.update(follow_update_at=pendulum.now())
-        self.update_table()
         logger.success(f'{user["screen_name"]} 的关注已获取')
-        pause(mode='user')
 
     @classmethod
     def yield_config_user(cls, **params):

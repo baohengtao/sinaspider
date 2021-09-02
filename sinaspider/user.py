@@ -71,19 +71,19 @@ class User(OrderedDict):
     def update_table(self):
         self.table.upsert(self, ['id'])
 
-    def relation(self, frineds_only=True, **kwargs):
+    def relation(self, friends_only=True, cache_days=30):
         logger.info('正在获取关注页面')
         follow = get_follow_pages(
-            f'231051_-_followers_-_{self["id"]}', **kwargs)
+            f'231051_-_followers_-_{self["id"]}', cache_days)
         follow = {u['id'] for u in follow}
         logger.info(f"共获取 {len(follow)}/{self['follow_count']} 个关注")
 
-        fans = get_follow_pages(f'231051_-_fans_-_{self["id"]}')
+        fans = get_follow_pages(f'231051_-_fans_-_{self["id"]}', cache_days)
         fans = {u['id'] for u in fans}
         logger.info(f"共获取 {len(fans)}/{self['followers_count']} 个粉丝")
         friends = fans & follow
         for uid in follow:
-            if frineds_only and uid not in friends:
+            if friends_only and uid not in friends:
                 continue
             following = self.__class__(uid)
             following['follower'] = self['id']
@@ -117,24 +117,19 @@ class User(OrderedDict):
         return downloaded
 
 
-def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page=None, cache_days=30) -> Generator[dict, None, None]:
+def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Generator[dict, None, None]:
     """
     获取关注列表
 
     Args:
         containerid (Union[str, int]):
             - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
-
-        start_page (int, optional): 起始爬取页面
-        end_page: 结束页面, 默认所有
         cache_days: 页面缓冲时间时间, 若为0, 则不缓存
 
     Yields:
         Generator[dict]: 返回用户字典
     """
-    page = start_page
-    if end_page:
-        assert start_page <= end_page
+    page = 1
     while True:
         url = weibo_api_url.set(args={'containerid': containerid})
         if 'fans' in containerid:
@@ -172,9 +167,7 @@ def get_follow_pages(containerid: Union[str, int], start_page: int = 1, end_page
         logger.success(f'页面 {page} 已获取完毕')
         if not response.from_cache:
             pause(mode='page')
-            page += 1
-        if end_page and page > end_page:
-            break
+        page += 1
 
 
 def fetch_user_info(uid: int, cache_days=30) -> User:
@@ -203,13 +196,13 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
     # 合并信息
     user = user_card | user_cn | user_info
     s = set(user_card.items()) | set(user_cn.items()) | set(user_info.items())
-    assert s in set(user.items())
+    assert s.issubset(user.items())
     user = _user_info_fix(user)
     user['info_updated_at'] = pendulum.now()
     user = User(user)
     user.update_table()
 
-    from_cache = [r.from_cache for r in [respond_card, respond_cn, respond_cn]]
+    from_cache = [r.from_cache for r in [respond_card, respond_cn, respond_info]]
     assert min(from_cache) is max(from_cache)
     if not all(from_cache):
         logger.info(f"{user['screen_name']} 信息已从网络获取.")
