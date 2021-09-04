@@ -2,7 +2,6 @@ from collections import OrderedDict
 from pathlib import Path
 
 import pendulum
-import click
 
 from sinaspider.helper import logger, pause, get_config
 from sinaspider.user import User
@@ -125,37 +124,11 @@ class UserConfig(OrderedDict):
         user.relation()
         logger.success(f'{self["screen_name"]} 的关注已获取')
 
-
-)
-
     def __str__(self):
-        text=''
+        text = ''
         for k, v in self.items():
             from datetime import datetime
             if isinstance(v, datetime):
-                v=v.strftime('%Y-%m-%d %H:%M:%S')
+                v = v.strftime('%Y-%m-%d %H:%M:%S')
             text += f'{k}: {v}\n'
         return text
-
-# @ click.command(fetch_weibo = )
-def loop(fetch_weibo = True, fetch_relation = True, download_dir = None):
-   for uc in UserConfig.table.find(order_by = 'weibo_update_at'):
-       logger.info(uc)
-       while True:
-           try:
-               if fetch_weibo:
-                   uc.fetch_weibo(download_dir)
-                if fetch_relation:
-                    uc.fetch_relation()
-                break
-
-            except (ProxyError, SSLError, ConnectionError):
-                logger.warning('Internet seems broken, sleeping...')
-                for i in range(600):
-                    print(f'sleeping {600-i-1}', end = '\r')
-                continue
-
-
-
-
-

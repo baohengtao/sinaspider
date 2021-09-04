@@ -23,7 +23,9 @@ headers = {
     "Cookie": keyring.get_password('sinaspider', 'cookie')
 }
 
-def get_config(account_id=None, database_name=None, write_xmp=None, download_dir=None):
+
+def get_config(account_id=None, database_name=None,
+               write_xmp=None, download_dir=None):
     """
     写入并读取配置
     Args:
@@ -43,8 +45,9 @@ def get_config(account_id=None, database_name=None, write_xmp=None, download_dir
 
 
 def get_url(url, expire_after=0):
-    session = CachedSession(cache_name=f'{xdg_cache_home}/sinaspider/http_cache',
-                            expire_after=expire_after)
+    session = CachedSession(
+        cache_name=f'{xdg_cache_home}/sinaspider/http_cache',
+        expire_after=expire_after)
 
     while True:
         try:
@@ -55,7 +58,6 @@ def get_url(url, expire_after=0):
             sleep(10 * 60)
 
     return r
-
 
 
 def write_xmp(tags, img):
