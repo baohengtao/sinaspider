@@ -8,7 +8,7 @@ USER_TABLE = 'user'
 WEIBO_TABLE = 'weibo'
 CONFIG_TABLE = 'config'
 RELATION_TABLE = 'relation'
-ARTIST_TABLE='artist'
+ARTIST_TABLE = 'artist'
 DATABASE = get_config()['database_name']
 
 database_url = f'postgresql://localhost/{DATABASE}'
@@ -28,7 +28,7 @@ if get_config().as_bool('write_xmp'):
     artist_table = database.create_table(ARTIST_TABLE, **_table_para)
 else:
     artist_table = None
-    
+
 
 def create_table_columns(table, columns):
     for column_key, column_type in columns:

@@ -114,7 +114,7 @@ def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Generator[d
                 for i in trange(1800, desc='sleeping...'):
                     sleep(i / 4)
             else:
-                logger.success(f"关注信息已更新完毕")
+                logger.success("关注信息已更新完毕")
                 logger.info(f'js==>{js}')
                 break
         cards_ = js['data']['cards'][0]['card_group']
@@ -134,7 +134,8 @@ def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Generator[d
                 user['gender'] = 'male'
 
             yield user
-        logger.success(f'页面 {page} 已获取完毕')
+        if not response.from_cache and js['ok']:
+            logger.success(f'页面 {page} 已获取完毕')
         if not response.from_cache:
             pause(mode='page')
         page += 1

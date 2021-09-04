@@ -44,7 +44,6 @@ class UserConfig(OrderedDict):
             self['weibo_fetch'] = value
         is_fetch = self.setdefault('weibo_fetch', False)
         self.update_table()
-        logger.info(f'Fetch Weibo: {is_fetch}')
         return is_fetch
 
     def toggle_retweet_fetch(self, value=None):
@@ -53,7 +52,6 @@ class UserConfig(OrderedDict):
             self['retweet_fetch'] = value
         is_fetch = self.setdefault('retweet_fetch', False)
         self.update_table()
-        logger.info(f'Fetch Retweet: {is_fetch}')
         return is_fetch
 
     def toggle_media_download(self, value=None):
@@ -62,7 +60,6 @@ class UserConfig(OrderedDict):
             self['media_download'] = value
         is_download = self.setdefault('media_download', False)
         self.update_table()
-        logger.info(f'Download Media: {is_download}')
         return is_download
 
     def toggle_relation_fetch(self, value=None):
@@ -71,7 +68,6 @@ class UserConfig(OrderedDict):
             self['relation_fetch'] = value
         is_fetch = self.setdefault('relation_fetch', False)
         self.update_table()
-        logger.info(f'Fetch Relation: {is_fetch}')
         return is_fetch
 
     def toggle_all(self, value):

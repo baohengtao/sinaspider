@@ -5,17 +5,17 @@ import click
 
 
 @click.group()
-def group():
+def script():
     pass
 
 
-@group.command()
+@script.command()
 @click.option('--fetch_weibo', '-w', is_flag=True)
 @click.option('--fetch_relation', '-r', is_flag=True)
 @click.option('--download_dir', '-d')
 def loop(fetch_weibo, fetch_relation, download_dir):
     for uc in UserConfig.table.find(order_by='weibo_update_at'):
-        logger.info(uc)
+        uc = UserConfig(uc)
         while True:
             try:
                 if fetch_weibo:
