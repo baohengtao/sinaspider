@@ -7,13 +7,13 @@ import pendulum
 from bs4 import BeautifulSoup
 from lxml import etree
 
-from sinaspider.helper import logger, get_url
+from sinaspider.helper import logger, get_url, pause
 from sinaspider.weibo import Weibo
 
 
 def get_weibo_by_id(wb_id):
-    weibo_info = _get_weibo_info_by_id(wb_id)
-    return parse_weibo(weibo_info)
+    if weibo_info := _get_weibo_info_by_id(wb_id):
+        return parse_weibo(weibo_info)
 
 
 def parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
@@ -59,16 +59,24 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
     """
     url = f'https://m.weibo.cn/detail/{wb_id}'
     response = get_url(url, expire_after=-1)
-    if response.from_cache:
-        logger.info(f'fetching {wb_id} from cache')
     html = response.text
     html = html[html.find('"status"'):]
     html = html[:html.rfind('"hotScheme"')]
     html = html[:html.rfind(',')]
-    if not html:
-        return
-    html = f'{{{html}}}'
-    weibo_info = json.loads(html, strict=False)['status']
+    weibo_info = None
+    if html:
+        html = f'{{{html}}}'
+        weibo_info = json.loads(html, strict=False)['status']
+        if not weibo_info:
+            response.revalidate(3600*24*30)
+            logger.warning(f'{url} cannot load')
+        else:
+            logger.info(f'{wb_id} fetched')
+    if response.from_cache:
+        logger.info(f'fetching {wb_id} from cache')
+    else:
+        logger.info('pausing...')
+        pause(mode='page')
     return weibo_info
 
 
@@ -88,6 +96,7 @@ def parse_weibo_card(weibo_card):
             self.wb |= text_info(self.card['text'])
             self.retweet_info()
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
+            logger.info(self.wb)
 
         def weibo(self) -> Weibo:
             """
@@ -100,7 +109,9 @@ def parse_weibo_card(weibo_card):
                     ordered_info[key] = wb.pop(key)
             ordered_info |= wb
             weibo = Weibo(ordered_info)
-            weibo.update_table()
+            logger.info(weibo)
+            if weibo:
+                weibo.update_table()
             return weibo
 
         def retweet_info(self):
@@ -132,7 +143,7 @@ def parse_weibo_card(weibo_card):
                 is_pinned=(self.card.get('title', {}).get('text') == '置顶')
             )
             for key in ['reposts_count', 'comments_count', 'attitudes_count']:
-                self.wb[key]=self.card[key]
+                self.wb[key] = self.card[key]
 
         def photos_info(self):
             pics = self.card.get('pics', [])

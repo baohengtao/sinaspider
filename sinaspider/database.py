@@ -8,21 +8,27 @@ USER_TABLE = 'user'
 WEIBO_TABLE = 'weibo'
 CONFIG_TABLE = 'config'
 RELATION_TABLE = 'relation'
+ARTIST_TABLE='artist'
 DATABASE = get_config()['database_name']
 
 database_url = f'postgresql://localhost/{DATABASE}'
 if not database_exists(database_url):
     create_database(database_url)
-pg = dataset.connect(database_url)
+database = dataset.connect(database_url)
 _table_para = dict(
     primary_id='id',
     primary_type=BigInteger,
     primary_increment=False)
-user_table = pg.create_table(USER_TABLE, **_table_para)
-weibo_table = pg.create_table(WEIBO_TABLE, **_table_para)
-config_table = pg.create_table(CONFIG_TABLE, **_table_para)
-relation_table = pg.create_table(RELATION_TABLE)
+user_table = database.create_table(USER_TABLE, **_table_para)
+weibo_table = database.create_table(WEIBO_TABLE, **_table_para)
+config_table = database.create_table(CONFIG_TABLE, **_table_para)
+relation_table = database.create_table(RELATION_TABLE)
 
+if get_config().as_bool('write_xmp'):
+    artist_table = database.create_table(ARTIST_TABLE, **_table_para)
+else:
+    artist_table = None
+    
 
 def create_table_columns(table, columns):
     for column_key, column_type in columns:
@@ -111,3 +117,25 @@ weibo_columns = (
     ('is_pinned', Boolean),
 )
 create_table_columns(weibo_table, weibo_columns)
+
+if artist_table:
+    artist_columns = {
+        ('artist', Text),
+        ('user_name', Text),
+        ('album', Text),
+        ('homepage', Text),
+        ('following', Boolean),
+        ('remark', Text),
+        ('birthday', Text),
+        ('age', Integer),
+        ('gender', Text),
+        ('education', ARRAY(Text)),
+        ('location', Text),
+        ('hometown', Text),
+        ('description', Text),
+        ('statuses_count', Integer),
+        ('followers_count', Integer),
+        ('follow_count', Integer),
+        ('follow_me', Boolean),
+    }
+    create_table_columns(artist_table, artist_columns)

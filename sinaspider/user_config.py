@@ -2,6 +2,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import pendulum
+import click
 
 from sinaspider.helper import logger, pause, get_config
 from sinaspider.user import User
@@ -93,11 +94,8 @@ class UserConfig(OrderedDict):
                 return
         user = User(self['id'])
         if self.toggle_media_download():
-            if download_dir:
-                download_dir = Path(download_dir) / self['screen_name']
-            else:
-                download_dir = Path.home() / 'Downloads/sinaspider' / \
-                    self['screen_name']
+            download_dir = Path(download_dir or get_config()['download_dir'])
+            download_dir /= self['screen_name']
         else:
             download_dir = None
 
@@ -127,36 +125,37 @@ class UserConfig(OrderedDict):
         user.relation()
         logger.success(f'{self["screen_name"]} 的关注已获取')
 
-    @classmethod
-    def yield_config_user(cls, **params):
-        """
-        :param params:
-            传递给table.find的参数, 例如:
-                downloading=True,
-                order_by='weibo_since',
-                weibo_since={'lt': pendulum.now().subtract(days=days)}
-        :return:
-        """
-        for user in cls.table.find(**params):
-            yield cls(user)
+
+)
 
     def __str__(self):
-        text = ''
+        text=''
         for k, v in self.items():
             from datetime import datetime
             if isinstance(v, datetime):
-                v = v.strftime('%Y-%m-%d %H:%M:%S')
+                v=v.strftime('%Y-%m-%d %H:%M:%S')
             text += f'{k}: {v}\n'
         return text
 
+# @ click.command(fetch_weibo = )
+def loop(fetch_weibo = True, fetch_relation = True, download_dir = None):
+   for uc in UserConfig.table.find(order_by = 'weibo_update_at'):
+       logger.info(uc)
+       while True:
+           try:
+               if fetch_weibo:
+                   uc.fetch_weibo(download_dir)
+                if fetch_relation:
+                    uc.fetch_relation()
+                break
 
-def _relation_complete():
-    for user in User.relation_table.find():
-        offline = True
-        text = ['清华', 'PKU', 'THU', '大学']
-        if desc := user.get('description'):
-            if any(t in desc for t in text):
-                offline = False
-        user_complete = User.from_user_id(user['id'], offline=offline)
-        user |= user_complete or {}
-        User.relation_table.update(user, ['id'])
+            except (ProxyError, SSLError, ConnectionError):
+                logger.warning('Internet seems broken, sleeping...')
+                for i in range(600):
+                    print(f'sleeping {600-i-1}', end = '\r')
+                continue
+
+
+
+
+

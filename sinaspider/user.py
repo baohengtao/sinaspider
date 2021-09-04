@@ -29,12 +29,15 @@ class User(OrderedDict):
     def __init__(self, *args, **kwargs):
         if kwargs or args[1:] or not isinstance(args[0], int):
             super().__init__(*args, **kwargs)
-        else:
+        elif args[0]:
             super().__init__(self.from_user_id(args[0]))
-        self.weibos = partial(
-            get_weibo_pages, containerid=f"107603{self['id']}")
-        self.following = partial(
-            get_follow_pages, f'231051_-_followers_-_{self["id"]}')
+        else:
+            super().__init__()
+        if self:
+            self.weibos = partial(
+                get_weibo_pages, containerid=f"107603{self['id']}")
+            self.following = partial(
+                get_follow_pages, f'231051_-_followers_-_{self["id"]}')
 
     @classmethod
     def from_user_id(cls, user_id, offline=None):

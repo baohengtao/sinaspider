@@ -79,14 +79,14 @@ class Pause:
 
         self.page_config = dict(
             awake=0,
-            stop=random.randint(4, 8),
+            stop=random.randint(10, 20),
             visited=0,
             level={
-                'short': 3,
+                'short': 2,
                 'break': 10,
                 'long': 50
             },
-            break_freq=100
+            break_freq=500
         )
         self.user_config = dict(
             awake=0,
