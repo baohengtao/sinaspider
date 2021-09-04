@@ -1,12 +1,19 @@
 from sinaspider import UserConfig
-from sinaspider.helpers import logger
+from sinaspider.helper import logger
 from requests.exceptions import ProxyError, SSLError, ConnectionError
 import click
 
 
-@click.command()
+@click.group()
+def group():
+    pass
+
+
+@group.command()
 @click.option('--fetch_weibo', '-w', is_flag=True)
-def loop(fetch_weibo=True, fetch_relation=True, download_dir=None):
+@click.option('--fetch_relation', '-r', is_flag=True)
+@click.option('--download_dir', '-d')
+def loop(fetch_weibo, fetch_relation, download_dir):
     for uc in UserConfig.table.find(order_by='weibo_update_at'):
         logger.info(uc)
         while True:
