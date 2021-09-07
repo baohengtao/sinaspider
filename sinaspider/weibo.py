@@ -120,11 +120,13 @@ class Weibo(OrderedDict):
         Returns:
                 dict: 图片元数据
         """
+        if not self:
+            return {}
         xmp_info = {}
         wb_map = [
             ('bid', 'ImageUniqueID'),
             ('user_id', 'ImageSupplierID'),
-            ('screen_name', 'ImageSupplierName'),
+            ('screen_name', 'ImageCreatorName'),
             ('text', 'BlogTitle'),
             ('url', 'BlogURL'),
             ('location', 'Location'),
@@ -133,9 +135,9 @@ class Weibo(OrderedDict):
         for info, xmp in wb_map:
             if v := self.get(info):
                 xmp_info[xmp] = v
-        xmp_info['DateCreated'] += pendulum.Duration(microseconds=int(sn))
+        xmp_info['DateCreated'] += pendulum.Duration(microseconds=int(sn or 0))
         xmp_info['DateCreated'] = xmp_info['DateCreated'].strftime(
-            '%Y:%m:%d %H:%M:%S.%f')
+        '%Y:%m:%d %H:%M:%S.%f')
         if sn:
             xmp_info['SeriesNumber'] = sn
         if not with_prefix:
@@ -145,6 +147,6 @@ class Weibo(OrderedDict):
 
     def gen_meta(self, sn=0) -> dict:
         from sinaspider.meta import Artist
-        artist = Artist(self['user_id']).to_xmp(with_prefix=True)
+        artist = Artist(self['user_id']).gen_meta()
         weibo = self.to_xmp(sn=sn, with_prefix=True)
         return weibo | artist 

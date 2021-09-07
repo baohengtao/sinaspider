@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Union, Generator
+from typing import Union, Iterator, Optional
 
 import pendulum
 from tqdm import trange
@@ -14,8 +14,8 @@ def get_weibo_pages(containerid: str,
                     start_page: int = 1,
                     end_page=None,
                     since: Union[int, str, datetime] = '1970-01-01',
-                    download_dir=None
-                    ) -> Generator[Weibo, None, None]:
+                    download_dir:Optional[str]=None
+                    ) -> Iterator[Weibo]:
     """
     爬取某一 containerid 类型的所有微博
 
@@ -68,7 +68,7 @@ def get_weibo_pages(containerid: str,
                 continue
             if weibo['created_at'] < since:
                 if weibo['is_pinned']:
-                    logger.warning(f"发现置顶微博, 跳过...")
+                    logger.warning("发现置顶微博, 跳过...")
                     continue
                 else:
                     logger.info(
@@ -87,7 +87,7 @@ def get_weibo_pages(containerid: str,
         pause(mode='page')
 
 
-def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Generator[dict, None, None]:
+def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Iterator[dict]:
     """
     获取关注列表
 
@@ -97,7 +97,7 @@ def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Generator[d
         cache_days: 页面缓冲时间时间, 若为0, 则不缓存
 
     Yields:
-        Generator[dict]: 返回用户字典
+        Iterator[dict]: 返回用户字典
     """
     page = 1
     while True:

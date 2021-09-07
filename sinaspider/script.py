@@ -1,7 +1,11 @@
-from sinaspider import UserConfig
-from sinaspider.helper import logger
-from requests.exceptions import ProxyError, SSLError, ConnectionError
+from pathlib import Path
+from tqdm import tqdm
+
 import click
+from requests.exceptions import ProxyError, SSLError, ConnectionError
+
+from sinaspider import UserConfig, Artist, Weibo
+from sinaspider.helper import logger
 
 
 @click.group()
@@ -27,5 +31,6 @@ def loop(fetch_weibo, fetch_relation, download_dir):
             except (ProxyError, SSLError, ConnectionError):
                 logger.warning('Internet seems broken, sleeping...')
                 for i in range(600):
-                    print(f'sleeping {600-i-1}', end='\r')
+                    print(f'sleeping {600 - i - 1}', end='\r')
                 continue
+

@@ -1,21 +1,23 @@
 import os
 import random
-import sys
+from pathlib import Path
 from time import sleep
-
 import keyring
 from baseconv import base62
 from configobj import ConfigObj
 from furl import furl
-from loguru import logger
+from requests.exceptions import SSLError
 from requests_cache import CachedSession
-from pathlib import Path
-
-logger.remove()
-logger.add(sys.stdout, colorize=True)
-
+from sinaspider import logger
 xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
 CONFIG_FILE = os.path.join(xdg_cache_home, 'sinaspider.ini')
+# class Config:
+
+#     def __init__(self):
+#         config = ConfigObj(CONFIG_FILE)
+#         self.database_name
+
+
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
 headers = {
@@ -37,7 +39,7 @@ def get_config(account_id=None, database_name=None,
     """
     overwrite = {k: v for k, v in locals().items() if v is not None}
     default = {'database_name': 'sina', 'write_xmp': False,
-               'download_dir': Path.home()/'Downloads/sinaspider'}
+               'download_dir': Path.home() / 'Downloads/sinaspider'}
     config = ConfigObj(CONFIG_FILE)
     config.update(default | config | overwrite)
     config.write()
@@ -53,8 +55,8 @@ def get_url(url, expire_after=0):
         try:
             r = session.get(url, headers=headers)
             break
-        except TimeoutError:
-            logger.error('Timeout sleep 600seconds and retry...')
+        except (TimeoutError, ConnectionError, SSLError) as e:
+            logger.error(f'{e}: Timeout sleep 600 seconds and retry {url}...')
             sleep(10 * 60)
 
     return r
@@ -73,7 +75,7 @@ def write_xmp(tags, img):
 
     with exiftool.ExifTool() as et:
         et.set_tags(tags, str(img))
-        Path(img).with_name(Path(img).name+'_original').unlink()
+        Path(img).with_name(Path(img).name + '_original').unlink()
 
 
 class Pause:
