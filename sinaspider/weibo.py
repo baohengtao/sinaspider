@@ -1,42 +1,31 @@
-from collections import OrderedDict
+from collections import UserDict
 from pathlib import Path
 from typing import Union
+
 import pendulum
+
 from sinaspider.helper import logger, get_url, convert_wb_bid_to_id, write_xmp
 
 
-class Weibo(OrderedDict):
+class Weibo(UserDict):
     from sinaspider.database import weibo_table as table
 
-    def __init__(self, *args, **kwargs):
-        """
-        可通过微博id获取某条微博, 同时支持数字id和bid.
-        读取结果将保存在数据库中.
-        若微博不存在, 返回 None
-        """
-        
-        first_arg = args[0] if args else None
-        if isinstance(first_arg, str):
-            if first_arg.isdigit():
-                first_arg = int(first_arg)
-            else:
-                first_arg = convert_wb_bid_to_id(args[0])
-
-        if kwargs or args[1:]:
-            super().__init__(*args, **kwargs)
-        elif isinstance(first_arg, int):
-            wb_info = self._from_weibo_id(first_arg) or {}
-            super().__init__(wb_info)
-        elif first_arg is None:
-            super().__init__()
+    def __init__(self, arg=None, **kwargs):
+        self.data, self.id = {}, None
+        if isinstance(arg, str):
+            arg = int(arg) if arg.isdigit() else convert_wb_bid_to_id(arg)
+        if isinstance(arg, int):
+            assert not kwargs
+            wb_info = self._from_id(arg)
+            self.data.update(wb_info)
+            self.id = arg
         else:
-            super().__init__(dict(first_arg))
-        for k, v in dict(self).items():
-            if v is None:
-                self.pop(k)
+            super().__init__(arg, **kwargs)
+            self.id = self['id']
+        self.data = {k: v for k, v in self if v}
 
     @classmethod
-    def _from_weibo_id(cls, wb_id):
+    def _from_id(cls, wb_id):
         """从数据库获取微博信息, 若不在其中, 则尝试从网络获取, 并将获取结果存入数据库"""
         assert isinstance(wb_id, int), wb_id
         docu = cls.table.find_one(id=wb_id) or {}
@@ -137,7 +126,7 @@ class Weibo(OrderedDict):
                 xmp_info[xmp] = v
         xmp_info['DateCreated'] += pendulum.Duration(microseconds=int(sn or 0))
         xmp_info['DateCreated'] = xmp_info['DateCreated'].strftime(
-        '%Y:%m:%d %H:%M:%S.%f')
+            '%Y:%m:%d %H:%M:%S.%f')
         if sn:
             xmp_info['SeriesNumber'] = sn
         if not with_prefix:
@@ -149,4 +138,4 @@ class Weibo(OrderedDict):
         from sinaspider.meta import Artist
         artist = Artist(self['user_id']).gen_meta()
         weibo = self.to_xmp(sn=sn, with_prefix=True)
-        return weibo | artist 
+        return weibo | artist

@@ -1,6 +1,6 @@
 import json
 import re
-from collections import OrderedDict
+from collections import UserDict
 from datetime import timedelta
 from functools import partial
 from itertools import chain
@@ -9,8 +9,15 @@ from pathlib import Path
 import pendulum
 from bs4 import BeautifulSoup
 
-from sinaspider.helper import get_url, logger, pause, get_config, weibo_api_url, write_xmp
-from sinaspider.page import get_weibo_pages, get_follow_pages
+from sinaspider.helper import (
+    get_config,
+    get_url,
+    logger,
+    pause,
+    weibo_api_url,
+    write_xmp,
+)
+from sinaspider.page import get_follow_pages, get_weibo_pages
 
 
 class Owner:
@@ -22,52 +29,35 @@ class Owner:
         self.collection = partial(get_weibo_pages, containerid=230259)
 
 
-class User(OrderedDict):
+class User(UserDict):
     from sinaspider.database import user_table as table
     from sinaspider.database import relation_table
 
-    def __init__(self, *args, **kwargs):
-        if kwargs or args[1:] or not isinstance(args[0], int):
-            super().__init__(*args, **kwargs)
-        elif args[0]:
-            super().__init__(self.from_user_id(args[0]))
+    def __init__(self, arg=None, /, **kwargs):
+        self.data, self.id = {}, None
+        if isinstance(arg, (int, str)):
+            assert not kwargs
+            if info := self.from_id(int(arg)):
+                self.data.update(info)
+                self.id = int(arg)
         else:
-            super().__init__()
-        if self:
-            self.weibos = partial(
-                get_weibo_pages, containerid=f"107603{self['id']}")
-            self.following = partial(
-                get_follow_pages, f'231051_-_followers_-_{self["id"]}')
+            super().__init__(arg, **kwargs)
+            self.id = self['id']
+        self.weibos = partial(
+            get_weibo_pages, containerid=f"107603{self.id}")
+        self.following = partial(
+            get_follow_pages, f'231051_-_followers_-_{self.id}')
 
     @classmethod
-    def from_user_id(cls, user_id, offline=None):
+    def from_id(cls, user_id, offline=False):
         """
-        根据用户 id 获取用户信息.
-        若用户信息从网络上获取, 则对数据库中的用户信息进行更新.
-
-        Args:
-            user_id (int)
-            offline (bool or None):
-                - None(default): 若用户信息最近 15 天内更新过, 则 offline 为 True, 否则 offline 为 False
-                - True: 从数据库获取用户信息
-                - False: 从网络获取用户信息并更新数据库
-
-        Returns:
-            User(dict): 用户信息
+        根据用户 id 获取用户信息. offline： 是否开启离线模式
         """
-        docu = cls.table.find_one(id=user_id) or {}
-        if offline is None:
-            offline = False
-            if docu and (updated := docu.get('info_updated_at')):
-                # 若最近15天更新过, 则 offline 为 True
-                offline = (pendulum.instance(updated).diff().days < 15)
-        if offline is False:
+        if not offline:
             logger.info('update online...')
             fetch_user_info(user_id)
-            docu = cls(cls.table.find_one(id=user_id))
-            print(docu)
-        docu = cls((k, v) for k, v in docu.items() if v)
-        return docu
+        docu = cls.table.find_one(id=user_id) or {}
+        return cls((k, v) for k, v in docu.items() if v)
 
     def update_table(self):
         self.table.upsert(self, ['id'])
@@ -75,11 +65,11 @@ class User(OrderedDict):
     def relation(self, friends_only=True, cache_days=30):
         logger.info('正在获取关注页面')
         follow = get_follow_pages(
-            f'231051_-_followers_-_{self["id"]}', cache_days)
+            f'231051_-_followers_-_{self.id}', cache_days)
         follow = {u['id'] for u in follow}
         logger.info(f"共获取 {len(follow)}/{self['follow_count']} 个关注")
 
-        fans = get_follow_pages(f'231051_-_fans_-_{self["id"]}', cache_days)
+        fans = get_follow_pages(f'231051_-_fans_-_{self.id}', cache_days)
         fans = {u['id'] for u in fans}
         logger.info(f"共获取 {len(fans)}/{self['followers_count']} 个粉丝")
         friends = fans & follow
@@ -158,6 +148,7 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
     assert min(from_cache) is max(from_cache)
     if not all(from_cache):
         logger.info(f"{user['screen_name']} 信息已从网络获取.")
+        print(user)
         pause(mode='page')
     else:
         logger.info(f"{user['screen_name']} 信息已从缓存读取.")
@@ -229,19 +220,7 @@ def _user_info_fix(user_info: dict) -> OrderedDict:
     user_info['homepage'] = f'https://weibo.com/u/{user_info["id"]}'
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
     user_info['hometown'] = user_info.pop('家乡', '')
-
-    key_order = [
-        'id', 'screen_name', 'remark', 'birthday', 'age', 'education', 'gender',
-        'location', 'description', 'homepage', 'statuses_count',
-        'following', 'follow_me', 'followers_count', 'follow_count'
-    ]
-    user_info_ordered = OrderedDict()
-    for key in key_order:
-        if key in user_info:
-            user_info_ordered[key] = user_info.pop(key)
-    user_info_ordered.update(user_info)
-
-    return user_info_ordered
+    return user_info
 
 
 def _parse_user_cn(respond):
