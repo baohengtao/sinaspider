@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import UserDict
 from pathlib import Path
 
 import pendulum
@@ -8,36 +8,34 @@ from sinaspider.user import User
 from sinaspider.config import config
 
 
-class UserConfig(OrderedDict):
+class UserConfig(UserDict):
     from sinaspider.database import config_table as table
 
-    def __init__(self, *args, **kwargs):
-        if kwargs or args[1:] or not isinstance(args[0], int):
-            super().__init__(*args, **kwargs)
-        else:
-            super().__init__(self._from_user_id(args[0]))
+    def __init__(self, arg=None, /, **kwargs):
+        if isinstance(arg, (int, str)):
+            assert not kwargs
+            uid = int(arg)
+            self.data = self.table.find_one(user_id=uid) or {
+                'id': uid,
+                'weibo_fetch': False,
+                'retweet_fetch': False,
+                'media_download': False,
+                'relation_fetch': False
+            }
+            self.id = uid
             self.update_table()
+        else:
+            super().__init__(arg, **kwargs)
+            self.id = self['id']
 
     def update_table(self):
-        user = User(self['id'])
+        if not self.id:
+            logger.error(f'no self.id: {self}')
+        user = User(self.id)
         if remark := user.pop('remark', ''):
             user['screen_name'] = remark
-        self.table.upsert(user, ['id'], ensure=False)
+        self.update(user)
         self.table.upsert(self, ['id'], ensure=True)
-
-    @classmethod
-    def _from_user_id(cls, user_id):
-        init_user = cls(
-            id=user_id,
-            weibo_fetch=False,
-            retweet_fetch=False,
-            media_download=False,
-            relation_fetch=False,
-        )
-        user = cls.table.find_one(id=user_id) or init_user
-        cls(user).update_table()
-        user = cls.table.find_one(id=user_id)
-        return cls(user)
 
     def toggle_weibo_fetch(self, value=None) -> bool:
         if value is not None:

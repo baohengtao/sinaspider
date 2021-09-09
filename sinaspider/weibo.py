@@ -22,7 +22,7 @@ class Weibo(UserDict):
         else:
             super().__init__(arg, **kwargs)
             self.id = self.get('id')
-        self.data = {k: v for k, v in self if v}
+        self.data = {k: v for k, v in self.items() if v or v==0}
 
     @classmethod
     def _from_id(cls, wb_id):

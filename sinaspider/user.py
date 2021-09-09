@@ -55,7 +55,6 @@ class User(UserDict):
         根据用户 id 获取用户信息. offline： 是否开启离线模式
         """
         if not offline:
-            logger.info('update online...')
             fetch_user_info(user_id)
         docu = cls.table.find_one(id=user_id) or {}
         return cls((k, v) for k, v in docu.items() if v)
@@ -119,17 +118,14 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
     url = weibo_api_url.copy()
 
     # 获取来自m.weibo.com的信息
-    logger.info(f'fetching extra user info for {uid}')
     url.args = {'containerid': f"230283{uid}_-_INFO"}
     respond_card = get_url(url, expire_after)
     user_card = _parse_user_card(respond_card)
 
     # 获取主信息
-    logger.info(f'fetching  user info for {uid}')
     url.args = {'containerid': f"100505{uid}"}
     respond_info = get_url(url, expire_after)
     js = json.loads(respond_info.content)
-    logger.info(url)
     user_info = js['data']['userInfo']
     user_info.pop('toolbar_menus', '')
 
@@ -154,8 +150,6 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
         logger.info(f"{user['screen_name']} 信息已从网络获取.")
         print(user)
         pause(mode='page')
-    else:
-        logger.info(f"{user['screen_name']} 信息已从缓存读取.")
     return user
 
 

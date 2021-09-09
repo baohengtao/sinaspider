@@ -3,7 +3,7 @@ import os
 from configobj import ConfigObj, get_extra_values
 from validate import Validator
 
-from sinaspider.helper import logger
+from sinaspider import logger
 
 _xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
 _CONFIG_FILE = os.path.join(_xdg_cache_home, 'sinaspider.ini')

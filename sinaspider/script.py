@@ -1,10 +1,16 @@
 from requests.exceptions import ProxyError, SSLError, ConnectionError
 
-from sinaspider import UserConfig
+from sinaspider import UserConfig, config
 from sinaspider.helper import logger
 
+from typer import Typer, Option, Argument
 
-def loop(fetch_weibo, fetch_relation, download_dir):
+app = Typer()
+
+@app.command()
+def loop(fetch_weibo: bool=Option(False, '--weibo', '-w', help="Fetch weibo"), 
+         fetch_relation: bool=Option(False, '--relation', '-r', help="Fetch relation"), 
+         download_dir: str=Argument(config['download_dir'], help='Download directory')):
     for uc in UserConfig.table.find(order_by='weibo_update_at'):
         uc = UserConfig(uc)
         while True:
