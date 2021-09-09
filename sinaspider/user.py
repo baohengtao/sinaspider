@@ -9,8 +9,8 @@ from pathlib import Path
 import pendulum
 from bs4 import BeautifulSoup
 
+from sinaspider.config import config
 from sinaspider.helper import (
-    get_config,
     get_url,
     logger,
     pause,
@@ -22,7 +22,8 @@ from sinaspider.page import get_follow_pages, get_weibo_pages
 
 class Owner:
     def __init__(self):
-        account_id = get_config().as_int('account_id')
+        account_id = config['account_id']
+        assert account_id, 'no account_id provided: %s' % account_id
         self.info = User(account_id)
         self.weibos = self.info.weibos
         self.following = self.info.following
@@ -97,7 +98,7 @@ class User(UserDict):
         """保存用户头像"""
         url = self['avatar_hd']
         downloaded = get_url(url).content
-        download_dir = Path(download_dir) if download_dir else get_config()['download_dir']
+        download_dir = Path(download_dir if download_dir else config['download_dir'])
         download_dir.mkdir(parents=True, exist_ok=True)
         basename = f"{self['id']}-{self['screen_name']}"
         ext = Path(url).suffix
@@ -106,7 +107,8 @@ class User(UserDict):
             logger.warning(f'{filepath} already exists')
         else:
             filepath.write_bytes(downloaded)
-            tags = {'XMP:Artist': self['screen_name'], 'XMP:BlogURL': self['homepage']}
+            tags = {'XMP:Artist': self['screen_name'],
+                    'XMP:BlogURL': self['homepage']}
             write_xmp(tags, filepath)
             logger.success(f'save avatar at  {filepath}')
         return downloaded
@@ -137,14 +139,16 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
 
     # 合并信息
     user = user_card | user_cn | user_info
-    s = {(k, str(v)) for k, v in chain.from_iterable([user_card.items(), user_cn.items(), user_info.items()])}
+    s = {(k, str(v)) for k, v in chain.from_iterable(
+        [user_card.items(), user_cn.items(), user_info.items()])}
     assert s.issubset({(k, str(v)) for k, v in user.items()})
     user = _user_info_fix(user)
     user['info_updated_at'] = pendulum.now()
     user = User(user)
     user.update_table()
 
-    from_cache = [r.from_cache for r in [respond_card, respond_cn, respond_info]]
+    from_cache = [r.from_cache for r in [
+        respond_card, respond_cn, respond_info]]
     assert min(from_cache) is max(from_cache)
     if not all(from_cache):
         logger.info(f"{user['screen_name']} 信息已从网络获取.")
@@ -155,8 +159,7 @@ def fetch_user_info(uid: int, cache_days=30) -> User:
     return user
 
 
-# noinspection PyUnresolvedReferences
-def _user_info_fix(user_info: dict) -> OrderedDict:
+def _user_info_fix(user_info: dict) -> dict:
     """清洗用户信息."""
     user_info = user_info.copy()
     if '昵称' in user_info:

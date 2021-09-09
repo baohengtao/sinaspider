@@ -46,7 +46,7 @@ def parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
     return parse_weibo_card(weibo_info)
 
 
-def _get_weibo_info_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
+def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     """
     爬取指定id的微博, 若原微博已删除, 返回None
 
@@ -63,7 +63,7 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> Union[Weibo, None]:
     html = html[html.find('"status"'):]
     html = html[:html.rfind('"hotScheme"')]
     html = html[:html.rfind(',')]
-    weibo_info = None
+    weibo_info = {}
     if html:
         html = f'{{{html}}}'
         weibo_info = json.loads(html, strict=False)['status']

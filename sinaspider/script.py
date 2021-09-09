@@ -1,22 +1,9 @@
-from pathlib import Path
-from tqdm import tqdm
-
-import click
 from requests.exceptions import ProxyError, SSLError, ConnectionError
 
-from sinaspider import UserConfig, Artist, Weibo
+from sinaspider import UserConfig
 from sinaspider.helper import logger
 
 
-@click.group()
-def script():
-    pass
-
-
-@script.command()
-@click.option('--fetch_weibo', '-w', is_flag=True)
-@click.option('--fetch_relation', '-r', is_flag=True)
-@click.option('--download_dir', '-d')
 def loop(fetch_weibo, fetch_relation, download_dir):
     for uc in UserConfig.table.find(order_by='weibo_update_at'):
         uc = UserConfig(uc)
@@ -33,4 +20,3 @@ def loop(fetch_weibo, fetch_relation, download_dir):
                 for i in range(600):
                     print(f'sleeping {600 - i - 1}', end='\r')
                 continue
-

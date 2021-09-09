@@ -14,7 +14,7 @@ def get_weibo_pages(containerid: str,
                     start_page: int = 1,
                     end_page=None,
                     since: Union[int, str, datetime] = '1970-01-01',
-                    download_dir:Optional[str]=None
+                    download_dir: Optional[str] = None
                     ) -> Iterator[Weibo]:
     """
     爬取某一 containerid 类型的所有微博

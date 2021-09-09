@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pendulum
 
-from sinaspider.helper import logger, pause, get_config
+from sinaspider.helper import logger, pause
 from sinaspider.user import User
+from sinaspider.config import config
 
 
 class UserConfig(OrderedDict):
@@ -89,7 +90,7 @@ class UserConfig(OrderedDict):
                 return
         user = User(self['id'])
         if self.toggle_media_download():
-            download_dir = Path(download_dir or get_config()['download_dir'])
+            download_dir = Path(download_dir or config['download_dir'])
             download_dir /= self['screen_name']
         else:
             download_dir = None
@@ -111,7 +112,7 @@ class UserConfig(OrderedDict):
         logger.success(f'{user["screen_name"]}微博获取完毕')
         pause(mode='user')
 
-    def fetch_relation(self, cache_days=30):
+    def fetch_relation(self):
         if not self.toggle_relation_fetch():
             return
         logger.info(f'正在获取用户 {self["screen_name"]}的关注信息')

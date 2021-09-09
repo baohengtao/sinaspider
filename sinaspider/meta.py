@@ -29,7 +29,7 @@ class Artist(dict):
                 album='微博'
             )
         docu.update(user)
-        artist = cls({k:v for k,v in docu.items() if v})
+        artist = cls({k: v for k, v in docu.items() if v})
         artist.update_table()
         return cls(cls.table.find_one(id=uid))
 

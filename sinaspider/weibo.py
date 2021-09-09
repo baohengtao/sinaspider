@@ -21,7 +21,7 @@ class Weibo(UserDict):
             self.id = arg
         else:
             super().__init__(arg, **kwargs)
-            self.id = self['id']
+            self.id = self.get('id')
         self.data = {k: v for k, v in self if v}
 
     @classmethod
@@ -60,7 +60,7 @@ class Weibo(UserDict):
         download_dir = Path(download_dir)
         if original_id := self.get('original_id'):
             download_dir /= 'retweet'
-            return self._from_weibo_id(int(original_id)).save_media(download_dir)
+            return self._from_id(int(original_id)).save_media(download_dir)
 
         download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"

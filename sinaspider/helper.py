@@ -2,20 +2,14 @@ import os
 import random
 from pathlib import Path
 from time import sleep
+
 import keyring
 from baseconv import base62
-from configobj import ConfigObj
 from furl import furl
 from requests.exceptions import SSLError
 from requests_cache import CachedSession
-from sinaspider import logger
-xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
-CONFIG_FILE = os.path.join(xdg_cache_home, 'sinaspider.ini')
-# class Config:
 
-#     def __init__(self):
-#         config = ConfigObj(CONFIG_FILE)
-#         self.database_name
+from sinaspider import logger, config
 
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
@@ -26,27 +20,8 @@ headers = {
 }
 
 
-def get_config(account_id=None, database_name=None,
-               write_xmp=None, download_dir=None):
-    """
-    写入并读取配置
-    Args:
-        account_id: 自己微博账号id
-        database_name: 数据库名称
-        write_xmp: 是否将微博信息写入照片
-    Returns:
-        [dict]: 当前的配置信息
-    """
-    overwrite = {k: v for k, v in locals().items() if v is not None}
-    default = {'database_name': 'sina', 'write_xmp': False,
-               'download_dir': Path.home() / 'Downloads/sinaspider'}
-    config = ConfigObj(CONFIG_FILE)
-    config.update(default | config | overwrite)
-    config.write()
-    return config
-
-
 def get_url(url, expire_after=0):
+    xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
     session = CachedSession(
         cache_name=f'{xdg_cache_home}/sinaspider/http_cache',
         expire_after=expire_after)
@@ -63,7 +38,7 @@ def get_url(url, expire_after=0):
 
 
 def write_xmp(tags, img):
-    if get_config().as_bool('write_xmp'):
+    if config['write_xmp']:
         try:
             import exiftool
         except ModuleNotFoundError:

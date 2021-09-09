@@ -1,15 +1,15 @@
 import dataset
 from sqlalchemy import ARRAY, Text, Integer, Boolean, DateTime, JSON, BigInteger
 from sqlalchemy_utils import database_exists, create_database
+from sinaspider import config
 
-from sinaspider.helper import get_config
 
 USER_TABLE = 'user'
 WEIBO_TABLE = 'weibo'
 CONFIG_TABLE = 'config'
 RELATION_TABLE = 'relation'
 ARTIST_TABLE = 'artist'
-DATABASE = get_config()['database_name']
+DATABASE = config['database_name']
 
 database_url = f'postgresql://localhost/{DATABASE}'
 if not database_exists(database_url):
@@ -24,7 +24,7 @@ weibo_table = database.create_table(WEIBO_TABLE, **_table_para)
 config_table = database.create_table(CONFIG_TABLE, **_table_para)
 relation_table = database.create_table(RELATION_TABLE)
 
-if get_config().as_bool('write_xmp'):
+if config['write_xmp']:
     artist_table = database.create_table(ARTIST_TABLE, **_table_para)
 else:
     artist_table = None
