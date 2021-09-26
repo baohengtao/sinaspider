@@ -50,7 +50,10 @@ def write_xmp(tags, img):
 
     with exiftool.ExifTool() as et:
         et.set_tags(tags, str(img))
-        Path(img).with_name(Path(img).name + '_original').unlink()
+        try:
+            Path(img).with_name(Path(img).name + '_original').unlink()
+        except FileNotFoundError:
+            pass
 
 
 class Pause:

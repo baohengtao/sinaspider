@@ -8,6 +8,7 @@ from sinaspider.user import User
 from sinaspider.config import config
 
 
+
 class UserConfig(UserDict):
     from sinaspider.database import config_table as table
 
@@ -77,7 +78,7 @@ class UserConfig(UserDict):
 
     def fetch_weibo(self, download_dir=None, update_interval=5, update=True):
         if not self.toggle_weibo_fetch():
-            print('skipping....for weibo_fetch is set to False')
+            print(f'skip {self["screen_name"]}...')
             return
         weibo_since, now = self['weibo_update_at'], pendulum.now()
         if weibo_since:
@@ -87,6 +88,7 @@ class UserConfig(UserDict):
                     f'skipping...for fetched at recent {update_interval} days')
                 return
         user = User(self['id'])
+        print(user)
         if self.toggle_media_download():
             download_dir = Path(download_dir or config['download_dir'])
             download_dir /= self['screen_name']
@@ -96,7 +98,6 @@ class UserConfig(UserDict):
         weibos = user.weibos(retweet=self.toggle_retweet_fetch(),
                              since=weibo_since,
                              download_dir=download_dir)
-        print(user)
         logger.info(
             f'正在获取用户 {self["screen_name"]} 自 {weibo_since:%y-%m-%d} 起的所有微博')
         logger.info(f"Fetching Retweet: {self.toggle_retweet_fetch()}")

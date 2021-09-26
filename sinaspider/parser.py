@@ -11,9 +11,11 @@ from sinaspider.helper import logger, get_url, pause
 from sinaspider.weibo import Weibo
 
 
+
 def get_weibo_by_id(wb_id):
     if weibo_info := _get_weibo_info_by_id(wb_id):
-        return parse_weibo(weibo_info)
+        if weibo:=parse_weibo(weibo_info):
+            return weibo 
 
 
 def parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
@@ -35,7 +37,8 @@ def parse_weibo(weibo_info: dict) -> Union[Weibo, None]:
         delete_text = [
             "该账号因被投诉违反法律法规和《微博社区公约》的相关规定，现已无法查看。查看帮助",
             "抱歉，作者已设置仅展示半年内微博，此微博已不可见。",
-            "抱歉，此微博已被作者删除。查看帮助"
+            "抱歉，此微博已被作者删除。查看帮助",
+            "抱歉，由于作者设置，你暂时没有这条微博的查看权限"
         ]
         if any(d in original['text'] for d in delete_text):
             return
@@ -80,7 +83,7 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     return weibo_info
 
 
-def parse_weibo_card(weibo_card):
+def parse_weibo_card(weibo_card: dict) -> Weibo:
     class _WeiboCardParser:
         """用于解析原始微博内容"""
 
@@ -98,21 +101,15 @@ def parse_weibo_card(weibo_card):
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
             logger.info(self.wb)
 
-        def weibo(self) -> Weibo:
+        def weibo(self) -> Union[Weibo, None]:
             """
             return Weibo object and also update weibo table
             """
-            keys = ['id', 'bid', 'user_id', 'screen_name', 'created_at', 'text']
-            wb, ordered_info = self.wb.copy(), OrderedDict()
-            for key in keys:
-                if key in wb:
-                    ordered_info[key] = wb.pop(key)
-            ordered_info |= wb
-            weibo = Weibo(ordered_info)
-            logger.info(weibo)
-            if weibo:
+            if self.wb:
+                weibo = Weibo(self.wb)
+                logger.info(weibo)
                 weibo.update_table()
-            return weibo
+                return weibo
 
         def retweet_info(self):
             if original := self.card.get('retweeted_status'):
@@ -151,10 +148,10 @@ def parse_weibo_card(weibo_card):
             live_photo = {}
             live_photo_prefix = 'https://video.weibo.com/media/play?livephoto=//us.sinaimg.cn/'
             if pic_video := self.card.get('pic_video'):
-                live_photo = pic_video.split(',')
-                live_photo = [p.split(':') for p in live_photo]
-                live_photo = {
-                    int(sn): f'{live_photo_prefix}{path}.mov' for sn, path in live_photo}
+                live_photo = {}
+                for p in pic_video.split(','):
+                    sn, path = p.split(':')
+                    live_photo[int(sn)] = f'{live_photo_prefix}{path}.mov'
                 assert max(live_photo) < len(pics)
             self.wb['photos'] = {str(i + 1): [pic, live_photo.get(i)]
                                  for i, pic in enumerate(pics)}
@@ -165,8 +162,8 @@ def parse_weibo_card(weibo_card):
                 return
             media_info = page_info['urls'] or page_info['media_info']
             keys = [
-                'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url', 'hevc_mp4_hd',
-                'mp4_ld_mp4', 'mp4_ld', 'stream_url_hd', 'stream_url',
+                'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url',
+                'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld', 'stream_url_hd', 'stream_url',
                 'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
             ]
             if not set(media_info).issubset(keys):
@@ -178,6 +175,8 @@ def parse_weibo_card(weibo_card):
                 logger.warning(f'no video info:==>{page_info}')
             else:
                 self.wb['video_url'] = urls[0]
+                if duration := int(media_info.get('duration', 0)):
+                    self.wb['video_duration'] = duration
 
     def text_info(text):
         if not text.strip():

@@ -29,7 +29,6 @@ class Owner:
         self.following = self.info.following
         self.collection = partial(get_weibo_pages, containerid=230259)
 
-
 class User(UserDict):
     from sinaspider.database import user_table as table
     from sinaspider.database import relation_table
@@ -44,6 +43,8 @@ class User(UserDict):
         else:
             super().__init__(arg, **kwargs)
             self.id = self['id']
+        if not self:
+            raise ValueError(self)
         self.weibos = partial(
             get_weibo_pages, containerid=f"107603{self.id}")
         self.following = partial(

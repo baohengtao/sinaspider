@@ -1,3 +1,4 @@
+from __future__ import annotations
 from collections import UserDict
 from pathlib import Path
 from typing import Union
@@ -9,33 +10,30 @@ from sinaspider.helper import logger, get_url, convert_wb_bid_to_id, write_xmp
 
 class Weibo(UserDict):
     from sinaspider.database import weibo_table as table
+    
 
     def __init__(self, arg=None, **kwargs):
+        from sinaspider.parser import get_weibo_by_id
         self.data, self.id = {}, None
         if isinstance(arg, str):
             arg = int(arg) if arg.isdigit() else convert_wb_bid_to_id(arg)
         if isinstance(arg, int):
             assert not kwargs
-            wb_info = self._from_id(arg)
-            self.data.update(wb_info)
             self.id = arg
+            self.data = self.table.find_one(id=self.id) or get_weibo_by_id(self.id)
         else:
             super().__init__(arg, **kwargs)
             self.id = self.get('id')
-        self.data = {k: v for k, v in self.items() if v or v==0}
+        if not self:
+            raise ValueError(self)
+        self.data = {k: v for k, v in self.items() if v or v == 0}
 
-    @classmethod
-    def _from_id(cls, wb_id):
-        """从数据库获取微博信息, 若不在其中, 则尝试从网络获取, 并将获取结果存入数据库"""
-        assert isinstance(wb_id, int), wb_id
-        docu = cls.table.find_one(id=wb_id) or {}
-        from sinaspider.parser import get_weibo_by_id
-        return cls(docu) or get_weibo_by_id(wb_id)
 
     def update_table(self):
         """更新数据信息"""
-        if self['reposts_count'] == '100万+':
-            self['reposts_count'] = 1000000
+        for k, v in self.items():
+            if v  == '100万+':
+                self[k]=1000000
         self.table.upsert(self, ['id'])
 
     def __str__(self):
@@ -60,7 +58,7 @@ class Weibo(UserDict):
         download_dir = Path(download_dir)
         if original_id := self.get('original_id'):
             download_dir /= 'retweet'
-            return self._from_id(int(original_id)).save_media(download_dir)
+            self.__class__(original_id).save_media(download_dir)
 
         download_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{download_dir}/{self['user_id']}_{self['id']}"
@@ -78,10 +76,13 @@ class Weibo(UserDict):
         if url := self.get('video_url'):
             assert ';' not in url
             filepath = f'{prefix}.mp4'
-            download_list.append({
-                'url': url,
-                'filepath': Path(filepath),
-                'xmp_info': self.to_xmp(with_prefix=True)})
+            if duration := self.get('video_duration', 0) > 1800:
+                logger.warning(f'video_duration is {duration}... skipping...')
+            else:
+                download_list.append({
+                    'url': url,
+                    'filepath': Path(filepath),
+                    'xmp_info': self.to_xmp(with_prefix=True)})
 
         # downloading...
         if download_list:
@@ -91,9 +92,9 @@ class Weibo(UserDict):
             url, filepath = dl['url'], Path(dl['filepath'])
             if filepath.exists():
                 logger.warning(f'{filepath} already exists..skip {url}')
-                continue
-            downloaded = get_url(url).content
-            filepath.write_bytes(downloaded)
+            else:
+                downloaded = get_url(url).content
+                filepath.write_bytes(downloaded)
             write_xmp(dl['xmp_info'], filepath)
 
         return download_list
@@ -109,9 +110,10 @@ class Weibo(UserDict):
         Returns:
                 dict: 图片元数据
         """
-        if not self:
-            return {}
         xmp_info = {}
+        if docu := self.table.find_one(original_id=self.id):
+            xmp_info['Publisher'] = docu['screen_name']
+
         wb_map = [
             ('bid', 'ImageUniqueID'),
             ('user_id', 'ImageSupplierID'),
