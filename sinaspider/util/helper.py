@@ -9,7 +9,7 @@ from furl import furl
 from requests.exceptions import SSLError
 from requests_cache import CachedSession
 
-from sinaspider import logger, config
+from sinaspider import logger
 
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
@@ -23,12 +23,14 @@ headers = {
 def get_url(url, expire_after=0):
     xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
     session = CachedSession(
-        cache_name=f'{xdg_cache_home}/sinaspider/http_cache',
-        expire_after=expire_after)
+        cache_name=f'{xdg_cache_home}/sinaspider/http_cache')
+    
+    if expire_after==0:
+        session.cache.delete_url(url)
 
     while True:
         try:
-            r = session.get(url, headers=headers)
+            r = session.get(url, headers=headers, expire_after=expire_after)
             break
         except (TimeoutError, ConnectionError, SSLError) as e:
             logger.error(f'{e}: Timeout sleep 600 seconds and retry {url}...')
@@ -38,14 +40,11 @@ def get_url(url, expire_after=0):
 
 
 def write_xmp(tags, img):
-    if config['write_xmp']:
-        try:
-            import exiftool
-        except ModuleNotFoundError:
-            logger.warning(
-                'exiftool not installed, cannot write xmp info to img')
-            return
-    else:
+    try:
+        import exiftool
+    except ModuleNotFoundError:
+        logger.warning(
+            'exiftool not installed, cannot write xmp info to img')
         return
 
     with exiftool.ExifTool() as et:
@@ -65,8 +64,8 @@ class Pause:
             visited=0,
             level={
                 'short': 2,
-                'break': 10,
-                'long': 50
+                'break': 4,
+                'long': 10,
             },
             break_freq=500
         )
@@ -75,9 +74,9 @@ class Pause:
             stop=random.randint(2, 4),
             visited=0,
             level={
-                'short': 10,
-                'break': 60,
-                'long': 200
+                'short': 5,
+                'break': 15,
+                'long': 20,
             },
             break_freq=10
         )

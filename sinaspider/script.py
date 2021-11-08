@@ -1,21 +1,34 @@
+from pathlib import Path
+from typing import Optional
+
+import typer
 from requests.exceptions import ProxyError, SSLError, ConnectionError
+from sqlmodel import Session, select
+from typer import Typer
 
-from sinaspider import UserConfig, config
-from sinaspider.helper import logger
-
-
-from typer import Typer, Option
+from sinaspider.method import UserConfigMethod
+from sinaspider.model import UserConfig, engine
+from sinaspider.util.helper import logger
 
 app = Typer()
 
 
 @app.command()
-def weibo(download_dir=config['download_dir']):
-    for uc in UserConfig.table.find(order_by='weibo_update_at'):
-        uc = UserConfig(uc)
+def weibo(download_dir: Path = Path.home() / 'Downloads/sinaspider_test',
+          users: Optional[list[int]] = typer.Option(None),
+          dry_run=typer.Option(False, "--dry-run")):
+    session = Session(engine)
+    for user in users:
+        UserConfigMethod(user, session=session).fetch_weibo(download_dir, update=dry_run)
+
+    for uc in session.exec(select(UserConfig)):
+        print(uc)
         while True:
             try:
-                uc.fetch_weibo(download_dir)
+                update_interval = min(3000 / uc.user.statuses_count, 10)
+                UserConfigMethod(uc.id, session=session).fetch_weibo(
+                    download_dir, update=dry_run, 
+                    update_interval=update_interval)
                 break
             except (ProxyError, SSLError, ConnectionError):
                 logger.warning('Internet seems broken, sleeping...')
@@ -26,11 +39,11 @@ def weibo(download_dir=config['download_dir']):
 
 @app.command()
 def relation():
-    for uc in UserConfig.table.find(order_by='weibo_update_at'):
-        uc = UserConfig(uc)
+    session = Session(engine)
+    for uc in session.exec(select(UserConfig)):
         while True:
             try:
-                uc.fetch_relation()
+                UserConfigMethod(uc.id, session=session).fetch_friends()
                 break
             except (ProxyError, SSLError, ConnectionError):
                 logger.warning('Internet seems broken, sleeping...')

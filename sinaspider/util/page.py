@@ -1,21 +1,19 @@
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Union, Iterator, Optional
+from typing import Union, Iterator
 
 import pendulum
 from tqdm import trange
 
-from sinaspider.helper import get_url, logger, pause, weibo_api_url
-from sinaspider.weibo import Weibo
+from sinaspider.util.helper import get_url, logger, pause, weibo_api_url
+from sinaspider.util.parser import parse_weibo
 
 
 def get_weibo_pages(containerid: str,
-                    retweet: bool = True,
                     start_page: int = 1,
                     end_page=None,
                     since: Union[int, str, datetime] = '1970-01-01',
-                    download_dir: Optional[str] = None
-                    ) -> Iterator[Weibo]:
+                    ) -> Iterator[tuple]:
     """
     爬取某一 containerid 类型的所有微博
 
@@ -23,11 +21,9 @@ def get_weibo_pages(containerid: str,
         containerid(str): 
             - 获取用户页面的微博: f"107603{user_id}"
             - 获取收藏页面的微博: 230259
-        retweet (bool): 是否爬取转发微博
         start_page(int): 指定从哪一页开始爬取, 默认第一页.
         end_page: 终止页面, 默认爬取到最后一页
         since: 若为整数, 从哪天开始爬取, 默认所有时间
-        download_dir: 下载目录, 若为空, 则不下载
 
 
     Yields:
@@ -49,7 +45,7 @@ def get_weibo_pages(containerid: str,
         if not js['ok']:
             if js['msg'] == '请求过于频繁，歇歇吧':
                 logger.critical('be banned')
-                return js
+                raise
             else:
                 logger.warning(
                     f"not js['ok'], seems reached end, no wb return for page {page}")
@@ -59,26 +55,23 @@ def get_weibo_pages(containerid: str,
                   for w in js['data']['cards'] if w['card_type'] == 9]
 
         for weibo_info in mblogs:
-            if weibo_info.get('retweeted_status') and not retweet:
-                logger.info('过滤转发微博...')
+            nt_weibo = parse_weibo(weibo_info)
+            if not nt_weibo:
                 continue
-            from sinaspider.parser import parse_weibo
-            weibo = parse_weibo(weibo_info)
-            if not weibo:
-                continue
-            if weibo['created_at'] < since:
-                if weibo['is_pinned']:
+            original, retweet = nt_weibo
+            is_pinned = retweet.pop(
+                'is_pinned', None) if retweet else original.pop('is_pinned', None)
+            created_at = retweet['created_at'] if retweet else original['created_at']
+            if created_at < since:
+                if is_pinned:
                     logger.warning("发现置顶微博, 跳过...")
                     continue
                 else:
                     logger.info(
-                        f"时间{weibo['created_at']} 在 {since:%y-%m-%d}之前, 获取完毕")
+                        f"时间{created_at} 在 {since:%y-%m-%d}之前, 获取完毕")
                     end_page = page
                     break
-
-            if download_dir:
-                weibo.save_media(download_dir)
-            yield weibo
+            yield nt_weibo
 
         logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
         page += 1
