@@ -35,7 +35,7 @@ class UserConfig(SQLModel, table=True):
     user: 'User' = Relationship(back_populates='user_config')
     screen_name: str
     age: Optional[int]
-    weibo_fetch: bool = False
+    weibo_fetch: bool = True
     retweet_fetch: bool = False
     relation_fetch: bool = False
     following: bool
@@ -63,6 +63,7 @@ class Artist(SQLModel, table=True):
     age: Optional[int]
     album: str
     photos_num: int = 0
+    recent_num: int = 0
     education: Optional[List[str]]
     description: Optional[str]
     homepage: Optional[str]

@@ -9,9 +9,9 @@
    ```zsh
    createdb your_database_name
    ```
-3. 配置信息 
+3. 配置信息
    ```python
-   from sinaspider import config
+   from sinaspider import _config
    # 写入配置信息
    config(
       account_id = 'your accout id' # 你的微博账号
@@ -32,8 +32,6 @@
 ## Quick Start
 将关注者放入配置列表中:
 ```python
-from sinaspider.user import Owner
-from sinaspider.user_config import UserConfig
 owner = Owner()
 for following in owner.following():
     UserConfig(following)

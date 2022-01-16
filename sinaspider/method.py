@@ -10,6 +10,7 @@ from sinaspider.util.helper import convert_wb_bid_to_id, get_url, write_xmp
 from sinaspider.util.helper import pause
 from sinaspider.util.page import get_weibo_pages, get_follow_pages
 from sinaspider.util.parser import get_user_by_id
+from sinaspider.util.thread import ClosableQueue, start_threads, stop_threads
 
 
 class UserConfigMethod:
@@ -29,14 +30,18 @@ class UserConfigMethod:
         self.session.add(user_config)
         self.session.commit()
         self.user_config = self.session.get(UserConfig, user_id)
+        self.img_queue = ClosableQueue(maxsize=100)
 
     def fetch_friends(self):
         for friend in self.user_method.friends():
             if not self.session.get(Friend, {'friend_id': friend.friend_id, 'user_id': friend.user_id}):
                 self.session.add(friend)
                 self.session.commit()
+        logger.info(
+            f'{len(list(self.user_method.friends()))} friends found...')
 
-    def fetch_weibo(self, download_dir=None, update_interval=5, update=True):
+    def fetch_weibo(self, download_dir=None, update_interval=0.01,
+                    update=True, start_page=1):
         if not self.user_config.weibo_fetch:
             print(f'skip {self.user.screen_name}...')
             return
@@ -47,26 +52,16 @@ class UserConfigMethod:
         UserMethod.from_id(self.id, self.session, update=True)
         print(self.user)
 
-        weibos = self.user_method.weibos(since=weibo_since)
+        weibos = self.user_method.weibos(
+            since=weibo_since, start_page=start_page)
         logger.info(
             f'正在获取用户 {self.user.screen_name} 自 {weibo_since:%y-%m-%d} 起的所有微博')
         logger.info(f"Fetching Retweet: {self.user_config.retweet_fetch}")
         logger.info(f"Media Saving: {download_dir or False}")
-        # logger.info(f"Update Config: {update}")
-
-        for nt_weibo in weibos:
-            original, retweet = WeiboMethod.add_to_table(
-                *nt_weibo, session=self.session)
-            if not retweet:
-                original_dir = Path(download_dir) / self.user.screen_name
-                WeiboMethod(original).save_media(original_dir)
-            elif self.user_config.retweet_fetch:
-                retweet_dir = Path(download_dir) / \
-                    'retweet' / self.user.screen_name
-                WeiboMethod(original).save_media(retweet_dir)
-            else:
-                continue
-            print(retweet or original)
+        threads = start_threads(10, self.img_queue)
+        for img in self._save_weibo(weibos, download_dir, self.user_config.retweet_fetch):
+            self.img_queue.put(img)
+        stop_threads(self.img_queue, threads)
         logger.success(f'{self.user.screen_name}微博获取完毕')
         if update:
             self.user_config.weibo_update_at = now
@@ -74,6 +69,24 @@ class UserConfigMethod:
             self.session.commit()
 
         pause(mode='user')
+        return
+
+    def _save_weibo(self, weibos, download_dir, retweet_fetch):
+        for nt_weibo in weibos:
+            original, retweet = WeiboMethod.add_to_table(
+                *nt_weibo, session=self.session)
+            if not retweet:
+                path = Path(download_dir) / self.user.screen_name
+            elif retweet_fetch:
+                path = Path(download_dir) / \
+                       'retweet' / self.user.screen_name
+            else:
+                continue
+            medias = list(WeiboMethod(original).medias(path))
+            logger.info(
+                f"Downloading {len(medias)} files to {path}...")
+            yield from medias
+            print(retweet or original)
 
     def display_friends(self):
         from IPython.display import Image, display
@@ -104,8 +117,7 @@ class WeiboMethod:
             return weibo
         elif nt_weibo := get_weibo_by_id(id):
             weibo, original = nt_weibo
-            cls.add_to_table(weibo, original, session=session)
-            return Weibo(**weibo)
+            return cls.add_to_table(weibo, original, session=session)[0]
 
     @classmethod
     def add_to_table(cls, *weibos: dict, session):
@@ -113,33 +125,34 @@ class WeiboMethod:
         for w in weibos:
             if w is None:
                 res.append(w)
-            else:
-                if d := set(w) - set(Weibo.__fields__):
-                    logger.warning(d)
-
-                wa = session.get(Weibo, w['id']) or Weibo()
-                for k, v in w.items():
-                    if k in Weibo.__fields__:
-                        setattr(wa, k, v)
-                logger.info(weibos)
-                assert wa.user_id
-                UserMethod.from_id(wa.user_id, session)
-                session.add(wa)
-                session.commit()
-                session.refresh(wa)
-                res.append(wa)
+                continue
+            if d := set(w) - set(Weibo.__fields__):
+                logger.warning(d)
+            UserMethod.from_id(w['user_id'], session)
+            wa = session.get(Weibo, w['id']) or Weibo()
+            for k, v in w.items():
+                if k in Weibo.__fields__:
+                    setattr(wa, k, v)
+            session.add(wa)
+            session.commit()
+            session.refresh(wa)
+            res.append(wa)
         return res
 
-    def medias(self):
+    def medias(self, filepath=None):
         photos = self.weibo.photos or {}
         for sn, urls in photos.items():
             for url in filter(bool, urls):
-                ext = url.split('.')[-1]
+                *_, ext = url.split('/')[-1].split('.')
+                if not _:
+                    ext = 'jpg'
+                
                 filename = f'{self.user_id}_{self.id}_{sn}.{ext}'
                 yield {
                     'url': url,
                     'filename': filename,
-                    'xmp_info': self.gen_meta(sn)
+                    'xmp_info': self.gen_meta(sn),
+                    'filepath': filepath
                 }
         if url := self.weibo.video_url:
             assert ';' not in url
@@ -149,24 +162,9 @@ class WeiboMethod:
                 yield {
                     'url': url,
                     'filename': f'{self.user_id}_{self.id}.mp4',
-                    'xmp_info': self.gen_meta()
+                    'xmp_info': self.gen_meta(),
+                    'filepath': filepath
                 }
-
-    def save_media(self, download_dir):
-        path = Path(download_dir)
-        path.mkdir(parents=True, exist_ok=True)
-        medias = list(self.medias())
-        for file in medias:
-            filepath = path / file['filename']
-            if filepath.exists():
-                logger.warning(
-                    f'{filepath} already exists..skip {file["url"]}')
-                continue
-            downloaded = get_url(file['url']).content
-            filepath.write_bytes(downloaded)
-            write_xmp(file['xmp_info'], filepath)
-        logger.info(
-            f"{self.id}: Downloading {len(medias)} files to {download_dir}...")
 
     def gen_meta(self, sn: Union[str, int] = 0) -> dict:
         weibo = self.weibo
@@ -210,7 +208,6 @@ class UserMethod:
         yield from get_follow_pages(self.follow_page)
 
     def friends(self):
-        logger.info('正在获取关注页面')
         follow = [User(**u) for u in get_follow_pages(self.follow_page)]
         logger.info(f"共获取 {len(follow)}/{self.user.follow_count} 个关注")
         fan = {u['id'] for u in get_follow_pages(self.fan_page)}
@@ -225,28 +222,40 @@ class UserMethod:
     @classmethod
     def from_id(cls, user_id: int, session, update=False, gen_artist=False) -> Optional[User]:
         cache_days = 30 if not update else 0
-        if not (user := session.get(User, user_id)) or update:
-            if user_dict := get_user_by_id(user_id, cache_days=cache_days):
-                if extra_key := set(user_dict) - set(User.__fields__):
-                    logger.critical(extra_key)
-                for k, v in user_dict.items():
-                    if v and isinstance(v, str) and v[-1] == '万':
-                        try:
-                            user_dict[k] = 10000 * float(v[:-1])
-                        except ValueError:
-                            continue
-                if not user:
-                    user = User(**user_dict)
-                    print(user)
-                else:
-                    for k, v in user_dict.items():
-                        setattr(user, k, v)
+        user = session.get(User, int(user_id))
+        user_dict = {}
+        if not user or update:
+            user_dict = get_user_by_id(user_id, cache_days=cache_days) or {}
+            if extra_key := set(user_dict) - set(User.__fields__):
+                logger.critical(extra_key)
+        if not user:
+            user = User()
+        for k, v in user_dict.items():
+            if v and isinstance(v, str) and v[-1] == '万':
+                try:
+                    v = 10000 * float(v[:-1])
+                except ValueError:
+                    continue
 
-        if user and gen_artist:
-            artist = Artist(**user.dict())
-            artist.album = 'Weibo'
-            artist.user_name = user.remark or user.screen_name
-            user.artist = [artist]
+            if v and isinstance(v, str) and v[-1] == '亿':
+                try:
+                    v = 100000000 * float(v[:-1])
+                except ValueError:
+                    continue
+            try:
+                setattr(user, k, v)
+            except ValueError:
+                logger.critical(f'no key {k}')
+
+        if gen_artist:
+            if not user.artist:
+                artist = Artist(**user.dict())
+                artist.album = 'new'
+                user.artist = [artist]
+            artist = user.artist[0]
+            if not artist.user_name or artist.user_name == user.screen_name:
+                artist.user_name = user.remark or user.screen_name
+
 
         session.add(user)
         session.commit()
@@ -279,6 +288,8 @@ class ArtistMethod:
         if artist.user.remark:
             artist.user_name = artist.user.remark
         artist.age = artist.user.age
+        if artist.user_name[0]=='-':
+            artist.user_name = artist.user_name[1:]
         session.add(artist)
         session.commit()
         session.refresh(artist)

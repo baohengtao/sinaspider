@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from pathlib import Path
 from time import sleep
 
@@ -10,7 +11,6 @@ from requests.exceptions import SSLError
 from requests_cache import CachedSession
 
 from sinaspider import logger
-
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
@@ -24,8 +24,8 @@ def get_url(url, expire_after=0):
     xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
     session = CachedSession(
         cache_name=f'{xdg_cache_home}/sinaspider/http_cache')
-    
-    if expire_after==0:
+
+    if expire_after == 0:
         session.cache.delete_url(url)
 
     while True:
@@ -60,14 +60,14 @@ class Pause:
 
         self.page_config = dict(
             awake=0,
-            stop=random.randint(10, 20),
+            stop=random.randint(5, 9),
             visited=0,
             level={
-                'short': 2,
-                'break': 4,
-                'long': 10,
+                'short': 5,
+                'break': 10,
+                'long': 120,
             },
-            break_freq=500
+            break_freq=25
         )
         self.user_config = dict(
             awake=0,
@@ -80,6 +80,8 @@ class Pause:
             },
             break_freq=10
         )
+
+        self.__since = time.time()
 
     def __call__(self, mode):
         if mode == 'page':
@@ -104,15 +106,16 @@ class Pause:
         if record['visited'] % break_freq == 0:
             self._sleep(level['long'])
 
-    @staticmethod
-    def _sleep(sleep_time):
+    def _sleep(self, sleep_time):
         sleep_time = random.randint(
             int(0.5 * sleep_time), int(1.5 * sleep_time))
-        logger.info(f'sleeping {sleep_time} second(s)')
-
-        for i in range(sleep_time):
-            print(f'sleep {i}/{sleep_time}', end='\r')
+        logger.info(f'waiting {sleep_time} second(s)...')
+        to_sleep = self.__since + sleep_time - time.time()
+        to_sleep = max(int(to_sleep), 0)
+        for i in range(to_sleep):
+            print(f'sleep {i}/{to_sleep}', end='\r')
             sleep(1)
+        self.__since = time.time()
 
 
 def convert_wb_bid_to_id(bid):

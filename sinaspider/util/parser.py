@@ -41,15 +41,21 @@ def parse_weibo(weibo_info: dict) -> Optional[NT_Weibo[dict, dict]]:
             "抱歉，作者已设置仅展示半年内微博，此微博已不可见。",
             "抱歉，此微博已被作者删除。查看帮助",
             "抱歉，由于作者设置，你暂时没有这条微博的查看权限",
-            "该微博因被投诉违反《微博社区公约》的相关规定，已被删除。查"
+            "该微博因被投诉违反《微博社区公约》的相关规定，已被删除。查",
+            "该账号因用户自行申请关闭，现已无法查看。"
+
         ]
         if any(d in original['text'] for d in delete_text):
+            return
+        if 'pic_num' not in original:
+            logger.warning(original['text'])
             return
         if original['pic_num'] > 9 or original['isLongText']:
             original = _get_weibo_info_by_id(original['id'])
         original = _parse_weibo_card(original)
     weibo_info = _parse_weibo_card(weibo_info)
     if original:
+        return None
         res = NT_Weibo(original=original, retweet=weibo_info)
     else:
         res = NT_Weibo(original=weibo_info, retweet=None)
@@ -118,7 +124,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                     original_id=original['id'],
                     original_bid=original['bid'],
                     original_uid=original['user']['id'],
-                    original_text=text_info(original['text'])['text']
+                    original_text=text_info(original['text']).get('text')
                 )
 
         def basic_info(self):
@@ -162,20 +168,20 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 return
             media_info = page_info['urls'] or page_info['media_info']
             keys = [
-                'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url',
-                'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld', 'stream_url_hd', 'stream_url',
+                'mp4_1080p_mp4','mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url',
+                'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld', 'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
                 'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
             ]
             if not set(media_info).issubset(keys):
                 logger.info(media_info)
-                logger.info(str(set(media_info) - set(keys)))
-                assert False
+                logger.critical(str(set(media_info) - set(keys)))
+                # assert False
             urls = [v for k in keys if (v := media_info.get(k))]
             if not urls:
                 logger.warning(f'no video info:==>{page_info}')
             else:
                 self.wb['video_url'] = urls[0]
-                if duration := int(media_info.get('duration', 0)):
+                if duration := float(media_info.get('duration', 0)):
                     self.wb['video_duration'] = duration
 
     def text_info(text):
@@ -202,53 +208,14 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 location_span = url_icon.findNext('span')
                 assert location_span.attrs['class'] == ['surl-text']
                 location = location_span.text
-        res = {
+        return {
             'text': soup.text,
             'at_users': at_list,
             'topics': topics_list,
             'location': location
         }
-        for k, v in res.items():
-            if k != 'text':
-                sv = _selector_info(text)[k]
-                if not sv == v:
-                    logger.critical([v, sv])
-                    logger.info(res)
-                    logger.info(soup)
-        return res
 
-    def _selector_info(text):
-        selector = etree.HTML(text)
-        text = selector.xpath('string(.)')
-        at_list, topics_list = [], []
 
-        for a in selector.xpath('//a'):
-            at_user = a.xpath('string(.)')
-            if at_user[0] != '@':
-                continue
-            at_user = at_user[1:]
-            assert a.xpath('@href')[0][3:] == at_user
-            at_list.append(at_user)
-
-        for topic in selector.xpath("//span[@class='surl-text']"):
-            t = topic.xpath('string(.)')
-            if m := re.match('^#(.*)#$', t):
-                topics_list.append(m.group(1))
-
-        location = ''
-        location_icon = 'timeline_card_small_location_default.png'
-        span_list = selector.xpath('//span')
-        for i, span in enumerate(span_list):
-            checker = span.xpath('img/@src')
-            if checker and location_icon in checker[0]:
-                location = span_list[i + 1].xpath('string(.)')
-                break
-        return {
-            'text': text,
-            'at_users': at_list,
-            'topics': topics_list,
-            'location': location
-        }
 
     return _WeiboCardParser().wb
 
@@ -266,12 +233,15 @@ def get_user_by_id(uid: int, cache_days=30):
     url.args = {'containerid': f"100505{uid}"}
     respond_info = get_url(url, expire_after)
     js = json.loads(respond_info.content)
-    try:
-        user_info = js['data']['userInfo']
-        user_info.pop('toolbar_menus', '')
-    except KeyError as e:
-        print(js)
-        raise e
+    while True:
+        try:
+            user_info = js['data']['userInfo']
+            user_info.pop('toolbar_menus', '')
+            break
+        except KeyError as e:
+            print(js, url)
+            pause(mode='user')
+            get_user_by_id(uid, cache_days=0)
 
     # 获取来自cn的信息
     respond_cn = get_url(f'https://weibo.cn/{uid}/info', expire_after)
@@ -281,7 +251,8 @@ def get_user_by_id(uid: int, cache_days=30):
     user = user_card | user_cn | user_info
     s = {(k, str(v)) for k, v in chain.from_iterable(
         [user_card.items(), user_cn.items(), user_info.items()])}
-    assert s.issubset({(k, str(v)) for k, v in user.items()})
+    if emp:={(k, str(v)) for k, v in user.items()}-s:
+        logger.critical(emp)
     try:
         user = _user_info_fix(user)
     except (KeyError, AssertionError) as e:
@@ -290,7 +261,7 @@ def get_user_by_id(uid: int, cache_days=30):
     user['info_updated_at'] = pendulum.now()
     from_cache = [r.from_cache for r in [
         respond_card, respond_cn, respond_info]]
-    assert min(from_cache) is max(from_cache)
+    # assert min(from_cache) is max(from_cache)
     if not all(from_cache):
         logger.info(f"{user['screen_name']} 信息已从网络获取.")
         pause(mode='page')
@@ -302,9 +273,13 @@ def _user_info_fix(user_info: dict) -> dict:
     user_info = user_info.copy()
     if '昵称' in user_info:
         assert user_info.get('screen_name', '') == user_info.pop('昵称', '')
+    user_info['screen_name'] = user_info['screen_name'].replace('-', '_')
+
     if '简介' in user_info:
-        assert user_info.get('description', '') == user_info.pop(
-            '简介', '').replace('暂无简介', '')
+        u1, u2 = user_info.get('description', '').strip(), user_info.pop(
+            '简介', '').replace('暂无简介', '').strip()
+        if u1 != u2:
+            logger.critical([u1,u2])
     if 'Tap to set alias' in user_info:
         assert user_info.get('remark', '') == user_info.pop(
             'Tap to set alias', '')
@@ -333,18 +308,17 @@ def _user_info_fix(user_info: dict) -> dict:
 
     # merge verified_reason
     keys = ['verified_reason', '认证', '认证信息']
-    values = [user_info.pop(k, '') for k in keys]
+    values = [user_info.pop(k, '').strip() for k in keys]
     values = [v for v in values if v]
     if values:
         if not len(set(values)) == 1:
             logger.error(set(values))
-            assert False
         user_info[keys[0]] = values[0]
 
     if '生日' in user_info:
         assert 'birthday' not in user_info or user_info['birthday'] == user_info['生日']
         user_info['birthday'] = user_info.pop('生日')
-    if birthday := user_info.get('birthday'):
+    if birthday := user_info.get('birthday', '').strip():
         birthday = birthday.split()[0].strip()
         if birthday == '0001-00-00':
             pass
@@ -404,6 +378,6 @@ def _parse_user_card(respond_card):
     user_card = sum([c['card_group'] for c in user_card], [])
     user_card = {card['item_name']: card['item_content']
                  for card in user_card if 'item_name' in card}
-    if '生日' in user_card:
+    if user_card.get('生日', '').strip():
         user_card['生日'] = user_card['生日'].split()[0]
     return user_card
