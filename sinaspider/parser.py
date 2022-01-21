@@ -1,25 +1,22 @@
 import json
 import re
-from collections import namedtuple
 from itertools import chain
-from typing import Union, Optional
+from typing import Optional
+from typing import Union
 
 import pendulum
+from pendulum.parsing import ParserError
 from bs4 import BeautifulSoup
-from lxml import etree
 
-from sinaspider.util.helper import logger, get_url, pause, weibo_api_url
-
-NT_Weibo = namedtuple('WeiboCard', 'original retweet')
+from sinaspider.helper import logger, get_url, pause, weibo_api_url
 
 
-def get_weibo_by_id(wb_id) -> NT_Weibo:
+def get_weibo_by_id(wb_id) -> Optional[dict]:
     if weibo_info := _get_weibo_info_by_id(wb_id):
-        if nt_weibo := parse_weibo(weibo_info):
-            return nt_weibo
+        return parse_weibo(weibo_info)
 
 
-def parse_weibo(weibo_info: dict) -> Optional[NT_Weibo[dict, dict]]:
+def parse_weibo(weibo_info: dict) -> Optional[dict]:
     """
     对从网页爬取到的微博进行解析.
     若为转发微博:
@@ -31,35 +28,12 @@ def parse_weibo(weibo_info: dict) -> Optional[NT_Weibo[dict, dict]]:
     Returns:
         解析后的微博信息. 若为转发的原微博已删除, 返回None
     """
-    if weibo_info['pic_num'] > 9 or weibo_info['isLongText']:
+    if weibo_info['pic_num'] > 9:
         weibo_info = _get_weibo_info_by_id(weibo_info['id'])
-        assert 'retweeted_status' not in weibo_info
-    original = weibo_info.get('retweeted_status')
-    if original:
-        delete_text = [
-            "该账号因被投诉违反法律法规和《微博社区公约》的相关规定，现已无法查看。查看帮助",
-            "抱歉，作者已设置仅展示半年内微博，此微博已不可见。",
-            "抱歉，此微博已被作者删除。查看帮助",
-            "抱歉，由于作者设置，你暂时没有这条微博的查看权限",
-            "该微博因被投诉违反《微博社区公约》的相关规定，已被删除。查",
-            "该账号因用户自行申请关闭，现已无法查看。"
-
-        ]
-        if any(d in original['text'] for d in delete_text):
-            return
-        if 'pic_num' not in original:
-            logger.warning(original['text'])
-            return
-        if original['pic_num'] > 9 or original['isLongText']:
-            original = _get_weibo_info_by_id(original['id'])
-        original = _parse_weibo_card(original)
+    if weibo_info.get('retweeted_status'):
+        return
     weibo_info = _parse_weibo_card(weibo_info)
-    if original:
-        return None
-        res = NT_Weibo(original=original, retweet=weibo_info)
-    else:
-        res = NT_Weibo(original=weibo_info, retweet=None)
-    return res
+    return weibo_info
 
 
 def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
@@ -117,7 +91,6 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             self.retweet_info()
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
-
         def retweet_info(self):
             if original := self.card.get('retweeted_status'):
                 self.wb.update(
@@ -132,10 +105,10 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             created_at = pendulum.parse(self.card['created_at'], strict=False)
             assert created_at.is_local()
             self.wb.update(
-                user_id=(user_id:=user['id']),
-                screen_name=user.get('remark') or user['screen_name'], 
-                id=(id:=int(self.card['id'])),
-                bid=(bid:=self.card['bid']),
+                user_id=(user_id := user['id']),
+                screen_name=user.get('remark') or user['screen_name'],
+                id=(id := int(self.card['id'])),
+                bid=(bid := self.card['bid']),
                 url=f'https://weibo.com/{user_id}/{bid}',
                 url_m=f'https://m.weibo.cn/detail/{id}',
                 created_at=created_at,
@@ -168,7 +141,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 return
             media_info = page_info['urls'] or page_info['media_info']
             keys = [
-                'mp4_1080p_mp4','mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url',
+                'mp4_1080p_mp4', 'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url',
                 'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld', 'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
                 'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
             ]
@@ -215,8 +188,6 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             'location': location
         }
 
-
-
     return _WeiboCardParser().wb
 
 
@@ -238,7 +209,7 @@ def get_user_by_id(uid: int, cache_days=30):
             user_info = js['data']['userInfo']
             user_info.pop('toolbar_menus', '')
             break
-        except KeyError as e:
+        except KeyError:
             print(js, url)
             pause(mode='user')
             get_user_by_id(uid, cache_days=0)
@@ -251,7 +222,7 @@ def get_user_by_id(uid: int, cache_days=30):
     user = user_card | user_cn | user_info
     s = {(k, str(v)) for k, v in chain.from_iterable(
         [user_card.items(), user_cn.items(), user_info.items()])}
-    if emp:={(k, str(v)) for k, v in user.items()}-s:
+    if emp := {(k, str(v)) for k, v in user.items()} - s:
         logger.critical(emp)
     try:
         user = _user_info_fix(user)
@@ -263,6 +234,7 @@ def get_user_by_id(uid: int, cache_days=30):
         respond_card, respond_cn, respond_info]]
     # assert min(from_cache) is max(from_cache)
     if not all(from_cache):
+        print(user)
         logger.info(f"{user['screen_name']} 信息已从网络获取.")
         pause(mode='page')
     return user
@@ -279,7 +251,7 @@ def _user_info_fix(user_info: dict) -> dict:
         u1, u2 = user_info.get('description', '').strip(), user_info.pop(
             '简介', '').replace('暂无简介', '').strip()
         if u1 != u2:
-            logger.critical([u1,u2])
+            logger.critical([u1, u2])
     if 'Tap to set alias' in user_info:
         assert user_info.get('remark', '') == user_info.pop(
             'Tap to set alias', '')
@@ -326,7 +298,7 @@ def _user_info_fix(user_info: dict) -> dict:
             try:
                 age = pendulum.parse(birthday).diff().years
                 user_info['age'] = age
-            except pendulum.parsing.ParserError:
+            except ParserError:
                 logger.warning(f'Cannot parse birthday {birthday}')
             user_info['birthday'] = birthday
     if education := user_info.pop('学习经历', ''):
@@ -345,7 +317,7 @@ def _parse_user_cn(respond):
     """解析weibo.cn的内容"""
     soup = BeautifulSoup(respond.text, 'lxml')
     divs = soup.find_all('div')
-    infos = dict()
+    info = dict()
     for tip, c in zip(divs[:-1], divs[1:]):
         if tip.attrs['class'] == ['tip']:
             assert c.attrs['class'] == ['c']
@@ -357,20 +329,20 @@ def _parse_user_cn(respond):
                         text = text.replace('\xa0', ' ')
                         try:
                             key, value = re.split('[:：]', text, maxsplit=1)
-                            infos[key] = value
+                            info[key] = value
                         except ValueError as e:
                             logger.error(f'{text} cannot parsed')
                             raise e
 
             elif tip.text == '学习经历' or '工作经历':
                 education = c.text.replace('\xa0', ' ').split('·')
-                infos[tip.text] = [e.strip() for e in education if e]
+                info[tip.text] = [e.strip() for e in education if e]
             else:
-                infos[tip.text] = c.text.replace('\xa0', ' ')
+                info[tip.text] = c.text.replace('\xa0', ' ')
 
-    if infos.get('生日') == '01-01':
-        infos.pop('生日')
-    return infos
+    if info.get('生日') == '01-01':
+        info.pop('生日')
+    return info
 
 
 def _parse_user_card(respond_card):

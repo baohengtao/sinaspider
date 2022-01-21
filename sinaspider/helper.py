@@ -3,14 +3,14 @@ import random
 import time
 from pathlib import Path
 from time import sleep
+from typing import Optional
 
 import keyring
 from baseconv import base62
 from furl import furl
+from loguru import logger
 from requests.exceptions import SSLError
 from requests_cache import CachedSession
-
-from sinaspider import logger
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
@@ -55,6 +55,47 @@ def write_xmp(tags, img):
             pass
 
 
+def convert_user_nick_to_id(users: str):
+    users = [u for u in users.split() if u]
+    for user_id in users:
+        if not user_id.isdigit():
+            r = get_url(f'https://m.weibo.cn/n/{user_id}')
+            user_id = r.url.split('/')[-1]
+        yield int(user_id)
+
+
+def normalize_user_id(user_id)->Optional[int]:
+    try:
+        return int(user_id)
+    except ValueError:
+        pass
+    assert isinstance(user_id, str)
+    url = f'https://m.weibo.cn/n/{user_id}'
+    r = get_url(url)
+    if url != r.url:
+        user_id = r.url.split('/')[-1]
+        return int(user_id)
+    else:
+        logger.warning(f'{url} not exist')
+        return
+
+
+def normalize_wb_id(wb_id: int | str) -> int:
+    try:
+        return int(wb_id)
+    except ValueError:
+        pass
+    assert isinstance(wb_id, str)
+    id_ = ''
+    bid = wb_id.swapcase()
+    while bid:
+        bid, num = bid[:-4], bid[-4:]
+        num = base62.decode(num)
+        id_ = f'{int(num):07d}{id_}'
+    id_ = int(id_)
+    return id_
+
+
 class Pause:
     def __init__(self):
 
@@ -89,7 +130,7 @@ class Pause:
         elif mode == 'user':
             self._pause(self.user_config)
         else:
-            logger.critical(f'unsuppored pause mode {mode}')
+            logger.critical(f'unsupported pause mode {mode}')
             assert False
 
     def _pause(self, record):
@@ -116,17 +157,6 @@ class Pause:
             print(f'sleep {i}/{to_sleep}', end='\r')
             sleep(1)
         self.__since = time.time()
-
-
-def convert_wb_bid_to_id(bid):
-    id_ = ''
-    bid = bid.swapcase()
-    while bid:
-        bid, num = bid[:-4], bid[-4:]
-        num = base62.decode(num)
-        id_ = f'{int(num):07d}{id_}'
-    id_ = int(id_)
-    return id_
 
 
 pause = Pause()

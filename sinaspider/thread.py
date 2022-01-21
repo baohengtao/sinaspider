@@ -4,7 +4,7 @@ from threading import Thread
 
 from loguru import logger
 
-from sinaspider.util.helper import get_url, write_xmp
+from sinaspider.helper import get_url, write_xmp
 
 
 class ClosableQueue(Queue):

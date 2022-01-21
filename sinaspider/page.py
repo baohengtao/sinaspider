@@ -1,28 +1,27 @@
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Union, Iterator
+from typing import Generator
 
 import pendulum
+from loguru import logger
 from tqdm import trange
 
-from sinaspider.util.helper import get_url, logger, pause, weibo_api_url
-from sinaspider.util.parser import parse_weibo
+from sinaspider.helper import weibo_api_url, get_url, pause
+from sinaspider.parser import parse_weibo
 
 
 def get_weibo_pages(containerid: str,
                     start_page: int = 1,
-                    end_page=None,
-                    since: Union[int, str, datetime] = '1970-01-01',
-                    ) -> Iterator[tuple]:
+                    since: int | str | datetime = '1970-01-01',
+                    ) -> Generator[dict, None, None]:
     """
     爬取某一 containerid 类型的所有微博
 
     Args:
-        containerid(str): 
+        containerid(str):
             - 获取用户页面的微博: f"107603{user_id}"
             - 获取收藏页面的微博: 230259
         start_page(int): 指定从哪一页开始爬取, 默认第一页.
-        end_page: 终止页面, 默认爬取到最后一页
         since: 若为整数, 从哪天开始爬取, 默认所有时间
 
 
@@ -31,13 +30,15 @@ def get_weibo_pages(containerid: str,
     """
     if isinstance(since, int):
         assert since > 0
-        since = pendulum.now().subtract(since)
+        since = pendulum.now().subtract(days=since)
     elif isinstance(since, str):
         since = pendulum.parse(since)
     else:
         since = pendulum.instance(since)
+    logger.info(f'fetch weibo from {since}')
     page = max(start_page, 1)
-    while True:
+    is_continue = True
+    while is_continue:
         url = weibo_api_url.copy()
         url.args = {'containerid': containerid, 'page': page}
         response = get_url(url)
@@ -55,38 +56,32 @@ def get_weibo_pages(containerid: str,
                   for w in js['data']['cards'] if w['card_type'] == 9]
 
         for weibo_info in mblogs:
-            nt_weibo = parse_weibo(weibo_info)
-            if not nt_weibo:
+            if not (weibo := parse_weibo(weibo_info)):
                 continue
-            original, retweet = nt_weibo
-            is_pinned = retweet.pop(
-                'is_pinned', None) if retweet else original.pop('is_pinned', None)
-            created_at = retweet['created_at'] if retweet else original['created_at']
-            if created_at < since:
+            is_pinned = weibo.pop('is_pinned', None)
+            if (created_at := weibo['created_at']) < since:
                 if is_pinned:
                     logger.warning("发现置顶微博, 跳过...")
                     continue
                 else:
                     logger.info(
                         f"时间{created_at} 在 {since:%y-%m-%d}之前, 获取完毕")
-                    end_page = page
+                    is_continue = False
                     break
-            yield nt_weibo
-
-        logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
-        page += 1
-        if end_page and page > end_page:
-            break
-        pause(mode='page')
+            yield weibo
+        else:
+            logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+            page += 1
+            pause(mode='page')
 
 
-def get_follow_pages(containerid: Union[str, int], cache_days=30) -> Iterator[dict]:
+def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, None, None]:
     """
     获取关注列表
 
     Args:
         containerid (Union[str, int]):
-            - 用户的关注列表: f'231051_-_followers_-_{user_id}' 
+            - 用户的关注列表: f'231051_-_followers_-_{user_id}'
         cache_days: 页面缓冲时间时间, 若为0, 则不缓存
 
     Yields:

@@ -1,17 +1,35 @@
-from sinaspider import UserMethod, engine, WeiboMethod
-from sqlmodel import Session
-def test_user():
-    uid=2715204863
-    with Session(engine) as session:
-        user=UserMethod.from_id(uid, session=session)
-    assert user.id==uid
+import sys
 
-def test_weibo_id():
-    wid=4696094896293270
-    from sinaspider.util.parser import get_weibo_by_id
-    nt_weibo = get_weibo_by_id(wid)
-    with Session(engine) as session:
-        weibo=WeiboMethod.from_id(wid, session)
-        weibo, original = nt_weibo
-        wb=WeiboMethod.add_to_table(weibo, original, session=session)[0]
-        assert wb.id == wid
+from sinaspider.model import *
+sys.path.append('..')
+database = init_database('pytest')
+DROP_TABLE=True
+DROP_TABLE=False
+
+
+def test_user():
+    user_id = 1120967445
+    user = User.from_id(user_id)
+    for weibo in user.timeline(since=12):
+        logger.info(weibo)
+
+    return user
+
+
+def test_weibo():
+    wb_id = 'LajbuaB9E'
+    weibo = Weibo.from_id(wb_id)
+    meta = weibo.gen_meta()
+    logger.info(f'meta is {meta}')
+    for m in weibo.medias():
+        logger.info(f'medias is {m}')
+
+def test_user_config():
+    user_id = 3548007485
+    uc=UserConfig.from_id(user_id)
+    uc.fetch_weibo(Path.home()/'Downloads/pytest_sina')
+
+def test_drop_table():
+    if DROP_TABLE:
+        database.drop_tables([User, UserConfig, Weibo])
+

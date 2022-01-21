@@ -1,171 +1,300 @@
 from datetime import datetime
-from typing import Optional, List, Dict
+from pathlib import Path
+from typing import Optional
 
 import pendulum
-from sqlalchemy import DateTime, JSON, BigInteger, Column
-from sqlmodel import SQLModel, Field, create_engine, Relationship
+from loguru import logger
+from peewee import Model
+from playhouse.postgres_ext import (
+    PostgresqlExtDatabase, IntegerField, BooleanField, TextField,
+    BigIntegerField, DateTimeField, BigAutoField,
+    ArrayField, CharField, ForeignKeyField, JSONField,
+)
 
-DATABASE = 'refresh'
-database_url = f'postgresql://localhost/{DATABASE}'
-engine = create_engine(database_url)
+from sinaspider.helper import normalize_wb_id, pause
+from sinaspider.page import get_weibo_pages
+from sinaspider.parser import get_weibo_by_id, get_user_by_id
+from sinaspider.thread import ClosableQueue, start_threads, stop_threads
 
-
-class Friend(SQLModel, table=True):
-    user_id: int = Field(
-        primary_key=True,
-        foreign_key='user.id',
-        sa_column=Column[BigInteger])
-
-    friend_id: int = Field(
-        primary_key=True,
-        sa_column=Column[BigInteger])
-
-    user: 'User' = Relationship(back_populates='friends')
-    description: Optional[str]
-    gender: str
-    homepage: str
-    avatar_hd: str
-
-    def __str__(self):
-        return f"""{self.dict()}"""
+database = PostgresqlExtDatabase(None, autoconnect=True)
 
 
-class UserConfig(SQLModel, table=True):
-    id: int = Field(primary_key=True, foreign_key='user.id')
-    user: 'User' = Relationship(back_populates='user_config')
-    screen_name: str
-    age: Optional[int]
-    weibo_fetch: bool = True
-    retweet_fetch: bool = False
-    relation_fetch: bool = False
-    following: bool
-    education: Optional[List[str]]
-    description: Optional[str]
-    homepage: str
-    weibo_update_at: datetime = Field(pendulum.from_timestamp(0))
-
-    def __str__(self):
-        text = ''
-        for k, v in self.dict().items():
-            from datetime import datetime
-            if isinstance(v, datetime):
-                v = v.strftime('%Y-%m-%d %H:%M:%S')
-            text += f'{k}: {v}\n'
-        return text
+def init_database(db_name):
+    database.init(db_name)
+    database.create_tables([User, UserConfig, Weibo])
+    return database
 
 
+class BaseModel(Model):
+    class Meta:
+        database = database
 
 
-class Artist(SQLModel, table=True):
-    id: int = Field(foreign_key='user.id', primary_key=True)
-    user: 'User' = Relationship(back_populates='artist')
-    user_name: str
-    age: Optional[int]
-    album: str
-    photos_num: int = 0
-    recent_num: int = 0
-    education: Optional[List[str]]
-    description: Optional[str]
-    homepage: Optional[str]
-    statuses_count: int
-    followers_count: int
-    follow_count: int
+class User(BaseModel):
+    id = BigIntegerField(primary_key=True, unique=True)
+    screen_name = TextField()
+    remark = TextField(null=True)
+    following = BooleanField()
+    birthday = TextField(null=True)
+    age = IntegerField(null=True)
+    gender = TextField()
+    education = ArrayField(field_class=TextField, null=True)
+    location = TextField(null=True)
 
+    hometown = TextField(null=True)
+    description = TextField(null=True)
+    homepage = TextField(null=True)
+    statuses_count = IntegerField(null=True)
+    followers_count = IntegerField(null=True)
+    follow_count = IntegerField(null=True)
+    follow_me = BooleanField(null=True)
 
-class User(SQLModel, table=True):
-    id: int = Field(sa_column=Column(BigInteger, primary_key=True))
-    weibos: List['Weibo'] = Relationship(back_populates='user')
-    artist: Optional[Artist] = Relationship(back_populates='user')
-    user_config: Optional[UserConfig] = Relationship(back_populates='user')
-    friends: List['Friend'] = Relationship(back_populates='user')
+    avatar_hd = TextField(null=True)
+    close_blue_v = BooleanField(null=True)
+    like = BooleanField(null=True)
+    like_me = BooleanField(null=True)
+    mbrank = BigIntegerField(null=True)
+    mbtype = BigIntegerField(null=True)
+    urank = BigIntegerField(null=True)
+    verified = BooleanField(null=True)
+    verified_reason = TextField(null=True)
+    verified_type = BigIntegerField(null=True)
+    verified_type_ext = BigIntegerField(null=True)
+    公司 = TextField(null=True)
+    工作经历 = TextField(null=True)
+    性取向 = TextField(null=True)
+    感情状况 = TextField(null=True)
+    标签 = TextField(null=True)
+    注册时间 = TextField(null=True)
+    阳光信用 = TextField(null=True)
+    审核时间 = TextField(null=True)
+    电话 = TextField(null=True)
+    邮箱 = TextField(null=True)
 
-    screen_name: str
-    remark: Optional[str]
-    following: bool
-    birthday: str
-    age: Optional[int]
-    gender: str
-    education: Optional[List[str]]
-    location: str
-    hometown: Optional[str]
-    description: Optional[str]
-    homepage: Optional[str]
-    statuses_count: int
-    followers_count: int
-    follow_count: int
-    follow_me: bool
-    注册时间: str
-    阳光信用: str
-    性取向: Optional[str]
-    verified: bool
-    verified_type: int
-    close_blue_v: bool
-    mbtype: int
-    urank: int
-    mbrank: int
-    avatar_hd: str
-    like: bool
-    like_me: bool
-    info_updated_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True)))
-    verified_type_ext: int
-    verified_reason: str
-    标签: str
-    公司: str
-    工作经历: str
-    感情状况: str
-    审核时间: str
-    电话: str
-    邮箱: str
+    class Meta:
+        table_name = 'user'
+
+    @classmethod
+    def from_id(cls, user_id: int, update=False) -> Optional['User']:
+        assert isinstance(user_id, int)
+        cache_days = 30 if not update else 0
+        if (user := User.get_or_none(id=user_id)) is None:
+            force_insert = True
+            update = True
+            user = User()
+        else:
+            force_insert = False
+        if update:
+            user_dict = get_user_by_id(user_id, cache_days=cache_days)
+            for k, v in user_dict.items():
+                setattr(user, k, v)
+            user.save(force_insert=force_insert)
+        return user
+
+    def timeline(self, start_page=1, since: int | str | datetime = '1970-01-01'):
+        weibos = get_weibo_pages(f'107603{self.id}', start_page, since)
+        yield from weibos
 
     def __str__(self):
         text = ''
         keys = ['id', 'screen_name', 'gender', 'birthday', 'location', 'homepage',
                 'description', 'statuses_count', 'followers_count', 'follow_count']
         for k in keys:
-            if v := self.dict().get(k):
+            if v := getattr(self, k, None):
                 text += f'{k}: {v}\n'
         return text
 
 
-class Weibo(SQLModel, table=True):
-    id: int = Field(sa_column=Column(BigInteger, primary_key=True))
-    bid: str
+class Weibo(BaseModel):
+    id = BigAutoField()
+    bid = TextField(null=True)
+    user = ForeignKeyField(User, backref='weibos')
+    screen_name = TextField(null=True)
+    created_at = DateTimeField(null=True)
+    text = TextField(null=True)
+    url = TextField(null=True)
+    url_m = TextField(null=True)
+    at_users = ArrayField(field_class=TextField, null=True)
+    location = TextField(null=True)
+    attitudes_count = IntegerField(null=True)
+    comments_count = IntegerField(null=True)
+    reposts_count = IntegerField(null=True)
+    source = TextField(null=True)
+    topics = ArrayField(field_class=TextField, null=True)
+    photos = JSONField(null=True)
+    video_duration = BigIntegerField(null=True)
+    video_url = TextField(null=True)
 
-    user_id: int = Field(foreign_key="user.id")
-    user: 'User' = Relationship(back_populates="weibos")
+    class Meta:
+        table_name = 'weibo'
 
-    screen_name: str
-    text: str
-    location: Optional[str]
-    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True)))
-    at_users: List[str] = None
-    topics: List[str] = None
-    source: str
+    @classmethod
+    def from_id(cls, id):
 
-    original_id: Optional[int] = Field(foreign_key='weibo.id')
-    original_bid: str = None
-    original_uid: int = Field(None, sa_column=Column(BigInteger))
-    original_text: str = None
-    reposts_count: int
-    comments_count: int
-    attitudes_count: int
-    url: str
-    url_m: str
-    photos: Dict[str, tuple[str, Optional[str]]] = Field(None, sa_column=Column(JSON))
-    video_url: str = None
-    video_duration: int = None
+        wb_id = normalize_wb_id(id)
+        if not (weibo := Weibo.get_or_none(id=wb_id)):
+            weibo_dict = get_weibo_by_id(wb_id)
+            weibo = Weibo(**weibo_dict)
+            weibo.user = User.from_id(weibo.user_id)
+            weibo.save(force_insert=True)
+        return weibo
+
+    def medias(self, filepath=None):
+        photos = self.photos or {}
+        for sn, urls in photos.items():
+            for url in filter(bool, urls):
+                *_, ext = url.split('/')[-1].split('.')
+                if not _:
+                    ext = 'jpg'
+                yield {
+                    'url': url,
+                    'filename': f'{self.user_id}_{self.id}_{sn}.{ext}',
+                    'xmp_info': self.gen_meta(sn),
+                    'filepath': filepath
+                }
+        if url := self.video_url:
+            assert ';' not in url
+            if (duration := self.video_duration) and duration > 600:
+                logger.warning(f'video_duration is {duration})...skipping...')
+            else:
+                yield {
+                    'url': url,
+                    'filename': f'{self.user_id}_{self.id}.mp4',
+                    'xmp_info': self.gen_meta(),
+                    'filepath': filepath
+                }
+
+    def gen_meta(self, sn: str | int = 0) -> dict:
+        sn = int(sn) if sn else 0
+        xmp_info = {
+            'ImageUniqueID': self.bid,
+            'ImageSupplierID': self.user_id,
+            'ImageSupplierName': 'Weibo',
+            'ImageCreatorName': self.screen_name,
+            'BlogTitle': self.text,
+            'BlogURL': self.url,
+            'Location': self.location,
+            'DateCreated': self.created_at + pendulum.Duration(microseconds=int(sn)),
+            'SeriesNumber': sn
+        }
+
+        xmp_info['DateCreated'] = xmp_info['DateCreated'].strftime(
+            '%Y:%m:%d %H:%M:%S.%f')
+        return {'XMP:' + k: v for k, v in xmp_info.items() if v}
 
     def __str__(self):
         text = ''
         keys = [
-            'screen_name', 'id', 'text', 'location',
+            'user_id', 'screen_name', 'id', 'text', 'location',
             'created_at', 'at_users', 'url'
         ]
         for k in keys:
-            if v := self.dict().get(k):
+            if v := getattr(self, k, None):
                 text += f'{k}: {v}\n'
         return text
 
 
-SQLModel.metadata.create_all(engine, tables=[p.__table__ for p in [Friend, UserConfig, Artist, User, Weibo]])
+# class Artist(BaseModel):
+#     id = ForeignKeyField(column_name='id', field='id',
+#                          model=User, primary_key=True)
+#     age = IntegerField(index=True, null=True)
+#     album = CharField(index=True)
+#     description = CharField(index=True, null=True)
+#     education = CharField(index=True, null=True)
+#     follow_count = IntegerField(index=True)
+#     followers_count = IntegerField(index=True)
+#     homepage = CharField(index=True, null=True)
+#     photos_num = IntegerField(default=0, index=True)
+#     recent_num = IntegerField(default=0)
+#     statuses_count = IntegerField(index=True)
+#     user_name = CharField(index=True)
+#
+#     class Meta:
+#         table_name = 'artist'
+#
+#
+# class Friend(BaseModel):
+#     avatar_hd = CharField(index=True)
+#     description = CharField(index=True, null=True)
+#     friend_id = BigIntegerField(index=True)
+#     gender = CharField(index=True)
+#     homepage = CharField(index=True)
+#     user = ForeignKeyField(column_name='user_id', field='id', model=User)
+#
+#     class Meta:
+#         table_name = 'friend'
+#         indexes = (
+#             (('user', 'friend_id'), True),
+#         )
+#         primary_key = CompositeKey('friend_id', 'user')
+#
+
+# noinspection PyTypeChecker
+
+
+class UserConfig(BaseModel):
+    user = ForeignKeyField(User)
+    screen_name = CharField()
+    age = IntegerField(index=True, null=True)
+    weibo_fetch = BooleanField(index=True, default=True)
+    weibo_update_at = DateTimeField(index=True, default=pendulum.datetime(1970, 1, 1))
+    following = BooleanField()
+    description = CharField(index=True, null=True)
+    education = CharField(index=True, null=True)
+    homepage = CharField(index=True)
+
+    class Meta:
+        table_name = 'userconfig'
+
+    @classmethod
+    def from_id(cls, user_id):
+        user = User.from_id(user_id)
+        if not (user_config := UserConfig.get_or_none(user=user)):
+            user_config = UserConfig(user=user)
+        fields = set(cls._meta.fields) - {'id'}
+        for k in fields:
+            if v := getattr(user, k, None):
+                setattr(user_config, k, v)
+        user_config.screen_name = user.remark or user.screen_name
+        user_config.save()
+        return user_config
+
+    def fetch_weibo(self, download_dir,
+                    update_interval=0.01, start_page=1):
+        if not self.weibo_fetch:
+            print(f'skip {self.screen_name}...')
+            return
+        weibo_since, now = self.weibo_update_at, pendulum.now()
+        if pendulum.instance(weibo_since).diff().days < update_interval:
+            print(f'skipping...for fetched at recent {update_interval} days')
+            return
+        User.from_id(self.user_id, update=True)
+        print(self.user)
+
+        weibos = self.user.timeline(
+            since=weibo_since, start_page=start_page)
+        logger.info(
+            f'正在获取用户 {self.screen_name} 自 {weibo_since:%y-%m-%d} 起的所有微博')
+        logger.info(f"Media Saving: {download_dir}")
+
+        img_queue = ClosableQueue(maxsize=100)
+        threads = start_threads(10, img_queue)
+        for img in self._save_weibo(weibos, download_dir):
+            img_queue.put(img)
+        stop_threads(img_queue, threads)
+        logger.success(f'{self.user.screen_name}微博获取完毕')
+        self.update(weibo_update_at=now).execute()
+        pause(mode='user')
+        return
+
+    def _save_weibo(self, weibos, download_dir):
+        path = Path(download_dir) / self.user.screen_name
+        for weibo_dict in weibos:
+            wb_id = weibo_dict['id']
+            if not (weibo := Weibo.get_or_none(id == wb_id)):
+                weibo = Weibo.create(**weibo_dict)
+            medias = list(weibo.medias(path))
+            print(weibo)
+            logger.info(
+                f"Downloading {len(medias)} files to {path}...")
+            yield from medias
