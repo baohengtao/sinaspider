@@ -5,18 +5,19 @@ from typing import Optional
 from typing import Union
 
 import pendulum
-from pendulum.parsing import ParserError
 from bs4 import BeautifulSoup
+from pendulum.parsing import ParserError
 
-from sinaspider.helper import logger, get_url, pause, weibo_api_url
-
+from sinaspider import console
+from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
+print = console.print
 
 def get_weibo_by_id(wb_id) -> Optional[dict]:
     if weibo_info := _get_weibo_info_by_id(wb_id):
         return parse_weibo(weibo_info)
 
 
-def parse_weibo(weibo_info: dict) -> Optional[dict]:
+def parse_weibo(weibo_info: dict) -> dict:
     """
     对从网页爬取到的微博进行解析.
     若为转发微博:
@@ -26,14 +27,13 @@ def parse_weibo(weibo_info: dict) -> Optional[dict]:
     Args:
         weibo_info (dict): 原始微博信息
     Returns:
-        解析后的微博信息. 若为转发的原微博已删除, 返回None
+        解析后的微博信息.
     """
+    weibo = _parse_weibo_card(weibo_info)
     if weibo_info['pic_num'] > 9:
-        weibo_info = _get_weibo_info_by_id(weibo_info['id'])
-    if weibo_info.get('retweeted_status'):
-        return
-    weibo_info = _parse_weibo_card(weibo_info)
-    return weibo_info
+        weibo_info |= _get_weibo_info_by_id(weibo_info['id'])
+        weibo = _parse_weibo_card(weibo_info)
+    return weibo
 
 
 def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
@@ -59,13 +59,13 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
         weibo_info = json.loads(html, strict=False)['status']
         if not weibo_info:
             response.revalidate(3600 * 24 * 30)
-            logger.warning(f'{url} cannot load')
+            console.log(f'{url} cannot load', style='warning')
         else:
-            logger.info(f'{wb_id} fetched')
+            console.log(f'{wb_id} fetched')
     if response.from_cache:
-        logger.info(f'fetching {wb_id} from cache')
+        console.log(f'fetching {wb_id} from cache')
     else:
-        logger.info('pausing...')
+        console.log('pausing...')
         pause(mode='page')
     return weibo_info
 
@@ -86,19 +86,19 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             try:
                 self.wb |= text_info(self.card['text'])
             except AssertionError:
-                print(weibo_card)
+                console.print_exception(show_locals=True)
                 raise
-            self.retweet_info()
+            # self.retweet_info()
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
-        def retweet_info(self):
-            if original := self.card.get('retweeted_status'):
-                self.wb.update(
-                    original_id=original['id'],
-                    original_bid=original['bid'],
-                    original_uid=original['user']['id'],
-                    original_text=text_info(original['text']).get('text')
-                )
+#         def retweet_info(self):
+#             if original := self.card.get('retweeted_status'):
+#                 self.wb.update(
+#                     original_id=original['id'],
+#                     original_bid=original['bid'],
+#                     original_uid=original['user']['id'],
+#                     original_text=text_info(original['text']).get('text')
+#                 )
 
         def basic_info(self):
             user = self.card['user']
@@ -146,12 +146,12 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
             ]
             if not set(media_info).issubset(keys):
-                logger.info(media_info)
-                logger.critical(str(set(media_info) - set(keys)))
+                console.log(media_info)
+                console.log(str(set(media_info) - set(keys)), style='error')
                 # assert False
             urls = [v for k in keys if (v := media_info.get(k))]
             if not urls:
-                logger.warning(f'no video info:==>{page_info}')
+                console.log(f'no video info:==>{page_info}', style='warn')
             else:
                 self.wb['video_url'] = urls[0]
                 if duration := float(media_info.get('duration', 0)):
@@ -223,7 +223,7 @@ def get_user_by_id(uid: int, cache_days=30):
     s = {(k, str(v)) for k, v in chain.from_iterable(
         [user_card.items(), user_cn.items(), user_info.items()])}
     if emp := {(k, str(v)) for k, v in user.items()} - s:
-        logger.critical(emp)
+        console.log(emp, style='error')
     try:
         user = _user_info_fix(user)
     except (KeyError, AssertionError) as e:
@@ -234,8 +234,7 @@ def get_user_by_id(uid: int, cache_days=30):
         respond_card, respond_cn, respond_info]]
     # assert min(from_cache) is max(from_cache)
     if not all(from_cache):
-        print(user)
-        logger.info(f"{user['screen_name']} 信息已从网络获取.")
+        console.log(f"{user['screen_name']} 信息已从网络获取.")
         pause(mode='page')
     return user
 
@@ -251,7 +250,7 @@ def _user_info_fix(user_info: dict) -> dict:
         u1, u2 = user_info.get('description', '').strip(), user_info.pop(
             '简介', '').replace('暂无简介', '').strip()
         if u1 != u2:
-            logger.critical([u1, u2])
+            console.log([u1, u2], style='error')
     if 'Tap to set alias' in user_info:
         assert user_info.get('remark', '') == user_info.pop(
             'Tap to set alias', '')
@@ -284,7 +283,7 @@ def _user_info_fix(user_info: dict) -> dict:
     values = [v for v in values if v]
     if values:
         if not len(set(values)) == 1:
-            logger.error(set(values))
+            console.log(set(values), style='error')
         user_info[keys[0]] = values[0]
 
     if '生日' in user_info:
@@ -299,7 +298,7 @@ def _user_info_fix(user_info: dict) -> dict:
                 age = pendulum.parse(birthday).diff().years
                 user_info['age'] = age
             except ParserError:
-                logger.warning(f'Cannot parse birthday {birthday}')
+                console.log(f'Cannot parse birthday {birthday}', style='error')
             user_info['birthday'] = birthday
     if education := user_info.pop('学习经历', ''):
         assert 'education' not in user_info
@@ -310,6 +309,8 @@ def _user_info_fix(user_info: dict) -> dict:
     user_info['homepage'] = f'https://weibo.com/u/{user_info["id"]}'
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
     user_info['hometown'] = user_info.pop('家乡', '')
+    user_info = {k: normalize_str(v) for k, v in user_info.items()}
+
     return user_info
 
 
@@ -331,7 +332,7 @@ def _parse_user_cn(respond):
                             key, value = re.split('[:：]', text, maxsplit=1)
                             info[key] = value
                         except ValueError as e:
-                            logger.error(f'{text} cannot parsed')
+                            console.log(f'{text} cannot parsed', style='error')
                             raise e
 
             elif tip.text == '学习经历' or '工作经历':

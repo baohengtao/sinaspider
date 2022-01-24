@@ -3,11 +3,11 @@ from time import sleep
 from typing import Generator
 
 import pendulum
-from loguru import logger
 from tqdm import trange
 
 from sinaspider.helper import weibo_api_url, get_url, pause
 from sinaspider.parser import parse_weibo
+from sinaspider import console
 
 
 def get_weibo_pages(containerid: str,
@@ -35,7 +35,7 @@ def get_weibo_pages(containerid: str,
         since = pendulum.parse(since)
     else:
         since = pendulum.instance(since)
-    logger.info(f'fetch weibo from {since}')
+    console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
     page = max(start_page, 1)
     is_continue = True
     while is_continue:
@@ -45,11 +45,11 @@ def get_weibo_pages(containerid: str,
         js = response.json()
         if not js['ok']:
             if js['msg'] == '请求过于频繁，歇歇吧':
-                logger.critical('be banned')
+                console.log('be banned', style='error')
                 raise
             else:
-                logger.warning(
-                    f"not js['ok'], seems reached end, no wb return for page {page}")
+                console.log(
+                    f"not js['ok'], seems reached end, no wb return for page {page}", style='warning')
                 break
 
         mblogs = [w['mblog']
@@ -61,16 +61,16 @@ def get_weibo_pages(containerid: str,
             is_pinned = weibo.pop('is_pinned', None)
             if (created_at := weibo['created_at']) < since:
                 if is_pinned:
-                    logger.warning("发现置顶微博, 跳过...")
+                    console.log("发现置顶微博, 跳过...")
                     continue
                 else:
-                    logger.info(
-                        f"时间{created_at} 在 {since:%y-%m-%d}之前, 获取完毕")
+                    console.log(
+                        f"时间{created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, 获取完毕")
                     is_continue = False
                     break
             yield weibo
         else:
-            logger.success(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+            console.log(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
             page += 1
             pause(mode='page')
 
@@ -102,8 +102,8 @@ def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, N
                 for i in trange(1800, desc='sleeping...'):
                     sleep(i / 4)
             else:
-                logger.success("关注信息已更新完毕")
-                logger.info(f'js==>{js}')
+                console.print("关注信息已更新完毕")
+                console.print(f'js==>{js}')
                 break
         cards_ = js['data']['cards'][0]['card_group']
 
@@ -123,7 +123,7 @@ def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, N
 
             yield user
         if not response.from_cache and js['ok']:
-            logger.success(f'页面 {page} 已获取完毕')
+            console.log(f'页面 {page} 已获取完毕')
         if not response.from_cache:
             pause(mode='page')
         page += 1

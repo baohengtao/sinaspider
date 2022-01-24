@@ -8,9 +8,11 @@ from typing import Optional
 import keyring
 from baseconv import base62
 from furl import furl
-from loguru import logger
 from requests.exceptions import SSLError
 from requests_cache import CachedSession
+
+from sinaspider import console, progress
+from rich.progress import track
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
@@ -33,7 +35,7 @@ def get_url(url, expire_after=0):
             r = session.get(url, headers=headers, expire_after=expire_after)
             break
         except (TimeoutError, ConnectionError, SSLError) as e:
-            logger.error(f'{e}: Timeout sleep 600 seconds and retry {url}...')
+            console.log(f'{e}: Timeout sleep 600 seconds and retry {url}...', style='error')
             sleep(10 * 60)
 
     return r
@@ -43,8 +45,8 @@ def write_xmp(tags, img):
     try:
         import exiftool
     except ModuleNotFoundError:
-        logger.warning(
-            'exiftool not installed, cannot write xmp info to img')
+        console.log(
+            'exiftool not installed, cannot write xmp info to img', style='error')
         return
 
     with exiftool.ExifTool() as et:
@@ -64,7 +66,8 @@ def convert_user_nick_to_id(users: str):
         yield int(user_id)
 
 
-def normalize_user_id(user_id)->Optional[int]:
+def normalize_user_id(user_id) -> Optional[int]:
+    from urllib.parse import unquote
     try:
         return int(user_id)
     except ValueError:
@@ -72,11 +75,11 @@ def normalize_user_id(user_id)->Optional[int]:
     assert isinstance(user_id, str)
     url = f'https://m.weibo.cn/n/{user_id}'
     r = get_url(url)
-    if url != r.url:
+    if url != unquote(r.url):
         user_id = r.url.split('/')[-1]
         return int(user_id)
     else:
-        logger.warning(f'{url} not exist')
+        console.log(f'{url} not exist', style='warning')
         return
 
 
@@ -94,6 +97,17 @@ def normalize_wb_id(wb_id: int | str) -> int:
         id_ = f'{int(num):07d}{id_}'
     id_ = int(id_)
     return id_
+
+
+def normalize_str(amount):
+    if amount and isinstance(amount, str):
+        num, mul = amount[:-1], amount[-1]
+        match mul:
+            case '亿':
+                amount = float(num) * (10 ** 8)
+            case '万':
+                amount = float(num) * (10 ** 4)
+    return amount
 
 
 class Pause:
@@ -130,7 +144,7 @@ class Pause:
         elif mode == 'user':
             self._pause(self.user_config)
         else:
-            logger.critical(f'unsupported pause mode {mode}')
+            console.log(f'unsupported pause mode {mode}', style='error')
             assert False
 
     def _pause(self, record):
@@ -150,12 +164,14 @@ class Pause:
     def _sleep(self, sleep_time):
         sleep_time = random.randint(
             int(0.5 * sleep_time), int(1.5 * sleep_time))
-        logger.info(f'waiting {sleep_time} second(s)...')
+        console.log(f'waiting {sleep_time} second(s)...')
         to_sleep = self.__since + sleep_time - time.time()
         to_sleep = max(int(to_sleep), 0)
+        console.log(f'sleeping {to_sleep} seconds')
         for i in range(to_sleep):
-            print(f'sleep {i}/{to_sleep}', end='\r')
             sleep(1)
+
+
         self.__since = time.time()
 
 

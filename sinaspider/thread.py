@@ -2,8 +2,7 @@ from pathlib import Path
 from queue import Queue
 from threading import Thread
 
-from loguru import logger
-
+from sinaspider import console
 from sinaspider.helper import get_url, write_xmp
 
 
@@ -54,8 +53,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
     filepath.mkdir(parents=True, exist_ok=True)
     img = filepath / filename
     if img.exists():
-        logger.warning(
-            f'{img} already exists..skip {url}')
+        console.log(f'{img} already exists..skipping...', style='warning')
         return
     while True:
         downloaded = get_url(url).content
@@ -63,9 +61,17 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
             continue
         else:
             if len(downloaded) < 1024:
-                logger.critical([len(downloaded), url, filepath])
+                console.log([len(downloaded), url, filepath], style='warning')
             break
 
     img.write_bytes(downloaded)
     if xmp_info:
         write_xmp(xmp_info, img)
+
+
+def download_files(imgs):
+    img_queue = ClosableQueue(maxsize=100)
+    threads = start_threads(10, img_queue)
+    for img in imgs:
+        img_queue.put(img)
+    stop_threads(img_queue, threads)
