@@ -35,7 +35,7 @@ def get_url(url, expire_after=0):
             r = session.get(url, headers=headers, expire_after=expire_after)
             break
         except (TimeoutError, ConnectionError, SSLError) as e:
-            console.log(f'{e}: Timeout sleep 600 seconds and retry {url}...', style='error')
+            console.log(f'{e}: Timeout sleep 600 seconds and retry [link={url}]{url}[/link]...', style='error')
             sleep(10 * 60)
 
     return r

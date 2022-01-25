@@ -8,7 +8,7 @@ from sinaspider.helper import normalize_user_id
 from sinaspider.model import UserConfig, User, Weibo, init_database
 
 app = Typer()
-default_path = Path.home() / 'Downloads/sinaspider_test'
+default_path = Path.home() / 'Downloads/sinaspider'
 init_database('sinaspider')
 
 

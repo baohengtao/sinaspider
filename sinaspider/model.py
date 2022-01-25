@@ -32,7 +32,7 @@ def init_database(db_name='sinaspider', reset=False):
 def transfer_database(from_db, to_db, reset=False):
     init_database(to_db, reset=reset)
     db = DataSet(f'postgres:///{from_db}')
-    for Table in [User, Weibo]:
+    for Table in [User, Weibo, UserConfig, Artist]:
         for row in db[Table._meta.table_name]:
             if Table.get_or_none(id=row['id']):
                 continue
@@ -40,16 +40,6 @@ def transfer_database(from_db, to_db, reset=False):
                 Table.create(**row)
             except IntegrityError:
                 pass
-    for user in db['userconfig']:
-        uc = UserConfig.from_id(user['id'])
-        uc.weibo_update_at = user['weibo_update_at']
-        uc.weibo_fetch = user['weibo_fetch']
-        uc.save()
-
-    for user in db['artist']:
-        artist = Artist.from_id(user['id'])
-        artist.user_name = user['user_name']
-        artist.album = user['album']
 
 
 class BaseModel(Model):
@@ -317,6 +307,8 @@ class UserConfig(BaseModel):
 
 
 class Artist(BaseModel):
+    username = CharField(index=True)
+    realname = CharField(null=True)
     user = ForeignKeyField(User)
     age = IntegerField(index=True, null=True)
     album = CharField(index=True, null=True)
@@ -328,7 +320,6 @@ class Artist(BaseModel):
     photos_num = IntegerField(default=0, index=True)
     recent_num = IntegerField(default=0)
     statuses_count = IntegerField(index=True)
-    username = CharField(index=True)
 
     class Meta:
         table_name = 'artist'
@@ -343,6 +334,8 @@ class Artist(BaseModel):
             if v := getattr(user, k, None):
                 setattr(artist, k, v)
         artist.username = user.remark or user.screen_name.lstrip('-')
+        if artist.username == artist.realname:
+            artist_realname = None
         artist.save()
         return artist
 
