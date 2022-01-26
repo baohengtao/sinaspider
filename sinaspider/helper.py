@@ -11,8 +11,7 @@ from furl import furl
 from requests.exceptions import SSLError
 from requests_cache import CachedSession
 
-from sinaspider import console, progress
-from rich.progress import track
+from sinaspider import console
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 
@@ -110,6 +109,34 @@ def normalize_str(amount):
     return amount
 
 
+def download_single_file(url, filepath: Path, filename, xmp_info=None):
+    filepath.mkdir(parents=True, exist_ok=True)
+    img = filepath / filename
+    if img.exists():
+        console.log(f'{img} already exists..skipping...', style='info')
+        return
+    while True:
+        downloaded = get_url(url).content
+        if len(downloaded) == 153:
+            continue
+        else:
+            if len(downloaded) < 1024:
+                console.log([len(downloaded), url, filepath], style='warning')
+            break
+
+    img.write_bytes(downloaded)
+    if xmp_info:
+        write_xmp(xmp_info, img)
+
+
+def download_files(imgs):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = [pool.submit(download_single_file, **img) for img in imgs]
+    for future in futures:
+        future.result()
+
+
 class Pause:
     def __init__(self):
 
@@ -164,13 +191,11 @@ class Pause:
     def _sleep(self, sleep_time):
         sleep_time = random.randint(
             int(0.5 * sleep_time), int(1.5 * sleep_time))
-        console.log(f'waiting {sleep_time} second(s)...')
         to_sleep = self.__since + sleep_time - time.time()
-        to_sleep = max(int(to_sleep), 0)
-        console.log(f'sleeping {to_sleep} seconds')
-        for i in range(to_sleep):
-            sleep(1)
-
+        if to_sleep := max(int(to_sleep), 0):
+            console.log(f'sleep {to_sleep} seconds...')
+            sleep(to_sleep)
+        
 
         self.__since = time.time()
 

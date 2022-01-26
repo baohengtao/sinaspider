@@ -13,6 +13,7 @@ from playhouse.postgres_ext import (
 )
 
 from sinaspider import console
+from sinaspider.helper import download_files
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import get_weibo_pages
 from sinaspider.parser import get_weibo_by_id, get_user_by_id
@@ -252,34 +253,35 @@ class UserConfig(BaseModel):
         return user_config
 
     def fetch_weibo(self, download_dir,
-                    start_page=1):
+                    start_page=1, force_fetch=False):
         if not self.weibo_fetch:
             console.log(f'skip {self.screen_name}...')
             return
-        days = 180
-        recent_num = (User
-                      .select(User)
-                      .join(Weibo, JOIN.LEFT_OUTER)
-                      .where(Weibo.created_at > pendulum.now().subtract(days=days))
-                      .where(User.id == self.user_id)
-                      .count()
-                      )
-        update_interval = min(days / (recent_num + 1), 30)
-        weibo_since, now = self.weibo_update_at, pendulum.now()
-        if pendulum.instance(weibo_since).diff().days < update_interval:
-            console.log(f'skipping {self.screen_name} for fetched at recent {update_interval} days')
-            return
+        if not force_fetch:
+            days = 180
+            recent_num = (User
+                          .select(User)
+                          .join(Weibo, JOIN.LEFT_OUTER)
+                          .where(Weibo.created_at > pendulum.now().subtract(days=days))
+                          .where(User.id == self.user_id)
+                          .count()
+                          )
+            update_interval = min(days / (recent_num + 1), 30)
+            if pendulum.instance(self.weibo_update_at).diff().days < update_interval:
+                console.log(f'skipping {self.screen_name} for fetched at recent {update_interval} days')
+                return
         User.from_id(self.user_id, update=True)
+        now = pendulum.now()
 
         weibos = self.user.timeline(
-            since=weibo_since, start_page=start_page)
-        console.rule(
-            f'开始获取 {self.screen_name} ({weibo_since:%y-%m-%d})...')
-        console.log(self.user)
-        console.log(f"Media Saving: {download_dir}")
-        imgs = self._save_weibo(weibos, download_dir)
-        from sinaspider.thread import download_files
-        download_files(imgs)
+            since=self.weibo_update_at, start_page=start_page)
+        with console.status(f" [magenta]Fetching {self.screen_name}...", spinner='christmas'):
+            console.rule(
+                f'开始获取 {self.screen_name} ({self.weibo_update_at:%y-%m-%d})...')
+            console.log(self.user)
+            console.log(f"Media Saving: {download_dir}")
+            imgs = self._save_weibo(weibos, download_dir)
+            download_files(imgs)
 
         # img_queue = ClosableQueue(maxsize=100)
         # threads = start_threads(10, img_queue)
@@ -301,8 +303,10 @@ class UserConfig(BaseModel):
                 weibo = Weibo.create(**weibo_dict)
             medias = list(weibo.medias(path))
             console.log(weibo)
-            console.log(
-                f"Downloading {len(medias)} files to {path}...\n")
+            if medias:
+                console.log(
+                    f"Downloading {len(medias)} files to {path}..")
+            print()
             yield from medias
 
 
