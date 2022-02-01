@@ -3,7 +3,6 @@ from time import sleep
 from typing import Generator
 
 import pendulum
-from tqdm import trange
 
 from sinaspider.helper import weibo_api_url, get_url, pause
 from sinaspider.parser import parse_weibo

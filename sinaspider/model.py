@@ -30,17 +30,20 @@ def init_database(db_name='sinaspider', reset=False):
     return database
 
 
-def transfer_database(from_db, to_db, reset=False):
-    init_database(to_db, reset=reset)
-    db = DataSet(f'postgres:///{from_db}')
-    for Table in [User, Weibo, UserConfig, Artist]:
-        for row in db[Table._meta.table_name]:
-            if Table.get_or_none(id=row['id']):
+def copy_database(src_db:DataSet, dst_db:PostgresqlExtDatabase):
+    # db = DataSet(f'postgres:///{from_db}')
+    tables = [User, Weibo, UserConfig, Artist]
+    dst_db.bind(tables)
+    dst_db.create_tables(tables)
+    for dst_table in tables:
+        for row in src_db[dst_table._meta.table_name]:
+            if dst_table.get_or_none(id=row['id']):
                 continue
-            try:
-                Table.create(**row)
-            except IntegrityError:
-                pass
+            dst_table.create(**row)
+            # try:
+            #     dst_table.create(**row)
+            # except IntegrityError:
+            #     pass
 
 
 class BaseModel(Model):
@@ -233,14 +236,14 @@ class UserConfig(BaseModel):
                   'following', 'description', 'homepage',
                   'weibo_fetch', 'weibo_update_at', ]
         for k in fields:
-            if v := getattr(self, k, None):
+            if (v := getattr(self, k, None)) is not None:
                 if isinstance(v, datetime):
                     v = v.strftime('%Y-%m-%d %H:%M:%S')
                 text += f'{k}: {v}\n'
         return text.strip()
 
     @classmethod
-    def from_id(cls, user_id):
+    def from_id(cls, user_id, save=True):
         user = User.from_id(user_id)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
@@ -249,7 +252,8 @@ class UserConfig(BaseModel):
             if v := getattr(user, k, None):
                 setattr(user_config, k, v)
         user_config.screen_name = user.remark or user.screen_name
-        user_config.save()
+        if save:
+            user_config.save()
         return user_config
 
     def fetch_weibo(self, download_dir,
@@ -258,7 +262,7 @@ class UserConfig(BaseModel):
             console.log(f'skip {self.screen_name}...')
             return
         if not force_fetch:
-            days = 180
+            days = 90
             recent_num = (User
                           .select(User)
                           .join(Weibo, JOIN.LEFT_OUTER)
@@ -266,10 +270,12 @@ class UserConfig(BaseModel):
                           .where(User.id == self.user_id)
                           .count()
                           )
-            update_interval = min(days / (recent_num + 1), 30)
-            if pendulum.instance(self.weibo_update_at).diff().days < update_interval:
+            update_interval = days // (2*(recent_num + 1)) + 1
+            if pendulum.instance(self.weibo_update_at).diff().days < min(update_interval, 20):
                 console.log(f'skipping {self.screen_name} for fetched at recent {update_interval} days')
                 return
+        else:
+            update_interval = 0
         User.from_id(self.user_id, update=True)
         now = pendulum.now()
 
@@ -277,7 +283,7 @@ class UserConfig(BaseModel):
             since=self.weibo_update_at, start_page=start_page)
         with console.status(f" [magenta]Fetching {self.screen_name}...", spinner='christmas'):
             console.rule(
-                f'开始获取 {self.screen_name} ({self.weibo_update_at:%y-%m-%d})...')
+                f'开始获取 {self.screen_name} (update_at:{self.weibo_update_at:%y-%m-%d}; update_interval:{update_interval})...')
             console.log(self.user)
             console.log(f"Media Saving: {download_dir}")
             imgs = self._save_weibo(weibos, download_dir)
