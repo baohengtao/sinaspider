@@ -151,7 +151,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 # assert False
             urls = [v for k in keys if (v := media_info.get(k))]
             if not urls:
-                console.log(f'no video info:==>{page_info}', style='warn')
+                console.log(f'no video info:==>{page_info}', style='warning')
             else:
                 self.wb['video_url'] = urls[0]
                 if duration := float(media_info.get('duration', 0)):

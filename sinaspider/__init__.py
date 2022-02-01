@@ -1,3 +1,7 @@
+"""
+Scraping Weibos
+"""
+__version__ = '0.4.1'
 from rich.console import Console
 from rich.progress import Progress
 from rich.theme import Theme
@@ -10,4 +14,3 @@ custom_theme = Theme({
 })
 console = Console(theme=custom_theme)
 progress = Progress(console=console)
-# progress.start()

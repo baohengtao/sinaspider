@@ -289,11 +289,7 @@ class UserConfig(BaseModel):
             imgs = self._save_weibo(weibos, download_dir)
             download_files(imgs)
 
-        # img_queue = ClosableQueue(maxsize=100)
-        # threads = start_threads(10, img_queue)
-        # for img in self._save_weibo(weibos, download_dir):
-        #     img_queue.put(img)
-        # stop_threads(img_queue, threads)
+     
         console.log(f'{self.user.screen_name}微博获取完毕')
         self.weibo_update_at = now
         self.save()
