@@ -1,0 +1,14 @@
+version: '3.7'
+services:
+
+  postgres-test:
+    image: postgres:latest
+    restart: 'no'
+    environment:
+      - POSTGRES_USER=sinaspider-test
+      - POSTGRES_PASSWORD=sinaspider-test
+    ports:
+      - '54322:5432'
+
+
+

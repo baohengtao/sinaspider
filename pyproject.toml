@@ -18,7 +18,7 @@ dependencies=[
 ]
 
 [project.optional-dependencies]
-test = ['pytest', 'pytest-pgsql']
+test = ['pytest', 'python_on_whales']
 dev = ['jupyterlab', 'JLDracula', 'jupyterlab_vim', 
         'ptpython', 'jupyterlab-lsp', 'python-lsp-server']
 

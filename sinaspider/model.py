@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 import pendulum
-from peewee import IntegrityError, JOIN
+from peewee import JOIN
 from peewee import Model
 from playhouse.dataset import DataSet
 from playhouse.postgres_ext import (
@@ -17,17 +17,17 @@ from sinaspider.helper import download_files
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import get_weibo_pages
 from sinaspider.parser import get_weibo_by_id, get_user_by_id
+from python_on_whales import DockerClient
 
-database = PostgresqlExtDatabase(None, autoconnect=True, autorollback=True)
 
+database = PostgresqlExtDatabase(
+    'sinaspider', host='localhost', port='54321',
+    user='sinaspider', password='sinaspider')
 
-def init_database(db_name='sinaspider', reset=False):
-    database.init(db_name)
-    if reset:
-        database.drop_tables([User, UserConfig, Artist, Weibo])
+def bind_database(database=database):
+    tables = [User, UserConfig, Artist, Weibo]
+    database.bind(tables)
     database.create_tables([User, UserConfig, Artist, Weibo])
-
-    return database
 
 
 def copy_database(src_db:DataSet, dst_db:PostgresqlExtDatabase):
@@ -47,8 +47,7 @@ def copy_database(src_db:DataSet, dst_db:PostgresqlExtDatabase):
 
 
 class BaseModel(Model):
-    class Meta:
-        database = database
+    pass
 
 
 class User(BaseModel):

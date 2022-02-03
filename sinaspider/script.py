@@ -6,11 +6,11 @@ from typer import Typer
 
 from sinaspider import console
 from sinaspider.helper import normalize_user_id, download_files
-from sinaspider.model import UserConfig, User, Weibo, init_database
+from sinaspider.model import UserConfig, User, Weibo, bind_database
 
 app = Typer()
 default_path = Path.home() / 'Downloads/sinaspider'
-init_database('sinaspider')
+bind_database()
 
 
 @app.command(help='Add user to database of users whom we want to fetch from')

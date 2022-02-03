@@ -91,14 +91,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             # self.retweet_info()
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
-#         def retweet_info(self):
-#             if original := self.card.get('retweeted_status'):
-#                 self.wb.update(
-#                     original_id=original['id'],
-#                     original_bid=original['bid'],
-#                     original_uid=original['user']['id'],
-#                     original_text=text_info(original['text']).get('text')
-#                 )
+
 
         def basic_info(self):
             user = self.card['user']
