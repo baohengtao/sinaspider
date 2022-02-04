@@ -30,21 +30,6 @@ def bind_database(database=database):
     database.create_tables([User, UserConfig, Artist, Weibo])
 
 
-def copy_database(src_db:DataSet, dst_db:PostgresqlExtDatabase):
-    # db = DataSet(f'postgres:///{from_db}')
-    tables = [User, Weibo, UserConfig, Artist]
-    dst_db.bind(tables)
-    dst_db.create_tables(tables)
-    for dst_table in tables:
-        for row in src_db[dst_table._meta.table_name]:
-            if dst_table.get_or_none(id=row['id']):
-                continue
-            dst_table.create(**row)
-            # try:
-            #     dst_table.create(**row)
-            # except IntegrityError:
-            #     pass
-
 
 class BaseModel(Model):
     pass
@@ -216,7 +201,7 @@ class Weibo(BaseModel):
 
 # noinspection PyTypeChecker
 class UserConfig(BaseModel):
-    user = ForeignKeyField(User)
+    user = ForeignKeyField(User, unique=True)
     screen_name = CharField()
     age = IntegerField(index=True, null=True)
     weibo_fetch = BooleanField(index=True, default=True)
@@ -314,7 +299,7 @@ class UserConfig(BaseModel):
 class Artist(BaseModel):
     username = CharField(index=True)
     realname = CharField(null=True)
-    user = ForeignKeyField(User)
+    user = ForeignKeyField(User, unique=True)
     age = IntegerField(index=True, null=True)
     album = CharField(index=True, null=True)
     description = CharField(index=True, null=True)
@@ -332,7 +317,7 @@ class Artist(BaseModel):
     @classmethod
     def from_id(cls, user_id):
         user = User.from_id(user_id)
-        if not (artist := Artist.get_or_none(user=user)):
+        if (artist := Artist.get_or_none(user_id=user.id)) is None:
             artist = Artist(user=user)
         fields = set(cls._meta.fields) - {'id'}
         for k in fields:
