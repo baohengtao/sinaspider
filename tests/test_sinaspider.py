@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('..')
 
 from sinaspider.model import *
@@ -7,17 +8,17 @@ from python_on_whales import DockerClient
 import pytest
 
 
-
 @pytest.fixture(scope='session')
 def start_docker():
     docker = DockerClient(compose_files=['tests/docker-test.yaml'])
     docker.compose.build()
     docker.compose.up(detach=True)
-    database=PostgresqlExtDatabase('sinaspider-test', host='localhost',
-                  user='sinaspider-test', password='sinaspider-test', 
-                  port='54322')
-    bind_database(database)
-    database.create_tables([User, UserConfig, Artist, Weibo])
+    database = PostgresqlExtDatabase('sinaspider-test', host='localhost',
+                                     user='sinaspider-test', password='sinaspider-test',
+                                     port='54322')
+    tables = [User, UserConfig, Artist, Weibo]
+    database.bind(tables)
+    database.create_tables()
     yield
     docker.compose.down()
 
@@ -25,7 +26,9 @@ def start_docker():
 def test_start_docker(start_docker):
     pass
 
-def test_user():
+
+#
+def test_user(start_docker):
     user_id = 1120967445
     user = User.from_id(user_id)
     for weibo in user.timeline(since=12):

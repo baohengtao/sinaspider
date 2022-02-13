@@ -10,7 +10,9 @@ from pendulum.parsing import ParserError
 
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
+
 print = console.print
+
 
 def get_weibo_by_id(wb_id) -> Optional[dict]:
     if weibo_info := _get_weibo_info_by_id(wb_id):
@@ -91,15 +93,12 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             # self.retweet_info()
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
-
-
         def basic_info(self):
             user = self.card['user']
             created_at = pendulum.parse(self.card['created_at'], strict=False)
             assert created_at.is_local()
             self.wb.update(
                 user_id=(user_id := user['id']),
-                screen_name=user.get('remark') or user['screen_name'],
                 id=(id := int(self.card['id'])),
                 bid=(bid := self.card['bid']),
                 url=f'https://weibo.com/{user_id}/{bid}',
@@ -220,14 +219,14 @@ def get_user_by_id(uid: int, cache_days=30):
     try:
         user = _user_info_fix(user)
     except (KeyError, AssertionError) as e:
-        print(user)
+        console.log(user, user_card)
         raise e
     user['info_updated_at'] = pendulum.now()
     from_cache = [r.from_cache for r in [
         respond_card, respond_cn, respond_info]]
     # assert min(from_cache) is max(from_cache)
     if not all(from_cache):
-        console.log(f"{user['screen_name']} 信息已从网络获取.")
+        console.log(f"{user['username']} 信息已从网络获取.")
         pause(mode='page')
     return user
 
@@ -303,6 +302,7 @@ def _user_info_fix(user_info: dict) -> dict:
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
     user_info['hometown'] = user_info.pop('家乡', '')
     user_info = {k: normalize_str(v) for k, v in user_info.items()}
+    user_info['username'] = user_info.pop('remark', None) or user_info.pop('screen_name')
 
     return user_info
 

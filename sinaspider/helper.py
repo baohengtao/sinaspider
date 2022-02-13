@@ -195,7 +195,6 @@ class Pause:
         if to_sleep := max(int(to_sleep), 0):
             console.log(f'sleep {to_sleep} seconds...')
             sleep(to_sleep)
-        
 
         self.__since = time.time()
 

@@ -6,11 +6,10 @@ from typer import Typer
 
 from sinaspider import console
 from sinaspider.helper import normalize_user_id, download_files
-from sinaspider.model import UserConfig, User, Weibo, bind_database
+from sinaspider.model import UserConfig, User, Weibo
 
 app = Typer()
 default_path = Path.home() / 'Downloads/sinaspider'
-bind_database()
 
 
 @app.command(help='Add user to database of users whom we want to fetch from')
@@ -21,11 +20,11 @@ def user(download_dir: str = default_path):
         User.from_id(user_id, update=True)
         uc = UserConfig.from_id(user_id, save=False)
         if uc_in_db := UserConfig.get_or_none(UserConfig.user_id == user_id):
-            console.log(f'用户{uc.screen_name}已在列表中')
-        uc.weibo_fetch = Confirm.ask(f"是否获取{uc.screen_name}的微博？")
+            console.log(f'用户{uc.username}已在列表中')
+        uc.weibo_fetch = Confirm.ask(f"是否获取{uc.username}的微博？")
         if uc.weibo_fetch or uc_in_db:
             uc.save()
-            console.log(f'用户{uc.screen_name}更新完成')
+            console.log(f'用户{uc.username}更新完成')
         console.log(uc, '\n')
         if uc.weibo_fetch and Confirm.ask('是否现在抓取'):
             start_page = IntPrompt.ask('start_page', default=1)

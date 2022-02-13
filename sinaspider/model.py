@@ -5,11 +5,9 @@ from typing import Optional
 import pendulum
 from peewee import JOIN
 from peewee import Model
-from playhouse.dataset import DataSet
 from playhouse.postgres_ext import (
     PostgresqlExtDatabase, IntegerField, BooleanField, TextField,
-    BigIntegerField, DateTimeField, BigAutoField,
-    ArrayField, CharField, ForeignKeyField, JSONField,
+    BigIntegerField, DateTimeField, ArrayField, CharField, ForeignKeyField, JSONField,
 )
 
 from sinaspider import console
@@ -17,27 +15,18 @@ from sinaspider.helper import download_files
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import get_weibo_pages
 from sinaspider.parser import get_weibo_by_id, get_user_by_id
-from python_on_whales import DockerClient
 
-
-database = PostgresqlExtDatabase(
-    'sinaspider', host='localhost', port='54321',
-    user='sinaspider', password='sinaspider')
-
-def bind_database(database=database):
-    tables = [User, UserConfig, Artist, Weibo]
-    database.bind(tables)
-    database.create_tables([User, UserConfig, Artist, Weibo])
-
+database = PostgresqlExtDatabase('sinaspider', host='localhost')
 
 
 class BaseModel(Model):
-    pass
+    class Meta:
+        database = database
 
 
 class User(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
-    screen_name = TextField()
+    username = TextField()
     remark = TextField(null=True)
     following = BooleanField()
     birthday = TextField(null=True)
@@ -102,7 +91,7 @@ class User(BaseModel):
 
     def __str__(self):
         text = ''
-        keys = ['id', 'screen_name', 'gender', 'birthday', 'location', 'homepage',
+        keys = ['id', 'username', 'gender', 'birthday', 'location', 'homepage',
                 'description', 'statuses_count', 'followers_count', 'follow_count']
         for k in keys:
             if v := getattr(self, k, None):
@@ -111,10 +100,10 @@ class User(BaseModel):
 
 
 class Weibo(BaseModel):
-    id = BigAutoField()
+    id = BigIntegerField(primary_key=True, unique=True)
     bid = TextField(null=True)
     user = ForeignKeyField(User, backref='weibos')
-    screen_name = TextField(null=True)
+    username = TextField(null=True)
     created_at = DateTimeField(null=True)
     text = TextField(null=True)
     url = TextField(null=True)
@@ -138,7 +127,8 @@ class Weibo(BaseModel):
 
         wb_id = normalize_wb_id(id)
         if not (weibo := Weibo.get_or_none(id=wb_id)):
-            weibo_dict = get_weibo_by_id(wb_id)
+            if not (weibo_dict := get_weibo_by_id(wb_id)):
+                return
             weibo = Weibo(**weibo_dict)
             weibo.user = User.from_id(weibo.user_id)
             weibo.save(force_insert=True)
@@ -175,7 +165,7 @@ class Weibo(BaseModel):
             'ImageUniqueID': self.bid,
             'ImageSupplierID': self.user_id,
             'ImageSupplierName': 'Weibo',
-            'ImageCreatorName': self.screen_name,
+            'ImageCreatorName': self.username,
             'BlogTitle': self.text,
             'BlogURL': self.url,
             'Location': self.location,
@@ -190,7 +180,7 @@ class Weibo(BaseModel):
     def __str__(self):
         text = ''
         keys = [
-            'user_id', 'screen_name', 'id', 'text', 'location',
+            'user_id', 'username', 'id', 'text', 'location',
             'created_at', 'at_users', 'url'
         ]
         for k in keys:
@@ -202,7 +192,7 @@ class Weibo(BaseModel):
 # noinspection PyTypeChecker
 class UserConfig(BaseModel):
     user = ForeignKeyField(User, unique=True)
-    screen_name = CharField()
+    username = CharField()
     age = IntegerField(index=True, null=True)
     weibo_fetch = BooleanField(index=True, default=True)
     weibo_update_at = DateTimeField(index=True, default=pendulum.datetime(1970, 1, 1))
@@ -216,7 +206,7 @@ class UserConfig(BaseModel):
 
     def __str__(self):
         text = ''
-        fields = ['screen_name', 'age', 'education',
+        fields = ['username', 'age', 'education',
                   'following', 'description', 'homepage',
                   'weibo_fetch', 'weibo_update_at', ]
         for k in fields:
@@ -235,15 +225,14 @@ class UserConfig(BaseModel):
         for k in fields:
             if v := getattr(user, k, None):
                 setattr(user_config, k, v)
-        user_config.screen_name = user.remark or user.screen_name
+        user_config.username = user.remark or user.username
         if save:
             user_config.save()
         return user_config
 
-    def fetch_weibo(self, download_dir,
-                    start_page=1, force_fetch=False):
+    def fetch_weibo(self, download_dir, start_page=1, force_fetch=False):
         if not self.weibo_fetch:
-            console.log(f'skip {self.screen_name}...')
+            console.log(f'skip {self.username}...')
             return
         if not force_fetch:
             days = 90
@@ -254,39 +243,43 @@ class UserConfig(BaseModel):
                           .where(User.id == self.user_id)
                           .count()
                           )
-            update_interval = days // (2*(recent_num + 1)) + 1
+            update_interval = 1 + 2 * days // (recent_num + 1)
             if pendulum.instance(self.weibo_update_at).diff().days < min(update_interval, 20):
-                console.log(f'skipping {self.screen_name} for fetched at recent {update_interval} days')
+                console.log(f'skipping {self.username} for fetched at recent {update_interval} days')
                 return
         else:
             update_interval = 0
         User.from_id(self.user_id, update=True)
         now = pendulum.now()
-
         weibos = self.user.timeline(
             since=self.weibo_update_at, start_page=start_page)
+
         with console.status(f" [magenta]Fetching {self.screen_name}...", spinner='christmas'):
             console.rule(
-                f'开始获取 {self.screen_name} (update_at:{self.weibo_update_at:%y-%m-%d}; update_interval:{update_interval})...')
+                f'开始获取 {self.username} '
+                f'(update_at:{self.weibo_update_at:%y-%m-%d}; '
+                f'update_interval:{update_interval})...')
+
             console.log(self.user)
             console.log(f"Media Saving: {download_dir}")
             imgs = self._save_weibo(weibos, download_dir)
             download_files(imgs)
-
-     
-        console.log(f'{self.user.screen_name}微博获取完毕')
+        console.log(f'{self.user.username}微博获取完毕')
         self.weibo_update_at = now
         self.save()
         pause(mode='user')
         return
 
     def _save_weibo(self, weibos, download_dir):
-        path = Path(download_dir) / self.screen_name
+        path = Path(download_dir) / self.username
         for weibo_dict in weibos:
             wb_id = weibo_dict['id']
             wb_id = normalize_wb_id(wb_id)
             if not (weibo := Weibo.get_or_none(id=wb_id)):
-                weibo = Weibo.create(**weibo_dict)
+                weibo = Weibo(**weibo_dict)
+                weibo.username = weibo.user.username
+                weibo.save(force_insert=True)
+
             medias = list(weibo.medias(path))
             console.log(weibo)
             if medias:
@@ -323,16 +316,18 @@ class Artist(BaseModel):
         for k in fields:
             if v := getattr(user, k, None):
                 setattr(artist, k, v)
-        artist.username = user.remark or user.screen_name.lstrip('-')
+        artist.username = user.remark or user.username.lstrip('-')
         if artist.username == artist.realname:
-            artist_realname = None
+            artist.realname = None
+        if not artist.album:
+            artist.album = 'new'
         artist.save()
         return artist
 
     @property
     def xmp_info(self):
         xmp = {
-            'Artist': self.username,
+            'Artist': self.realname or self.username,
             'ImageCreatorID': self.homepage,
             'ImageSupplierID': self.user_id,
             'ImageSupplierName': 'Weibo'
@@ -340,19 +335,5 @@ class Artist(BaseModel):
 
         return {'XMP:' + k: v for k, v in xmp.items()}
 
-#
-# class Friend(BaseModel):
-#     avatar_hd = CharField(index=True)
-#     description = CharField(index=True, null=True)
-#     friend_id = BigIntegerField(index=True)
-#     gender = CharField(index=True)
-#     homepage = CharField(index=True)
-#     user = ForeignKeyField(column_name='user_id', field='id', model=User)
-#
-#     class Meta:
-#         table_name = 'friend'
-#         indexes = (
-#             (('user', 'friend_id'), True),
-#         )
-#         primary_key = CompositeKey('friend_id', 'user')
-#
+
+database.create_tables([User, UserConfig, Artist, Weibo])
