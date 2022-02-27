@@ -7,7 +7,7 @@ from peewee import JOIN
 from peewee import Model
 from playhouse.postgres_ext import (
     PostgresqlExtDatabase, IntegerField, BooleanField, TextField,
-    BigIntegerField, DateTimeField, ArrayField, CharField, ForeignKeyField, JSONField,
+    BigIntegerField, DateTimeTZField, ArrayField, CharField, ForeignKeyField, JSONField,
 )
 
 from sinaspider import console
@@ -104,7 +104,7 @@ class Weibo(BaseModel):
     bid = TextField(null=True)
     user = ForeignKeyField(User, backref='weibos')
     username = TextField(null=True)
-    created_at = DateTimeField(null=True)
+    created_at = DateTimeTZField(null=True)
     text = TextField(null=True)
     url = TextField(null=True)
     url_m = TextField(null=True)
@@ -195,7 +195,7 @@ class UserConfig(BaseModel):
     username = CharField()
     age = IntegerField(index=True, null=True)
     weibo_fetch = BooleanField(index=True, default=True)
-    weibo_update_at = DateTimeField(index=True, default=pendulum.datetime(1970, 1, 1))
+    weibo_update_at = DateTimeTZField(index=True, default=pendulum.datetime(1970, 1, 1))
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
@@ -231,11 +231,12 @@ class UserConfig(BaseModel):
         return user_config
 
     def fetch_weibo(self, download_dir, start_page=1, force_fetch=False):
+        import math
         if not self.weibo_fetch:
             console.log(f'skip {self.username}...')
             return
         if not force_fetch:
-            days = 90
+            days = 100
             recent_num = (User
                           .select(User)
                           .join(Weibo, JOIN.LEFT_OUTER)
@@ -243,8 +244,9 @@ class UserConfig(BaseModel):
                           .where(User.id == self.user_id)
                           .count()
                           )
-            update_interval = 1 + 2 * days // (recent_num + 1)
-            if pendulum.instance(self.weibo_update_at).diff().days < min(update_interval, 20):
+            update_interval = math.ceil(days / (recent_num + 5))
+            update_interval = max(update_interval, 3)
+            if pendulum.instance(self.weibo_update_at).diff().days < update_interval :
                 console.log(f'skipping {self.username} for fetched at recent {update_interval} days')
                 return
         else:
@@ -254,7 +256,7 @@ class UserConfig(BaseModel):
         weibos = self.user.timeline(
             since=self.weibo_update_at, start_page=start_page)
 
-        with console.status(f" [magenta]Fetching {self.screen_name}...", spinner='christmas'):
+        with console.status(f" [magenta]Fetching {self.username}...", spinner='christmas'):
             console.rule(
                 f'开始获取 {self.username} '
                 f'(update_at:{self.weibo_update_at:%y-%m-%d}; '
@@ -268,7 +270,7 @@ class UserConfig(BaseModel):
         self.weibo_update_at = now
         self.save()
         pause(mode='user')
-        return
+        return True
 
     def _save_weibo(self, weibos, download_dir):
         path = Path(download_dir) / self.username
@@ -294,24 +296,26 @@ class Artist(BaseModel):
     realname = CharField(null=True)
     user = ForeignKeyField(User, unique=True)
     age = IntegerField(index=True, null=True)
-    album = CharField(index=True, null=True)
+    folder = CharField(index=True, null=True)
+    photos_num = IntegerField(default=0)
+    favor_num = IntegerField(default=0)
+    recent_num = IntegerField(default=0)
+    statuses_count = IntegerField(index=True)
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
     follow_count = IntegerField(index=True)
     followers_count = IntegerField(index=True)
     homepage = CharField(index=True, null=True)
-    photos_num = IntegerField(default=0, index=True)
-    recent_num = IntegerField(default=0)
-    statuses_count = IntegerField(index=True)
 
     class Meta:
         table_name = 'artist'
 
     @classmethod
-    def from_id(cls, user_id):
-        user = User.from_id(user_id)
+    def from_id(cls, user_id, update=False):
+        user = User.from_id(user_id, update=update)
         if (artist := Artist.get_or_none(user_id=user.id)) is None:
             artist = Artist(user=user)
+            artist.folder = 'new'
         fields = set(cls._meta.fields) - {'id'}
         for k in fields:
             if v := getattr(user, k, None):
@@ -319,8 +323,6 @@ class Artist(BaseModel):
         artist.username = user.remark or user.username.lstrip('-')
         if artist.username == artist.realname:
             artist.realname = None
-        if not artist.album:
-            artist.album = 'new'
         artist.save()
         return artist
 
