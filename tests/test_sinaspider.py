@@ -1,7 +1,3 @@
-import sys
-
-sys.path.append('..')
-
 from sinaspider.model import *
 from sinaspider import console
 from python_on_whales import DockerClient
@@ -14,11 +10,12 @@ def start_docker():
     docker.compose.build()
     docker.compose.up(detach=True)
     database = PostgresqlExtDatabase('sinaspider-test', host='localhost',
-                                     user='sinaspider-test', password='sinaspider-test',
+                                     user='sinaspider-test',
+                                     password='sinaspider-test',
                                      port='54322')
     tables = [User, UserConfig, Artist, Weibo]
     database.bind(tables)
-    database.create_tables()
+    database.create_tables(tables)
     yield
     docker.compose.down()
 

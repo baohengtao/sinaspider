@@ -1,3 +1,4 @@
+import itertools
 from datetime import datetime, timedelta
 from time import sleep
 from typing import Generator
@@ -36,11 +37,9 @@ def get_weibo_pages(containerid: str,
     else:
         since = pendulum.instance(since)
     console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
-    page = max(start_page, 1)
-    is_continue = True
-    while is_continue:
-        url = weibo_api_url.copy()
-        url.args = {'containerid': containerid, 'page': page}
+    url = weibo_api_url.copy()
+    url.args = {'containerid': containerid}
+    for url.args['page'] in itertools.count(start=max(start_page, 1)):
         response = get_url(url)
         js = response.json()
         if not js['ok']:
@@ -49,8 +48,9 @@ def get_weibo_pages(containerid: str,
                 raise
             else:
                 console.log(
-                    f"not js['ok'], seems reached end, no wb return for page {page}", style='warning')
-                break
+                    "not js['ok'], seems reached end, no wb return for page "
+                    f"{url.args['page']}", style='warning')
+                return
 
         mblogs = [w['mblog']
                   for w in js['data']['cards'] if w['card_type'] == 9]
@@ -66,16 +66,15 @@ def get_weibo_pages(containerid: str,
                 else:
                     console.log(
                         f"时间{created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, 获取完毕")
-                    is_continue = False
-                    break
+                    return
             yield weibo
         else:
-            console.log(f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
-            page += 1
+            console.log(f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")
             pause(mode='page')
 
 
-def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, None, None]:
+def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[
+        dict, None, None]:
     """
     获取关注列表
 
@@ -87,13 +86,10 @@ def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, N
     Yields:
         Iterator[dict]: 返回用户字典
     """
-    page = 1
-    while True:
-        url = weibo_api_url.set(args={'containerid': containerid})
+    url = weibo_api_url.set(args={'containerid': containerid})
+    for url.args['page'] in itertools.count():
         if 'fans' in containerid:
-            url.args['since_id'] = 21 * page - 1
-        else:
-            url.args['page'] = page
+            url.args['since_id'] = 21 * url.args.pop('page') - 1
         response = get_url(url, expire_after=timedelta(days=cache_days))
         js = response.json()
         if not js['ok']:
@@ -123,7 +119,6 @@ def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, N
 
             yield user
         if not response.from_cache and js['ok']:
-            console.log(f'页面 {page} 已获取完毕')
+            console.log(f'页面 {url.args["page"]} 已获取完毕')
         if not response.from_cache:
             pause(mode='page')
-        page += 1

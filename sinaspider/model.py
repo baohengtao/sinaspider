@@ -1,13 +1,22 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Generator, Iterator
+
 
 import pendulum
 from peewee import JOIN
 from peewee import Model
 from playhouse.postgres_ext import (
-    PostgresqlExtDatabase, IntegerField, BooleanField, TextField,
-    BigIntegerField, DateTimeTZField, ArrayField, CharField, ForeignKeyField, JSONField,
+    PostgresqlExtDatabase,
+    IntegerField,
+    BooleanField,
+    TextField,
+    BigIntegerField,
+    DateTimeTZField,
+    ArrayField,
+    CharField,
+    ForeignKeyField,
+    JSONField,
 )
 
 from sinaspider import console
@@ -16,7 +25,7 @@ from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import get_weibo_pages
 from sinaspider.parser import get_weibo_by_id, get_user_by_id
 
-database = PostgresqlExtDatabase('sinaspider', host='localhost')
+database = PostgresqlExtDatabase("sinaspider", host="localhost")
 
 
 class BaseModel(Model):
@@ -66,10 +75,10 @@ class User(BaseModel):
     邮箱 = TextField(null=True)
 
     class Meta:
-        table_name = 'user'
+        table_name = "user"
 
     @classmethod
-    def from_id(cls, user_id: int, update=False) -> Optional['User']:
+    def from_id(cls, user_id: int, update=False) -> Optional["User"]:
         user_id = normalize_user_id(user_id)
         cache_days = 30 if not update else 0
         if (user := User.get_or_none(id=user_id)) is None:
@@ -85,24 +94,35 @@ class User(BaseModel):
             user.save(force_insert=force_insert)
         return user
 
-    def timeline(self, start_page=1, since: int | str | datetime = '1970-01-01'):
-        weibos = get_weibo_pages(f'107603{self.id}', start_page, since)
+    def timeline(self, start_page=1,
+                 since: int | str | datetime = "1970-01-01"):
+        weibos = get_weibo_pages(f"107603{self.id}", start_page, since)
         yield from weibos
 
     def __str__(self):
-        text = ''
-        keys = ['id', 'username', 'gender', 'birthday', 'location', 'homepage',
-                'description', 'statuses_count', 'followers_count', 'follow_count']
+        text = ""
+        keys = [
+            "id",
+            "username",
+            "gender",
+            "birthday",
+            "location",
+            "homepage",
+            "description",
+            "statuses_count",
+            "followers_count",
+            "follow_count",
+        ]
         for k in keys:
             if v := getattr(self, k, None):
-                text += f'{k}: {v}\n'
+                text += f"{k}: {v}\n"
         return text.strip()
 
 
 class Weibo(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
     bid = TextField(null=True)
-    user = ForeignKeyField(User, backref='weibos')
+    user = ForeignKeyField(User, backref="weibos")
     username = TextField(null=True)
     created_at = DateTimeTZField(null=True)
     text = TextField(null=True)
@@ -120,7 +140,7 @@ class Weibo(BaseModel):
     video_url = TextField(null=True)
 
     class Meta:
-        table_name = 'weibo'
+        table_name = "weibo"
 
     @classmethod
     def from_id(cls, id):
@@ -138,54 +158,62 @@ class Weibo(BaseModel):
         photos = self.photos or {}
         for sn, urls in photos.items():
             for url in filter(bool, urls):
-                *_, ext = url.split('/')[-1].split('.')
+                *_, ext = url.split("/")[-1].split(".")
                 if not _:
-                    ext = 'jpg'
+                    ext = "jpg"
                 yield {
-                    'url': url,
-                    'filename': f'{self.user_id}_{self.id}_{sn}.{ext}',
-                    'xmp_info': self.gen_meta(sn),
-                    'filepath': filepath
+                    "url": url,
+                    "filename": f"{self.user_id}_{self.id}_{sn}.{ext}",
+                    "xmp_info": self.gen_meta(sn),
+                    "filepath": filepath,
                 }
         if url := self.video_url:
-            assert ';' not in url
+            assert ";" not in url
             if (duration := self.video_duration) and duration > 600:
-                console.log(f'video_duration is {duration})...skipping...')
+                console.log(f"video_duration is {duration})...skipping...")
             else:
                 yield {
-                    'url': url,
-                    'filename': f'{self.user_id}_{self.id}.mp4',
-                    'xmp_info': self.gen_meta(),
-                    'filepath': filepath
+                    "url": url,
+                    "filename": f"{self.user_id}_{self.id}.mp4",
+                    "xmp_info": self.gen_meta(),
+                    "filepath": filepath,
                 }
 
     def gen_meta(self, sn: str | int = 0) -> dict:
         sn = int(sn) if sn else 0
         xmp_info = {
-            'ImageUniqueID': self.bid,
-            'ImageSupplierID': self.user_id,
-            'ImageSupplierName': 'Weibo',
-            'ImageCreatorName': self.username,
-            'BlogTitle': self.text,
-            'BlogURL': self.url,
-            'Location': self.location,
-            'DateCreated': self.created_at + pendulum.Duration(microseconds=int(sn)),
-            'SeriesNumber': sn
+            "ImageUniqueID": self.bid,
+            "ImageSupplierID": self.user_id,
+            "ImageSupplierName": "Weibo",
+            "ImageCreatorName": self.username,
+            "BlogTitle": self.text,
+            "BlogURL": self.url,
+            "Location": self.location,
+            "DateCreated": (self.created_at +
+                            pendulum.Duration(microseconds=int(sn))),
+            "SeriesNumber": sn,
         }
 
-        xmp_info['DateCreated'] = xmp_info['DateCreated'].strftime(
-            '%Y:%m:%d %H:%M:%S.%f')
-        return {'XMP:' + k: v for k, v in xmp_info.items() if v}
+        xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
+            "%Y:%m:%d %H:%M:%S.%f"
+        )
+        return {"XMP:" + k: v for k, v in xmp_info.items() if v}
 
     def __str__(self):
-        text = ''
+        text = ""
         keys = [
-            'user_id', 'username', 'id', 'text', 'location',
-            'created_at', 'at_users', 'url'
+            "user_id",
+            "username",
+            "id",
+            "text",
+            "location",
+            "created_at",
+            "at_users",
+            "url",
         ]
         for k in keys:
             if v := getattr(self, k, None):
-                text += f'{k}: {v}\n'
+                text += f"{k}: {v}\n"
         return text.strip()
 
 
@@ -195,25 +223,33 @@ class UserConfig(BaseModel):
     username = CharField()
     age = IntegerField(index=True, null=True)
     weibo_fetch = BooleanField(index=True, default=True)
-    weibo_update_at = DateTimeTZField(index=True, default=pendulum.datetime(1970, 1, 1))
+    weibo_update_at = DateTimeTZField(
+        index=True, default=pendulum.datetime(1970, 1, 1))
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
     homepage = CharField(index=True)
 
     class Meta:
-        table_name = 'userconfig'
+        table_name = "userconfig"
 
     def __str__(self):
-        text = ''
-        fields = ['username', 'age', 'education',
-                  'following', 'description', 'homepage',
-                  'weibo_fetch', 'weibo_update_at', ]
+        text = ""
+        fields = [
+            "username",
+            "age",
+            "education",
+            "following",
+            "description",
+            "homepage",
+            "weibo_fetch",
+            "weibo_update_at",
+        ]
         for k in fields:
             if (v := getattr(self, k, None)) is not None:
                 if isinstance(v, datetime):
-                    v = v.strftime('%Y-%m-%d %H:%M:%S')
-                text += f'{k}: {v}\n'
+                    v = v.strftime("%Y-%m-%d %H:%M:%S")
+                text += f"{k}: {v}\n"
         return text.strip()
 
     @classmethod
@@ -221,7 +257,7 @@ class UserConfig(BaseModel):
         user = User.from_id(user_id)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
-        fields = set(cls._meta.fields) - {'id'}
+        fields = set(cls._meta.fields) - {"id"}
         for k in fields:
             if v := getattr(user, k, None):
                 setattr(user_config, k, v)
@@ -230,65 +266,65 @@ class UserConfig(BaseModel):
             user_config.save()
         return user_config
 
-    def fetch_weibo(self, download_dir, start_page=1, force_fetch=False):
+    @property
+    def need_fetch(self):
         import math
+
         if not self.weibo_fetch:
-            console.log(f'skip {self.username}...')
+            console.log(f"skip {self.username}...")
             return
-        if not force_fetch:
-            days = 100
-            recent_num = (User
-                          .select(User)
-                          .join(Weibo, JOIN.LEFT_OUTER)
-                          .where(Weibo.created_at > pendulum.now().subtract(days=days))
-                          .where(User.id == self.user_id)
-                          .count()
-                          )
-            update_interval = math.ceil(days / (recent_num + 5))
-            update_interval = max(update_interval, 3)
-            if pendulum.instance(self.weibo_update_at).diff().days < update_interval :
-                console.log(f'skipping {self.username} for fetched at recent {update_interval} days')
-                return
+        days = 100
+        recent_num = (
+            User.select(User)
+            .join(Weibo, JOIN.LEFT_OUTER)
+            .where(Weibo.created_at > pendulum.now().subtract(days=days))
+            .where(User.id == self.user_id)
+            .count()
+        )
+        update_interval = math.ceil(days * 1 / 2 * 1 / (recent_num + 1))
+        update_interval = max(update_interval, 3)
+        update_at = pendulum.instance(self.weibo_update_at)
+        if update_at.diff().days < update_interval:
+            console.log(f"skipping {self.username}"
+                        f"for fetched at recent {update_interval} days")
+            return False
         else:
-            update_interval = 0
+            console.rule(
+                f"开始获取 {self.username} "
+                f"(update_at:{self.weibo_update_at:%y-%m-%d}; "
+                f"update_interval:{update_interval})..."
+            )
+            return True
+
+    def fetch_weibo(self, download_dir, start_page=1):
+
         User.from_id(self.user_id, update=True)
         now = pendulum.now()
         weibos = self.user.timeline(
             since=self.weibo_update_at, start_page=start_page)
 
-        with console.status(f" [magenta]Fetching {self.username}...", spinner='christmas'):
-            console.rule(
-                f'开始获取 {self.username} '
-                f'(update_at:{self.weibo_update_at:%y-%m-%d}; '
-                f'update_interval:{update_interval})...')
-
+        with console.status(
+            f" [magenta]Fetching {self.username}...", spinner="christmas"
+        ):
             console.log(self.user)
             console.log(f"Media Saving: {download_dir}")
-            imgs = self._save_weibo(weibos, download_dir)
+            imgs = save_weibo(weibos, Path(download_dir) / self.username)
             download_files(imgs)
-        console.log(f'{self.user.username}微博获取完毕')
+        console.log(f"{self.user.username}微博获取完毕")
         self.weibo_update_at = now
         self.save()
-        pause(mode='user')
-        return True
+        pause(mode="user")
 
-    def _save_weibo(self, weibos, download_dir):
-        path = Path(download_dir) / self.username
-        for weibo_dict in weibos:
-            wb_id = weibo_dict['id']
-            wb_id = normalize_wb_id(wb_id)
-            if not (weibo := Weibo.get_or_none(id=wb_id)):
-                weibo = Weibo(**weibo_dict)
-                weibo.username = weibo.user.username
-                weibo.save(force_insert=True)
-
-            medias = list(weibo.medias(path))
-            console.log(weibo)
-            if medias:
-                console.log(
-                    f"Downloading {len(medias)} files to {path}..")
-            print()
-            yield from medias
+    @staticmethod
+    def fetch_favorite(download_dir):
+        weibos = get_weibo_pages(containerid="230259")
+        with console.status("[magenta]Fetching favorite...",
+                            spinner="christmas"):
+            console.log(f"Media Saving: {download_dir}")
+            imgs = save_weibo(weibos, Path(download_dir) / "favorite")
+            download_files(imgs)
+        console.log("收藏微博获取完毕")
+        pause(mode="user")
 
 
 class Artist(BaseModel):
@@ -308,19 +344,19 @@ class Artist(BaseModel):
     homepage = CharField(index=True, null=True)
 
     class Meta:
-        table_name = 'artist'
+        table_name = "artist"
 
     @classmethod
     def from_id(cls, user_id, update=False):
         user = User.from_id(user_id, update=update)
         if (artist := Artist.get_or_none(user_id=user.id)) is None:
             artist = Artist(user=user)
-            artist.folder = 'new'
-        fields = set(cls._meta.fields) - {'id'}
+            artist.folder = "new"
+        fields = set(cls._meta.fields) - {"id"}
         for k in fields:
             if v := getattr(user, k, None):
                 setattr(artist, k, v)
-        artist.username = user.remark or user.username.lstrip('-')
+        artist.username = user.remark or user.username.lstrip("-")
         if artist.username == artist.realname:
             artist.realname = None
         artist.save()
@@ -329,13 +365,41 @@ class Artist(BaseModel):
     @property
     def xmp_info(self):
         xmp = {
-            'Artist': self.realname or self.username,
-            'ImageCreatorID': self.homepage,
-            'ImageSupplierID': self.user_id,
-            'ImageSupplierName': 'Weibo'
+            "Artist": self.realname or self.username,
+            "ImageCreatorID": self.homepage,
+            "ImageSupplierID": self.user_id,
+            "ImageSupplierName": "Weibo",
         }
 
-        return {'XMP:' + k: v for k, v in xmp.items()}
+        return {"XMP:" + k: v for k, v in xmp.items()}
 
 
 database.create_tables([User, UserConfig, Artist, Weibo])
+
+
+def save_weibo(
+    weibos: Iterator[dict], download_dir: str | Path
+) -> Generator[dict, None, None]:
+    """
+    Save weibo to database and return media info
+    :param weibos: Iterator of weibo dict
+    :param download_dir:
+    :return: generator of medias to downloads
+    """
+
+    path = download_dir
+    for weibo_dict in weibos:
+        wb_id = weibo_dict["id"]
+        wb_id = normalize_wb_id(wb_id)
+        if not (weibo := Weibo.get_or_none(id=wb_id)):
+            weibo = Weibo(**weibo_dict)
+            weibo.user = User.from_id(weibo_dict["user_id"])
+            weibo.username = weibo.user.username
+            weibo.save(force_insert=True)
+
+        medias = list(weibo.medias(path))
+        console.log(weibo)
+        if medias:
+            console.log(f"Downloading {len(medias)} files to {path}..")
+        print()
+        yield from medias

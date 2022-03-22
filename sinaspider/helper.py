@@ -14,9 +14,10 @@ from requests_cache import CachedSession
 from sinaspider import console
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
-
+user_agent = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) "
+              "Gecko/20100101 Firefox/90.0")
 headers = {
-    "User_Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0",
+    "User_Agent": user_agent,
     "Cookie": keyring.get_password('sinaspider', 'cookie')
 }
 
@@ -34,7 +35,9 @@ def get_url(url, expire_after=0):
             r = session.get(url, headers=headers, expire_after=expire_after)
             break
         except (TimeoutError, ConnectionError, SSLError) as e:
-            console.log(f'{e}: Timeout sleep 600 seconds and retry [link={url}]{url}[/link]...', style='error')
+            console.log(
+                f"{e}: Timeout sleep 600 seconds and "
+                f"retry[link={url}]{url}[/link]...", style='error')
             sleep(10 * 60)
 
     return r
@@ -45,7 +48,7 @@ def write_xmp(tags, img):
         import exiftool
     except ModuleNotFoundError:
         console.log(
-            'exiftool not installed, cannot write xmp info to img', style='error')
+            'exiftool not installed...', style='error')
         return
 
     with exiftool.ExifTool() as et:

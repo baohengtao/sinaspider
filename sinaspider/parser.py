@@ -6,7 +6,7 @@ from typing import Union
 
 import pendulum
 from bs4 import BeautifulSoup
-from pendulum.parsing import ParserError
+from pendulum.parsing.exceptions import ParserError
 
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
@@ -117,7 +117,9 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             pics = self.card.get('pics', [])
             pics = [p['large']['url'] for p in pics]
             live_photo = {}
-            live_photo_prefix = 'https://video.weibo.com/media/play?livephoto=//us.sinaimg.cn/'
+            live_photo_prefix = (
+                'https://video.weibo.com/media/play?'
+                'livephoto=//us.sinaimg.cn/')
             if pic_video := self.card.get('pic_video'):
                 live_photo = {}
                 for p in pic_video.split(','):
@@ -133,8 +135,9 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 return
             media_info = page_info['urls'] or page_info['media_info']
             keys = [
-                'mp4_1080p_mp4', 'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4', 'mp4_hd', 'mp4_hd_url',
-                'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld', 'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
+                'mp4_1080p_mp4', 'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4',
+                'mp4_hd', 'mp4_hd_url', 'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld',
+                'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
                 'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
             ]
             if not set(media_info).issubset(keys):
@@ -254,7 +257,8 @@ def _user_info_fix(user_info: dict) -> dict:
         user_info['gender'] = 'male'
 
     if 'followers_count_str' in user_info:
-        assert user_info.pop('followers_count_str') == str(user_info['followers_count'])
+        assert user_info.pop('followers_count_str') == str(
+            user_info['followers_count'])
 
     # pop items
     keys = ['cover_image_phone', 'profile_image_url', 'profile_url']
@@ -279,7 +283,8 @@ def _user_info_fix(user_info: dict) -> dict:
         user_info[keys[0]] = values[0]
 
     if '生日' in user_info:
-        assert 'birthday' not in user_info or user_info['birthday'] == user_info['生日']
+        assert ('birthday' not in user_info or
+                user_info['birthday'] == user_info['生日'])
         user_info['birthday'] = user_info.pop('生日')
     if birthday := user_info.get('birthday', '').strip():
         birthday = birthday.split()[0].strip()
@@ -302,7 +307,8 @@ def _user_info_fix(user_info: dict) -> dict:
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
     user_info['hometown'] = user_info.pop('家乡', '')
     user_info = {k: normalize_str(v) for k, v in user_info.items()}
-    user_info['username'] = user_info.pop('remark', None) or user_info.pop('screen_name')
+    user_info['username'] = user_info.pop(
+        'remark', None) or user_info.pop('screen_name')
 
     return user_info
 
