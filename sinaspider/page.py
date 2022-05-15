@@ -6,9 +6,56 @@ from typing import Generator
 import pendulum
 from tqdm import trange
 
+from sinaspider import console
 from sinaspider.helper import weibo_api_url, get_url, pause
 from sinaspider.parser import parse_weibo
-from sinaspider import console
+
+
+def get_friends_pages(uid):
+    for page in itertools.count():
+        url = f"https://api.weibo.cn/2/friendships/bilateral?c=weicoabroad&page={page}&s=c773e7e0&uid={uid}"
+        js = get_url(url).json()
+        if not (users := js['users']):
+            break
+        yield from users
+        pause(mode='page')
+
+
+def get_timeline_pages(since: pendulum.DateTime = None):
+    next_cursor = None
+    seed = 'https://m.weibo.cn/feed/friends'
+    while True:
+        url = f'{seed}?max_id={next_cursor}' if next_cursor else seed
+        r = get_url(url)
+        data = r.json()['data']
+        next_cursor = data['next_cursor']
+        for status in data['statuses']:
+            if 'retweeted_status' in status:
+                continue
+            if status.get('pic_ids'):
+                yield status
+            created_at = status['created_at']
+            created_at = pendulum.parse(created_at, strict=False)
+            if since > created_at:
+                return
+        console.log(f'created_at:{created_at}')
+        pause(mode='page')
+
+
+def get_liked_pages(uid: int, max_page: int = 2):
+    url = f'https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0'
+    for page in range(1, max_page+1):
+        r = get_url(url % page)
+        js = r.json()
+        mblogs = [card['mblog']
+                  for card in js['cards'] if card['card_type'] == 9]
+        for weibo_info in mblogs:
+            if weibo:=parse_weibo(weibo_info):
+                if "photos" in weibo:
+                    yield weibo
+        pause(mode='page')
+
+            
 
 
 def get_weibo_pages(containerid: str,
@@ -55,13 +102,14 @@ def get_weibo_pages(containerid: str,
         mblogs = [w['mblog']
                   for w in js['data']['cards'] if w['card_type'] == 9]
 
+        is_pinned = True
         for weibo_info in mblogs:
             if not (weibo := parse_weibo(weibo_info)):
                 continue
-            is_pinned = weibo.pop('is_pinned', None)
             if (created_at := weibo['created_at']) < since:
                 if is_pinned:
-                    console.log("发现置顶微博, 跳过...")
+                    console.log("略过第一条微博...")
+                    is_pinned = False
                     continue
                 else:
                     console.log(

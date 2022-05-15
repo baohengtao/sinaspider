@@ -1,4 +1,5 @@
 import json
+from json.decoder import JSONDecodeError
 import re
 from itertools import chain
 from typing import Optional
@@ -51,14 +52,16 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     """
     url = f'https://m.weibo.cn/detail/{wb_id}'
     response = get_url(url, expire_after=-1)
-    html = response.text
-    html = html[html.find('"status"'):]
-    html = html[:html.rfind('"hotScheme"')]
-    html = html[:html.rfind(',')]
+    rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
+    html = rec.match(response.text)
     weibo_info = {}
     if html:
-        html = f'{{{html}}}'
-        weibo_info = json.loads(html, strict=False)['status']
+        html = html.groups(1)[0]
+        try:
+            weibo_info = json.loads(html, strict=False)['status']
+        except JSONDecodeError as e:
+            console.log(html)
+            raise e
         if not weibo_info:
             response.revalidate(3600 * 24 * 30)
             console.log(f'{url} cannot load', style='warning')
@@ -100,14 +103,12 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             self.wb.update(
                 user_id=(user_id := user['id']),
                 id=(id := int(self.card['id'])),
-                bid=(bid := self.card['bid']),
-                url=f'https://weibo.com/{user_id}/{bid}',
+                bid=(bid := self.card.get('bid')),
+                url=f'https://weibo.com/{user_id}/{bid or id}',
                 url_m=f'https://m.weibo.cn/detail/{id}',
                 created_at=created_at,
                 source=self.card['source'],
             )
-            if pin := self.card.get('title'):
-                self.wb['is_pinned'] = (pin.get('text') == '置顶')
             for key in ['reposts_count', 'comments_count', 'attitudes_count']:
                 if (v := self.card[key]) == '100万+':
                     v = 1000000
@@ -115,7 +116,14 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
 
         def photos_info(self):
             pics = self.card.get('pics', [])
-            pics = [p['large']['url'] for p in pics]
+            if isinstance(pics, dict):
+                pics = [p['large']['url']
+                        for p in pics.values() if 'large' in p]
+            else:
+                pics = [p['large']['url'] for p in pics]
+            if not pics and (ids:=self.card.get('pic_ids')):
+                pics = [f'https://wx3.sinaimg.cn/large/{id}' for id in ids]
+            # pics = [p['large']['url'] for p in pics]
             live_photo = {}
             live_photo_prefix = (
                 'https://video.weibo.com/media/play?'

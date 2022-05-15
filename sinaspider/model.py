@@ -2,7 +2,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Generator, Iterator
 
-
 import pendulum
 from peewee import JOIN
 from peewee import Model
@@ -22,7 +21,7 @@ from playhouse.postgres_ext import (
 from sinaspider import console
 from sinaspider.helper import download_files
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
-from sinaspider.page import get_weibo_pages
+from sinaspider.page import get_weibo_pages, get_friends_pages, get_liked_pages
 from sinaspider.parser import get_weibo_by_id, get_user_by_id
 
 database = PostgresqlExtDatabase("sinaspider", host="localhost")
@@ -96,8 +95,13 @@ class User(BaseModel):
 
     def timeline(self, start_page=1,
                  since: int | str | datetime = "1970-01-01"):
-        weibos = get_weibo_pages(f"107603{self.id}", start_page, since)
-        yield from weibos
+        yield from get_weibo_pages(f"107603{self.id}", start_page, since)
+
+    def liked_photo(self, max_page: int):
+        yield from get_liked_pages(self.id, max_page)
+
+    def friends(self):
+        yield from get_friends_pages(self.id)
 
     def __str__(self):
         text = ""
@@ -163,7 +167,7 @@ class Weibo(BaseModel):
                     ext = "jpg"
                 yield {
                     "url": url,
-                    "filename": f"{self.user_id}_{self.id}_{sn}.{ext}",
+                    "filename": f"{self.created_at:%y-%m-%d}_{self.user_id}_{self.id}_{sn}.{ext}",
                     "xmp_info": self.gen_meta(sn),
                     "filepath": filepath,
                 }
@@ -229,6 +233,7 @@ class UserConfig(BaseModel):
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
     homepage = CharField(index=True)
+    visible = BooleanField(null=True)
 
     class Meta:
         table_name = "userconfig"
@@ -266,6 +271,32 @@ class UserConfig(BaseModel):
             user_config.save()
         return user_config
 
+    def set_visibility(self):
+        if self.visible is True:
+            return self.visible
+        last_page = self.user.statuses_count // 20
+        visibility = True
+        while True:
+            weibos = get_weibo_pages(f"107603{self.user_id}", last_page)
+            try:
+                weibo = next(weibos)
+            except StopIteration:
+                visibility = False
+                break
+            else:
+                if weibo['created_at'] < pendulum.now().subtract(months=6):
+                    visibility = True
+                    break
+                else:
+                    last_page += 1
+
+        if self.visible is None:
+            self.visible = visibility
+            self.save()
+        else:
+            assert visibility is False
+        return self.visible
+
     @property
     def need_fetch(self):
         import math
@@ -273,46 +304,52 @@ class UserConfig(BaseModel):
         if not self.weibo_fetch:
             console.log(f"skip {self.username}...")
             return
-        days = 100
+        days = 90
         recent_num = (
             User.select(User)
-            .join(Weibo, JOIN.LEFT_OUTER)
-            .where(Weibo.created_at > pendulum.now().subtract(days=days))
-            .where(User.id == self.user_id)
-            .count()
+                .join(Weibo, JOIN.LEFT_OUTER)
+                .where(Weibo.created_at > pendulum.now().subtract(days=days))
+                .where(Weibo.photos != None)
+                .where(User.id == self.user_id)
+                .count()
         )
-        update_interval = math.ceil(days * 1 / 2 * 1 / (recent_num + 1))
-        update_interval = max(update_interval, 3)
+        update_interval = math.ceil(4 * days / (recent_num + 1))
+        update_interval = max(update_interval, 7)
+        update_interval = min(update_interval, 90)
         update_at = pendulum.instance(self.weibo_update_at)
         if update_at.diff().days < update_interval:
             console.log(f"skipping {self.username}"
                         f"for fetched at recent {update_interval} days")
             return False
         else:
-            console.rule(
-                f"开始获取 {self.username} "
-                f"(update_at:{self.weibo_update_at:%y-%m-%d}; "
-                f"update_interval:{update_interval})..."
-            )
             return True
 
     def fetch_weibo(self, download_dir, start_page=1):
+        console.rule(
+            f"开始获取 {self.username} "
+            f"(update_at:{self.weibo_update_at:%y-%m-%d})"
+        )
+        self.set_visibility()
 
         User.from_id(self.user_id, update=True)
         now = pendulum.now()
         weibos = self.user.timeline(
             since=self.weibo_update_at, start_page=start_page)
-
-        with console.status(
-            f" [magenta]Fetching {self.username}...", spinner="christmas"
-        ):
-            console.log(self.user)
-            console.log(f"Media Saving: {download_dir}")
-            imgs = save_weibo(weibos, Path(download_dir) / self.username)
-            download_files(imgs)
+        console.log(self.user)
+        console.log(f"Media Saving: {download_dir}")
+        imgs = save_weibo(weibos, Path(download_dir) / 'users'/self.username)
+        download_files(imgs)
         console.log(f"{self.user.username}微博获取完毕")
         self.weibo_update_at = now
         self.save()
+
+        weibo_liked = self.user.liked_photo(max_page=1)
+        console.log(f"Media Saving: {download_dir}")
+        imgs = save_weibo(weibo_liked, Path(download_dir) /
+                          "liked"/self.username, save_to_db=False)
+        download_files(imgs)
+        console.log(f"{self.user.username}的赞获取完毕")
+
         pause(mode="user")
 
     @staticmethod
@@ -378,7 +415,7 @@ database.create_tables([User, UserConfig, Artist, Weibo])
 
 
 def save_weibo(
-    weibos: Iterator[dict], download_dir: str | Path
+        weibos: Iterator[dict], download_dir: str | Path, save_to_db=True
 ) -> Generator[dict, None, None]:
     """
     Save weibo to database and return media info
@@ -393,9 +430,10 @@ def save_weibo(
         wb_id = normalize_wb_id(wb_id)
         if not (weibo := Weibo.get_or_none(id=wb_id)):
             weibo = Weibo(**weibo_dict)
-            weibo.user = User.from_id(weibo_dict["user_id"])
-            weibo.username = weibo.user.username
-            weibo.save(force_insert=True)
+            if save_to_db:
+                weibo.user = User.from_id(weibo_dict["user_id"])
+                weibo.username = weibo.user.username
+                weibo.save(force_insert=True)
 
         medias = list(weibo.medias(path))
         console.log(weibo)

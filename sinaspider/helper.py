@@ -8,17 +8,17 @@ from typing import Optional
 import keyring
 from baseconv import base62
 from furl import furl
+import pendulum
 from requests.exceptions import SSLError
 from requests_cache import CachedSession
-
 from sinaspider import console
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
-user_agent = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) "
-              "Gecko/20100101 Firefox/90.0")
+user_agent = 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Mobile Safari/537.36'
 headers = {
-    "User_Agent": user_agent,
-    "Cookie": keyring.get_password('sinaspider', 'cookie')
+    "User-Agent": user_agent,
+    "Cookie": keyring.get_password('sinaspider', 'cookie'),
+    "referer": "https://m.weibo.cn",
 }
 
 
@@ -119,10 +119,22 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         console.log(f'{img} already exists..skipping...', style='info')
         return
     while True:
-        downloaded = get_url(url).content
-        if len(downloaded) == 153:
+        r = get_url(url)
+        if r.status_code == 403:
+            from furl import furl
+            if (expires := furl(url).args.get("Expires")):
+                expires = pendulum.from_timestamp(int(expires))
+                console.log(f"{url} expires at {expires}", style="warning")
+                return
+        if r.status_code != 200:
+            console.log(url)
+            time.sleep(15)
+            if r.status_code == 404:
+                console.log(url+" 404")
+                return
             continue
         else:
+            downloaded = get_url(url).content
             if len(downloaded) < 1024:
                 console.log([len(downloaded), url, filepath], style='warning')
             break
@@ -134,7 +146,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
 
 def download_files(imgs):
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=10) as pool:
+    with ThreadPoolExecutor(max_workers=5) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
     for future in futures:
         future.result()

@@ -1,15 +1,14 @@
-from sinaspider.model import UserConfig, User, Weibo
 from pathlib import Path
 
 import pendulum
 from rich.prompt import Prompt, Confirm, IntPrompt
-from typer import Typer
-
-from sinaspider import console
+from sinaspider import console, get_progress
 from sinaspider.helper import (
     normalize_user_id,
     download_files,
     normalize_wb_id)
+from sinaspider.model import UserConfig, User, Weibo
+from typer import Typer
 
 app = Typer()
 default_path = Path.home() / 'Downloads/sinaspider'
@@ -31,7 +30,7 @@ def user(download_dir: str = default_path):
         console.log(uc, '\n')
         if uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
             start_page = IntPrompt.ask('start_page', default=1)
-            uc.fetch_weibo(download_dir,  start_page=start_page)
+            uc.fetch_weibo(download_dir, start_page=start_page)
 
 
 @app.command(help="Continue fetch user weibos from certain page")
@@ -47,26 +46,36 @@ def user_continue(user: str, start_page: int,
 
 
 @app.command(help="Loop through users in database and fetch weibos")
-def user_loop(download_dir: Path = default_path):
+def loop(download_dir: Path = default_path):
     import time
-    query = UserConfig.select()
-    i = 0
-    for uc in query.order_by(UserConfig.weibo_update_at):
-        if not uc.need_fetch:
-            continue
-        uc.fetch_weibo(download_dir)
+    users = UserConfig.select().order_by(UserConfig.weibo_update_at)
+    users = [uc for uc in users if uc.need_fetch]
+    with get_progress() as progress:
+        for i, uc in progress.track(enumerate(users, start=1), total=len(users)):
+            uc.fetch_weibo(download_dir)
+            console.log(f'[yellow]第{i}个用户获取完毕')
+            for flag in [20, 10, 5]:
+                if i % flag == 0:
+                    to_sleep = 3 * i
+                    break
+            else:
+                to_sleep = 5
+                time.sleep(5)
+            console.log(f'sleep {to_sleep}...')
+            time.sleep(to_sleep)
 
-        i += 1
-        console.log(f'[yellow]第{i}个用户获取完毕')
-        for flag in [20, 10, 5]:
-            if i % flag == 0:
-                to_sleep = 3 * i
-                break
-        else:
-            to_sleep = 5
-            time.sleep(5)
-        console.log(f'sleep {to_sleep}...')
-        time.sleep(to_sleep)
+
+@app.command(help='Update users from timeline')
+def timeline(download_dir: Path = default_path, since: float = None):
+    from sinaspider.page import get_timeline_pages
+    since = pendulum.now().subtract(days=since)
+    for status in get_timeline_pages(since=since):
+        user = UserConfig.get_or_none(user_id=status['user']['id'])
+        if not user:
+            continue
+        created_at = pendulum.parse(status['created_at'], strict=False)
+        if user.weibo_update_at < created_at:
+            user.fetch_weibo(download_dir)
 
 
 @app.command(help="fetch weibo by weibo_id")
