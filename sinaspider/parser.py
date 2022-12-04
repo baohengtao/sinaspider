@@ -54,19 +54,18 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     response = get_url(url, expire_after=-1)
     rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
     html = rec.match(response.text)
+    html = html.groups(1)[0]
     weibo_info = {}
-    if html:
-        html = html.groups(1)[0]
-        try:
-            weibo_info = json.loads(html, strict=False)['status']
-        except JSONDecodeError as e:
-            console.log(html)
-            raise e
-        if not weibo_info:
-            response.revalidate(3600 * 24 * 30)
-            console.log(f'{url} cannot load', style='warning')
-        else:
-            console.log(f'{wb_id} fetched')
+    try:
+        weibo_info = json.loads(html, strict=False)['status']
+    except JSONDecodeError as e:
+        console.log(html)
+        raise e
+    if not weibo_info:
+        response.revalidate(3600 * 24 * 30)
+        console.log(f'{url} cannot load', style='warning')
+    else:
+        console.log(f'{wb_id} fetched')
     if response.from_cache:
         console.log(f'fetching {wb_id} from cache')
     else:
@@ -104,6 +103,9 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 user_id=(user_id := user['id']),
                 id=(id := int(self.card['id'])),
                 bid=(bid := self.card.get('bid')),
+                username=user['screen_name'],
+                gender=user['gender'],
+                followers_count=user['followers_count'],
                 url=f'https://weibo.com/{user_id}/{bid or id}',
                 url_m=f'https://m.weibo.cn/detail/{id}',
                 created_at=created_at,
@@ -121,8 +123,9 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                         for p in pics.values() if 'large' in p]
             else:
                 pics = [p['large']['url'] for p in pics]
-            if not pics and (ids:=self.card.get('pic_ids')):
-                pics = [f'https://wx3.sinaimg.cn/large/{id}' for id in ids]
+            if not pics and (ids := self.card.get('pic_ids')):
+                pics = [f'https://wx{i%3+1}.sinaimg.cn/large/{id}'
+                        for i, id in enumerate(ids)]
             # pics = [p['large']['url'] for p in pics]
             live_photo = {}
             live_photo_prefix = (
@@ -212,8 +215,10 @@ def get_user_by_id(uid: int, cache_days=30):
             user_info = js['data']['userInfo']
             user_info.pop('toolbar_menus', '')
             break
-        except KeyError:
+        except KeyError as e:
             print(js, url)
+            if js['msg'] == '这里还没有内容':
+                raise e
             pause(mode='user')
             get_user_by_id(uid, cache_days=0)
 
@@ -255,10 +260,11 @@ def _user_info_fix(user_info: dict) -> dict:
         if u1 != u2:
             console.log([u1, u2], style='error')
     if 'Tap to set alias' in user_info:
-        assert user_info.get('remark', '') == user_info.pop(
-            'Tap to set alias', '')
+        assert user_info.get('remark', '').strip() == user_info.pop(
+            'Tap to set alias', '').strip()
     if user_info.get('gender') == 'f':
-        assert user_info.pop('性别', '女') == '女'
+        user_info.pop('性别', '女')
+        # assert user_info.pop('性别', '女') == '女'
         user_info['gender'] = 'female'
     elif user_info.get('gender') == 'm':
         assert user_info.pop('性别', '男') == '男'
@@ -360,4 +366,6 @@ def _parse_user_card(respond_card):
                  for card in user_card if 'item_name' in card}
     if user_card.get('生日', '').strip():
         user_card['生日'] = user_card['生日'].split()[0]
+    user_card['IP'] = user_card.pop('IP属地', '').replace(
+        "（IP属地以运营商信息为准，如有问题可咨询客服）", "")
     return user_card

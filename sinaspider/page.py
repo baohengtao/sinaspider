@@ -1,9 +1,12 @@
 import itertools
 from datetime import datetime, timedelta
+from logging import exception
+from pathlib import Path
 from time import sleep
 from typing import Generator
 
 import pendulum
+from six import Iterator
 from tqdm import trange
 
 from sinaspider import console
@@ -42,20 +45,57 @@ def get_timeline_pages(since: pendulum.DateTime = None):
         pause(mode='page')
 
 
-def get_liked_pages(uid: int, max_page: int = 2):
+def check_liked(weibo_id):
+    from peewee import SqliteDatabase, Model, BigIntegerField
+    from sinaspider.model import Weibo
+    database = SqliteDatabase(Path.home()/".cache/liked_weibo.db")
+
+    class BaseModel(Model):
+        class Meta:
+            database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
+
+    class LikedWeibo(BaseModel):
+        weibo_id = BigIntegerField()
+
+    database.create_tables([LikedWeibo])
+
+    if LikedWeibo.get_or_none(weibo_id=weibo_id) or Weibo.get_or_none(id=weibo_id):
+        console.log(f'{weibo_id} already in {database.database}')
+        return False
+    else:
+        LikedWeibo.create(weibo_id=weibo_id)
+        return True
+
+
+def get_liked_pages(uid: int, max_page: int = 3, max_imgs: int = 40):
     url = f'https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0'
-    for page in range(1, max_page+1):
+    count = 0
+    for page in range(1, max_page + 1):
         r = get_url(url % page)
         js = r.json()
         mblogs = [card['mblog']
                   for card in js['cards'] if card['card_type'] == 9]
         for weibo_info in mblogs:
-            if weibo:=parse_weibo(weibo_info):
-                if "photos" in weibo:
-                    yield weibo
-        pause(mode='page')
+            if weibo := parse_weibo(weibo_info):
+                if "photos" in weibo and weibo['gender'] != 'm':
+                    followers_count = weibo['followers_count']
+                    try:
+                        followers_count = int(followers_count)
+                    except ValueError:
+                        assert "万" in followers_count
+                        continue
+                    else:
+                        if followers_count > 10000 or followers_count < 300:
+                            continue
+                    if weibo['created_at'] < pendulum.now().subtract(days=10):
+                        return
+                    count += len(weibo['photos'])
+                    if check_liked(weibo['id']):
+                        yield weibo
+                    if count > max_imgs:
+                        return
 
-            
+        pause(mode='page')
 
 
 def get_weibo_pages(containerid: str,

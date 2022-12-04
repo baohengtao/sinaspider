@@ -72,6 +72,7 @@ class User(BaseModel):
     审核时间 = TextField(null=True)
     电话 = TextField(null=True)
     邮箱 = TextField(null=True)
+    IP = TextField(null=True)
 
     class Meta:
         table_name = "user"
@@ -97,8 +98,8 @@ class User(BaseModel):
                  since: int | str | datetime = "1970-01-01"):
         yield from get_weibo_pages(f"107603{self.id}", start_page, since)
 
-    def liked_photo(self, max_page: int):
-        yield from get_liked_pages(self.id, max_page)
+    def liked_photo(self, max_page: int, max_imgs: int):
+        yield from get_liked_pages(self.id, max_page, max_imgs)
 
     def friends(self):
         yield from get_friends_pages(self.id)
@@ -167,8 +168,8 @@ class Weibo(BaseModel):
                     ext = "jpg"
                 yield {
                     "url": url,
-                    "filename": f"{self.created_at:%y-%m-%d}_{self.user_id}_{self.id}_{sn}.{ext}",
-                    "xmp_info": self.gen_meta(sn),
+                    "filename": f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}_{sn}.{ext}",
+                    "xmp_info": self.gen_meta(sn=sn, url=url),
                     "filepath": filepath,
                 }
         if url := self.video_url:
@@ -178,12 +179,12 @@ class Weibo(BaseModel):
             else:
                 yield {
                     "url": url,
-                    "filename": f"{self.user_id}_{self.id}.mp4",
-                    "xmp_info": self.gen_meta(),
+                    "filename": f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}.mp4",
+                    "xmp_info": self.gen_meta(url=url),
                     "filepath": filepath,
                 }
 
-    def gen_meta(self, sn: str | int = 0) -> dict:
+    def gen_meta(self, sn: str | int = 0, url: str = "") -> dict:
         sn = int(sn) if sn else 0
         xmp_info = {
             "ImageUniqueID": self.bid,
@@ -195,7 +196,8 @@ class Weibo(BaseModel):
             "Location": self.location,
             "DateCreated": (self.created_at +
                             pendulum.Duration(microseconds=int(sn))),
-            "SeriesNumber": sn,
+            "SeriesNumber": sn if sn else '',
+            "URLUrl": url
         }
 
         xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
@@ -325,6 +327,8 @@ class UserConfig(BaseModel):
             return True
 
     def fetch_weibo(self, download_dir, start_page=1):
+        if not self.weibo_fetch:
+            return
         console.rule(
             f"开始获取 {self.username} "
             f"(update_at:{self.weibo_update_at:%y-%m-%d})"
@@ -343,10 +347,11 @@ class UserConfig(BaseModel):
         self.weibo_update_at = now
         self.save()
 
-        weibo_liked = self.user.liked_photo(max_page=1)
+        weibo_liked = self.user.liked_photo(max_page=3, max_imgs=40)
         console.log(f"Media Saving: {download_dir}")
-        imgs = save_weibo(weibo_liked, Path(download_dir) /
-                          "liked"/self.username, save_to_db=False)
+        imgs = save_liked_weibo(weibo_liked,
+                                liked_by=self.username,
+                                download_dir=Path(download_dir)/"liked")
         download_files(imgs)
         console.log(f"{self.user.username}的赞获取完毕")
 
@@ -424,7 +429,6 @@ def save_weibo(
     :return: generator of medias to downloads
     """
 
-    path = download_dir
     for weibo_dict in weibos:
         wb_id = weibo_dict["id"]
         wb_id = normalize_wb_id(wb_id)
@@ -435,9 +439,30 @@ def save_weibo(
                 weibo.username = weibo.user.username
                 weibo.save(force_insert=True)
 
-        medias = list(weibo.medias(path))
+        medias = list(weibo.medias(download_dir))
         console.log(weibo)
         if medias:
-            console.log(f"Downloading {len(medias)} files to {path}..")
+            console.log(f"Downloading {len(medias)} files to {download_dir}..")
         print()
         yield from medias
+
+
+def save_liked_weibo(weibos: Iterator[dict],
+                     liked_by: str,
+                     download_dir: Path) -> Generator[dict, None, None]:
+    for weibo_dict in weibos:
+        weibo = Weibo(**weibo_dict)
+        filepath = download_dir/'9' if len(weibo.photos) >= 9 else download_dir
+        console.log(weibo)
+        console.log(
+            f"Downloading {len(weibo.photos)} files to {filepath}..")
+        for sn, (url, _) in weibo.photos.items():
+            *_, ext = url.split("/")[-1].split(".")
+            if not _:
+                ext = "jpg"
+            yield {
+                "url": url,
+                "filename": f"{liked_by}_{weibo.username}_{weibo.id}_{sn}.{ext}",
+                "xmp_info": weibo.gen_meta(sn),
+                "filepath": filepath
+            }

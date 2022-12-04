@@ -9,7 +9,7 @@ import keyring
 from baseconv import base62
 from furl import furl
 import pendulum
-from requests.exceptions import SSLError
+from requests.exceptions import ProxyError, SSLError
 from requests_cache import CachedSession
 from sinaspider import console
 
@@ -34,11 +34,11 @@ def get_url(url, expire_after=0):
         try:
             r = session.get(url, headers=headers, expire_after=expire_after)
             break
-        except (TimeoutError, ConnectionError, SSLError) as e:
+        except (TimeoutError, ConnectionError, SSLError, ProxyError) as e:
             console.log(
-                f"{e}: Timeout sleep 600 seconds and "
+                f"{e}: Timeout sleep 60 seconds and "
                 f"retry[link={url}]{url}[/link]...", style='error')
-            sleep(10 * 60)
+            sleep(60)
 
     return r
 
@@ -146,7 +146,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
 
 def download_files(imgs):
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=10) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
     for future in futures:
         future.result()

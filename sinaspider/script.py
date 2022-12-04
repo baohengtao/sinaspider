@@ -52,8 +52,11 @@ def loop(download_dir: Path = default_path):
     users = [uc for uc in users if uc.need_fetch]
     with get_progress() as progress:
         for i, uc in progress.track(enumerate(users, start=1), total=len(users)):
-            uc.fetch_weibo(download_dir)
-            console.log(f'[yellow]第{i}个用户获取完毕')
+            try:
+                uc.fetch_weibo(download_dir)
+                console.log(f'[yellow]第{i}个用户获取完毕')
+            except KeyError:
+                continue
             for flag in [20, 10, 5]:
                 if i % flag == 0:
                     to_sleep = 3 * i
@@ -74,7 +77,7 @@ def timeline(download_dir: Path = default_path, since: float = None):
         if not user:
             continue
         created_at = pendulum.parse(status['created_at'], strict=False)
-        if user.weibo_update_at < created_at:
+        if user.weibo_fetch and user.weibo_update_at < created_at:
             user.fetch_weibo(download_dir)
 
 
