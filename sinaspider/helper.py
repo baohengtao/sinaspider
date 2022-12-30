@@ -9,7 +9,7 @@ import keyring
 from baseconv import base62
 from furl import furl
 import pendulum
-from requests.exceptions import ProxyError, SSLError
+from requests.exceptions import ProxyError, SSLError, ConnectionError
 from requests_cache import CachedSession
 from sinaspider import console
 

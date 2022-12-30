@@ -9,9 +9,9 @@ from sinaspider.helper import (
     normalize_wb_id)
 from sinaspider.model import UserConfig, User, Weibo
 from typer import Typer
-
+from time import sleep
 app = Typer()
-default_path = Path.home() / 'Downloads/sinaspider'
+default_path = Path.home() / 'Pictures/sinaspider'
 
 
 @app.command(help='Add user to database of users whom we want to fetch from')
@@ -51,7 +51,8 @@ def loop(download_dir: Path = default_path):
     users = UserConfig.select().order_by(UserConfig.weibo_update_at)
     users = [uc for uc in users if uc.need_fetch]
     with get_progress() as progress:
-        for i, uc in progress.track(enumerate(users, start=1), total=len(users)):
+        for i, uc in progress.track(enumerate(users, start=1),
+                                    total=len(users)):
             try:
                 uc.fetch_weibo(download_dir)
                 console.log(f'[yellow]第{i}个用户获取完毕')
@@ -69,9 +70,11 @@ def loop(download_dir: Path = default_path):
 
 
 @app.command(help='Update users from timeline')
-def timeline(download_dir: Path = default_path, since: float = None):
+def timeline(download_dir: Path = default_path,
+             since=None, days: float = None):
     from sinaspider.page import get_timeline_pages
-    since = pendulum.now().subtract(days=since)
+    if since is None:
+        since = pendulum.now().subtract(days=days)
     for status in get_timeline_pages(since=since):
         user = UserConfig.get_or_none(user_id=status['user']['id'])
         if not user:
@@ -79,6 +82,19 @@ def timeline(download_dir: Path = default_path, since: float = None):
         created_at = pendulum.parse(status['created_at'], strict=False)
         if user.weibo_fetch and user.weibo_update_at < created_at:
             user.fetch_weibo(download_dir)
+
+
+@app.command(help='Schedule timeline command')
+def schedule(download_dir: Path = default_path,
+             days: float = None, frequency: float = 1):
+    since = pendulum.now().subtract(days=days)
+    while True:
+        next_since = pendulum.now()
+        timeline(download_dir, since)
+        console.log(
+            f'next fetching time: {pendulum.now().add(days=frequency)}')
+        sleep(frequency * 24 * 3600)
+        since = next_since
 
 
 @app.command(help="fetch weibo by weibo_id")
