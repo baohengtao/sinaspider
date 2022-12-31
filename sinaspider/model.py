@@ -261,7 +261,7 @@ class UserConfig(BaseModel):
 
     @classmethod
     def from_id(cls, user_id, save=True):
-        user = User.from_id(user_id)
+        user = User.from_id(user_id, update=True)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
         fields = set(cls._meta.fields) - {"id"}
@@ -335,7 +335,7 @@ class UserConfig(BaseModel):
         )
         self.set_visibility()
 
-        User.from_id(self.user_id, update=True)
+        UserConfig.from_id(self.user_id)
         now = pendulum.now()
         weibos = self.user.timeline(
             since=self.weibo_update_at, start_page=start_page)

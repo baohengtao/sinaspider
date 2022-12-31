@@ -35,10 +35,16 @@ def get_url(url, expire_after=0):
             r = session.get(url, headers=headers, expire_after=expire_after)
             break
         except (TimeoutError, ConnectionError, SSLError, ProxyError) as e:
+            if type(e) is ConnectionError:
+                period = 600
+            elif type(e) is SSLError:
+                period = 5
+            else:
+                period = 60
             console.log(
-                f"{e}: Timeout sleep 60 seconds and "
+                f"{e}: Timeout sleep {period} seconds and "
                 f"retry[link={url}]{url}[/link]...", style='error')
-            sleep(60)
+            sleep(period)
 
     return r
 
@@ -127,11 +133,11 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
                 console.log(f"{url} expires at {expires}", style="warning")
                 return
         if r.status_code != 200:
-            console.log(url)
-            time.sleep(15)
             if r.status_code == 404:
                 console.log(url+" 404")
                 return
+            console.log(url)
+            time.sleep(15)
             continue
         else:
             downloaded = get_url(url).content

@@ -19,7 +19,6 @@ def user(download_dir: str = default_path):
     while user_id := Prompt.ask('请输入用户名:smile:'):
         if not (user_id := normalize_user_id(user_id)):
             continue
-        User.from_id(user_id, update=True)
         uc = UserConfig.from_id(user_id, save=False)
         if uc_in_db := UserConfig.get_or_none(UserConfig.user_id == user_id):
             console.log(f'用户{uc.username}已在列表中')
