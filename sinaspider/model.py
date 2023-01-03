@@ -341,7 +341,11 @@ class UserConfig(BaseModel):
             since=self.weibo_update_at, start_page=start_page)
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        imgs = save_weibo(weibos, Path(download_dir) / 'users'/self.username)
+        if self.weibo_update_at > pendulum.now().subtract(years=1):
+            user_root = 'users'
+        else:
+            user_root = 'new'
+        imgs = save_weibo(weibos, Path(download_dir)/user_root/self.username)
         download_files(imgs)
         console.log(f"{self.user.username}微博获取完毕")
         self.weibo_update_at = now

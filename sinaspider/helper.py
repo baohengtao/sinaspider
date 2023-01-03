@@ -152,7 +152,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
 
 def download_files(imgs):
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=10) as pool:
+    with ThreadPoolExecutor(max_workers=7) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
     for future in futures:
         future.result()

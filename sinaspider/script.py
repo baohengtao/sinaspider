@@ -7,7 +7,7 @@ from sinaspider.helper import (
     normalize_user_id,
     download_files,
     normalize_wb_id)
-from sinaspider.model import UserConfig, User, Weibo
+from sinaspider.model import UserConfig, Weibo
 from typer import Typer
 from time import sleep
 app = Typer()
@@ -90,10 +90,23 @@ def schedule(download_dir: Path = default_path,
     while True:
         next_since = pendulum.now()
         timeline(download_dir, since)
-        console.log(
-            f'next fetching time: {pendulum.now().add(days=frequency)}')
-        sleep(frequency * 24 * 3600)
+        tidy_img(download_dir)
+        # wait for next fetching
+        next_fetching_time = pendulum.now().add(days=frequency)
+        console.log(f'next fetching time: {next_fetching_time}')
+        while pendulum.now() < next_fetching_time:
+            sleep(1800)
+        # updat since
         since = next_since
+
+
+def tidy_img(download_dir):
+    from imgmeta.script import write_meta, rename
+    ori = download_dir / 'users'
+    if not ori.exists():
+        return
+    write_meta(ori)
+    rename(ori, new_dir=True, root=download_dir/'tidyed')
 
 
 @app.command(help="fetch weibo by weibo_id")
