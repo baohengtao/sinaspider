@@ -45,10 +45,14 @@ def user_continue(user: str, start_page: int,
 
 
 @app.command(help="Loop through users in database and fetch weibos")
-def loop(download_dir: Path = default_path):
+def loop(download_dir: Path = default_path, new_user_only: bool = False):
     import time
     users = UserConfig.select().order_by(UserConfig.weibo_update_at)
-    users = [uc for uc in users if uc.need_fetch]
+    if new_user_only:
+        users = [uc for uc in users if uc.weibo_update_at <
+                 pendulum.now().subtract(years=1)]
+    else:
+        users = [uc for uc in users if uc.need_fetch]
     with get_progress() as progress:
         for i, uc in progress.track(enumerate(users, start=1),
                                     total=len(users)):
@@ -89,24 +93,35 @@ def schedule(download_dir: Path = default_path,
     since = pendulum.now().subtract(days=days)
     while True:
         next_since = pendulum.now()
+        update_user_config()
         timeline(download_dir, since)
+        loop(download_dir, new_user_only=True)
         tidy_img(download_dir)
         # wait for next fetching
         next_fetching_time = pendulum.now().add(days=frequency)
         console.log(f'next fetching time: {next_fetching_time}')
         while pendulum.now() < next_fetching_time:
-            sleep(1800)
+            sleep(600)
         # updat since
         since = next_since
 
 
 def tidy_img(download_dir):
     from imgmeta.script import write_meta, rename
-    ori = download_dir / 'users'
-    if not ori.exists():
-        return
-    write_meta(ori)
-    rename(ori, new_dir=True, root=download_dir/'tidyed')
+    folders = ['users', 'new']
+    for folder in folders:
+        ori = download_dir / folder
+        if ori.exists():
+            write_meta(ori)
+            rename(ori, new_dir=True, root=ori.parent/('tidyed_'+ori.stem))
+
+
+def update_user_config():
+    from sinaspider.model import Artist
+    for uc in UserConfig:
+        if artist := Artist.get_or_none(user=uc.user):
+            uc.photos_num = artist.photos_num
+            uc.save()
 
 
 @app.command(help="fetch weibo by weibo_id")

@@ -119,7 +119,7 @@ class User(BaseModel):
             "follow_count",
         ]
         for k in keys:
-            if v := getattr(self, k, None):
+            if (v := getattr(self, k, None)) is not None:
                 text += f"{k}: {v}\n"
         return text.strip()
 
@@ -218,7 +218,7 @@ class Weibo(BaseModel):
             "url",
         ]
         for k in keys:
-            if v := getattr(self, k, None):
+            if (v := getattr(self, k, None)) is not None:
                 text += f"{k}: {v}\n"
         return text.strip()
 
@@ -236,6 +236,7 @@ class UserConfig(BaseModel):
     education = CharField(index=True, null=True)
     homepage = CharField(index=True)
     visible = BooleanField(null=True)
+    photos_num = IntegerField(null=True)
 
     class Meta:
         table_name = "userconfig"
@@ -266,7 +267,11 @@ class UserConfig(BaseModel):
             user_config = UserConfig(user=user)
         fields = set(cls._meta.fields) - {"id"}
         for k in fields:
-            if v := getattr(user, k, None):
+            try:
+                v = getattr(user, k)
+            except AttributeError:
+                continue
+            else:
                 setattr(user_config, k, v)
         user_config.username = user.remark or user.username
         if save:

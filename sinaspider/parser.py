@@ -32,10 +32,9 @@ def parse_weibo(weibo_info: dict) -> dict:
     Returns:
         解析后的微博信息.
     """
-    weibo = _parse_weibo_card(weibo_info)
     if weibo_info['pic_num'] > 9:
         weibo_info |= _get_weibo_info_by_id(weibo_info['id'])
-        weibo = _parse_weibo_card(weibo_info)
+    weibo = _parse_weibo_card(weibo_info)
     return weibo
 
 
@@ -96,6 +95,10 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
         def basic_info(self):
+            if self.card.get('title', {}).get('text') == '置顶':
+                is_pinned = True
+            else:
+                is_pinned = False
             user = self.card['user']
             created_at = pendulum.parse(self.card['created_at'], strict=False)
             assert created_at.is_local()
@@ -110,6 +113,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 url_m=f'https://m.weibo.cn/detail/{id}',
                 created_at=created_at,
                 source=self.card['source'],
+                is_pinned=is_pinned
             )
             for key in ['reposts_count', 'comments_count', 'attitudes_count']:
                 if (v := self.card[key]) == '100万+':

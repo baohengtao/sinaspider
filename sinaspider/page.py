@@ -140,14 +140,12 @@ def get_weibo_pages(containerid: str,
         mblogs = [w['mblog']
                   for w in js['data']['cards'] if w['card_type'] == 9]
 
-        is_pinned = True
         for weibo_info in mblogs:
             if not (weibo := parse_weibo(weibo_info)):
                 continue
             if (created_at := weibo['created_at']) < since:
-                if is_pinned:
-                    console.log("略过第一条微博...")
-                    is_pinned = False
+                if weibo['is_pinned']:
+                    console.log("略过置顶微博...")
                     continue
                 else:
                     console.log(
