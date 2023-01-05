@@ -97,13 +97,13 @@ def schedule(download_dir: Path = default_path,
         timeline(download_dir, since)
         loop(download_dir, new_user_only=True)
         tidy_img(download_dir)
+        # updat since
+        since = next_since
         # wait for next fetching
-        next_fetching_time = pendulum.now().add(days=frequency)
+        next_fetching_time = max(since.add(days=frequency), pendulum.now())
         console.log(f'next fetching time: {next_fetching_time}')
         while pendulum.now() < next_fetching_time:
             sleep(600)
-        # updat since
-        since = next_since
 
 
 def tidy_img(download_dir):
