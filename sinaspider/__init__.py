@@ -14,7 +14,7 @@ custom_theme = Theme({
     "warning": "magenta",
     "error": "bold red"
 })
-console = Console(theme=custom_theme)
+console = Console(theme=custom_theme, record=True)
 
 
 

@@ -1,5 +1,6 @@
 import json
 from json.decoder import JSONDecodeError
+from time import sleep
 import re
 from itertools import chain
 from typing import Optional
@@ -11,7 +12,6 @@ from pendulum.parsing.exceptions import ParserError
 
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
-
 print = console.print
 
 
@@ -49,12 +49,16 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
         Weibo instance if exists, else None
 
     """
+    weibo_info = {}
     url = f'https://m.weibo.cn/detail/{wb_id}'
     response = get_url(url, expire_after=-1)
+    invisible = '由于博主设置，目前内容暂不可见。' 
+    if invisible in response.text:
+        console.log(f'{wb_id}: {invisible}', style='error')
+        return weibo_info
     rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
     html = rec.match(response.text)
     html = html.groups(1)[0]
-    weibo_info = {}
     try:
         weibo_info = json.loads(html, strict=False)['status']
     except JSONDecodeError as e:
@@ -220,7 +224,7 @@ def get_user_by_id(uid: int, cache_days=30):
             user_info.pop('toolbar_menus', '')
             break
         except KeyError as e:
-            print(js, url)
+            console.log(js, url)
             if js['msg'] == '这里还没有内容':
                 raise e
             pause(mode='user')

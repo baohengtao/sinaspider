@@ -133,10 +133,9 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
                 console.log(f"{url} expires at {expires}", style="warning")
                 return
         if r.status_code != 200:
+            console.log(f"{url}, {r.status_code}")
             if r.status_code == 404:
-                console.log(url+" 404")
                 return
-            console.log(url)
             time.sleep(15)
             continue
         else:

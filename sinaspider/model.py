@@ -5,6 +5,7 @@ from typing import Optional, Generator, Iterator
 import pendulum
 from peewee import JOIN
 from peewee import Model
+from playhouse.shortcuts import  model_to_dict
 from playhouse.postgres_ext import (
     PostgresqlExtDatabase,
     IntegerField,
@@ -30,6 +31,9 @@ database = PostgresqlExtDatabase("sinaspider", host="localhost")
 class BaseModel(Model):
     class Meta:
         database = database
+    
+    def __repr__(self):
+        return "\n".join(f'{k}: {v}' for k, v in model_to_dict(self).items())
 
 
 class User(BaseModel):
@@ -73,6 +77,9 @@ class User(BaseModel):
     电话 = TextField(null=True)
     邮箱 = TextField(null=True)
     IP = TextField(null=True)
+    
+    def __repr__(self):
+        return super().__repr__()
 
     class Meta:
         table_name = "user"
@@ -109,6 +116,7 @@ class User(BaseModel):
         keys = [
             "id",
             "username",
+            "following",
             "gender",
             "birthday",
             "location",
@@ -117,6 +125,7 @@ class User(BaseModel):
             "statuses_count",
             "followers_count",
             "follow_count",
+            "IP"
         ]
         for k in keys:
             if (v := getattr(self, k, None)) is not None:
@@ -222,6 +231,9 @@ class Weibo(BaseModel):
                 text += f"{k}: {v}\n"
         return text.strip()
 
+    
+    def __repr__(self):
+        return super().__repr__()
 
 # noinspection PyTypeChecker
 class UserConfig(BaseModel):
@@ -237,10 +249,13 @@ class UserConfig(BaseModel):
     homepage = CharField(index=True)
     visible = BooleanField(null=True)
     photos_num = IntegerField(null=True)
+    IP = TextField(null=True)
 
     class Meta:
         table_name = "userconfig"
-
+    
+    def __repr__(self):
+        return super().__repr__()    
     def __str__(self):
         text = ""
         fields = [
@@ -252,6 +267,7 @@ class UserConfig(BaseModel):
             "homepage",
             "weibo_fetch",
             "weibo_update_at",
+            "IP"
         ]
         for k in fields:
             if (v := getattr(self, k, None)) is not None:
@@ -262,7 +278,10 @@ class UserConfig(BaseModel):
 
     @classmethod
     def from_id(cls, user_id, save=True):
-        user = User.from_id(user_id, update=True)
+        try:
+            user = User.from_id(user_id, update=True)
+        except KeyError:
+            user = User.from_id(user_id)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
         fields = set(cls._meta.fields) - {"id"}
@@ -393,16 +412,20 @@ class Artist(BaseModel):
     follow_count = IntegerField(index=True)
     followers_count = IntegerField(index=True)
     homepage = CharField(index=True, null=True)
+    added_at = DateTimeTZField(null=True)
 
     class Meta:
         table_name = "artist"
 
+    def __repr__(self):
+        return super().__repr__()
     @classmethod
     def from_id(cls, user_id, update=False):
         user = User.from_id(user_id, update=update)
         if (artist := Artist.get_or_none(user_id=user.id)) is None:
             artist = Artist(user=user)
             artist.folder = "new"
+            artist.added_at = pendulum.now()
         fields = set(cls._meta.fields) - {"id"}
         for k in fields:
             if v := getattr(user, k, None):
@@ -461,10 +484,11 @@ def save_liked_weibo(weibos: Iterator[dict],
                      download_dir: Path) -> Generator[dict, None, None]:
     for weibo_dict in weibos:
         weibo = Weibo(**weibo_dict)
-        filepath = download_dir/'9' if len(weibo.photos) >= 9 else download_dir
+        filepath = download_dir / str(len(weibo.photos))
         console.log(weibo)
         console.log(
             f"Downloading {len(weibo.photos)} files to {filepath}..")
+        print()
         for sn, (url, _) in weibo.photos.items():
             *_, ext = url.split("/")[-1].split(".")
             if not _:

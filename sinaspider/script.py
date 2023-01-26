@@ -90,20 +90,29 @@ def timeline(download_dir: Path = default_path,
 @app.command(help='Schedule timeline command')
 def schedule(download_dir: Path = default_path,
              days: float = None, frequency: float = 1):
+    from rich.terminal_theme import MONOKAI
     since = pendulum.now().subtract(days=days)
+    next_fetching_time = pendulum.now()
     while True:
-        next_since = pendulum.now()
-        update_user_config()
-        timeline(download_dir, since)
-        loop(download_dir, new_user_only=True)
-        tidy_img(download_dir)
-        # updat since
-        since = next_since
-        # wait for next fetching
-        next_fetching_time = max(since.add(days=frequency), pendulum.now())
-        console.log(f'next fetching time: {next_fetching_time}')
         while pendulum.now() < next_fetching_time:
             sleep(600)
+        try:
+            next_since = pendulum.now()
+            update_user_config()
+            console.rule('[bold red]Timeline...', style="magenta")
+            timeline(download_dir, since)
+            console.rule('[bold red]New users...', style="magenta")
+            loop(download_dir, new_user_only=True)
+            tidy_img(download_dir)
+            # updat since
+            since = next_since
+            # wait for next fetching
+            next_fetching_time = max(since.add(days=frequency), pendulum.now())
+            console.log(f'next fetching time: {next_fetching_time}')
+        finally:
+            log_file = f"sinaspider_{pendulum.now().format('YYMMDD_HHmmss')}.html"
+            console.log(f'Saving log to {download_dir/log_file}')
+            console.save_html(download_dir/log_file, theme=MONOKAI)
 
 
 def tidy_img(download_dir):
@@ -116,6 +125,7 @@ def tidy_img(download_dir):
             rename(ori, new_dir=True, root=ori.parent/('tidyed_'+ori.stem))
 
 
+@app.command(help='Update photos num for user_config')
 def update_user_config():
     from sinaspider.model import Artist
     for uc in UserConfig:

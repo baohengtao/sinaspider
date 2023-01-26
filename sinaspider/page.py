@@ -67,12 +67,22 @@ def check_liked(weibo_id):
 
 def get_liked_pages(uid: int, max_page: int = 3, max_imgs: int = 40):
     url = f'https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0'
-    count = 0
+    img_count, wb_count = 0, 0
     for page in range(1, max_page + 1):
-        r = get_url(url % page)
+        while (r := get_url(url % page)).status_code != 200:
+            console.log(
+                f'{r.url} get status code {r.status_code}...', style='error')
+            console.log('sleeping 60 seconds')
+            sleep(60)
         js = r.json()
-        mblogs = [card['mblog']
-                  for card in js['cards'] if card['card_type'] == 9]
+        try:
+            mblogs = [card['mblog']
+                      for card in js['cards'] if card['card_type'] == 9]
+        except TypeError as e:
+            console.log(
+                f"type error for url: [link={r.url}]r.url[/link]",
+                style='error')
+            raise e
         for weibo_info in mblogs:
             if weibo := parse_weibo(weibo_info):
                 if "photos" in weibo and weibo['gender'] != 'm':
@@ -85,12 +95,13 @@ def get_liked_pages(uid: int, max_page: int = 3, max_imgs: int = 40):
                     else:
                         if followers_count > 10000 or followers_count < 300:
                             continue
-                    if weibo['created_at'] < pendulum.now().subtract(days=10):
+                    if weibo['created_at'] < pendulum.now().subtract(days=30):
                         return
-                    count += len(weibo['photos'])
+                    img_count += len(weibo['photos'])
+                    wb_count += 1
                     if check_liked(weibo['id']):
                         yield weibo
-                    if count > max_imgs:
+                    if img_count > max_imgs and wb_count > 5:
                         return
 
         pause(mode='page')
