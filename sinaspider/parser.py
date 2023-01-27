@@ -52,7 +52,7 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     weibo_info = {}
     url = f'https://m.weibo.cn/detail/{wb_id}'
     response = get_url(url, expire_after=-1)
-    invisible = '由于博主设置，目前内容暂不可见。' 
+    invisible = '由于博主设置，目前内容暂不可见。'
     if invisible in response.text:
         console.log(f'{wb_id}: {invisible}', style='error')
         return weibo_info
@@ -117,7 +117,8 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 url_m=f'https://m.weibo.cn/detail/{id}',
                 created_at=created_at,
                 source=self.card['source'],
-                is_pinned=is_pinned
+                is_pinned=is_pinned,
+                retweeted=self.card.get('retweeted_status', {}).get('bid'),
             )
             for key in ['reposts_count', 'comments_count', 'attitudes_count']:
                 if (v := self.card[key]) == '100万+':

@@ -31,21 +31,19 @@ def get_timeline_pages(since: pendulum.DateTime = None):
         data = r.json()['data']
         next_cursor = data['next_cursor']
         for status in data['statuses']:
+            created_at = pendulum.parse(status['created_at'], strict=False)
+            if created_at < since:
+                return
             if 'retweeted_status' in status:
                 continue
             if status.get('pic_ids'):
                 yield status
-            created_at = status['created_at']
-            created_at = pendulum.parse(created_at, strict=False)
-            if since > created_at:
-                return
         console.log(f'created_at:{created_at}')
         pause(mode='page')
 
 
 def check_liked(weibo_id):
     from peewee import SqliteDatabase, Model, BigIntegerField
-    from sinaspider.model import Weibo
     database = SqliteDatabase(Path.home()/".cache/liked_weibo.db")
 
     class BaseModel(Model):
@@ -57,18 +55,18 @@ def check_liked(weibo_id):
 
     database.create_tables([LikedWeibo])
 
-    if LikedWeibo.get_or_none(weibo_id=weibo_id) or Weibo.get_or_none(id=weibo_id):
+    if LikedWeibo.get_or_none(weibo_id=weibo_id):
         console.log(f'{weibo_id} already in {database.database}')
         return False
     else:
-        LikedWeibo.create(weibo_id=weibo_id)
+        # LikedWeibo.create(weibo_id=weibo_id)
         return True
 
 
-def get_liked_pages(uid: int, max_page: int = 3, max_imgs: int = 40):
+def get_liked_pages(uid: int, since: datetime):
+    from sinaspider.helper import normalize_str
     url = f'https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0'
-    img_count, wb_count = 0, 0
-    for page in range(1, max_page + 1):
+    for page in itertools.count(start=1):
         while (r := get_url(url % page)).status_code != 200:
             console.log(
                 f'{r.url} get status code {r.status_code}...', style='error')
@@ -84,25 +82,15 @@ def get_liked_pages(uid: int, max_page: int = 3, max_imgs: int = 40):
                 style='error')
             raise e
         for weibo_info in mblogs:
-            if weibo := parse_weibo(weibo_info):
-                if "photos" in weibo and weibo['gender'] != 'm':
-                    followers_count = weibo['followers_count']
-                    try:
-                        followers_count = int(followers_count)
-                    except ValueError:
-                        assert "万" in followers_count
-                        continue
-                    else:
-                        if followers_count > 10000 or followers_count < 300:
-                            continue
-                    if weibo['created_at'] < pendulum.now().subtract(days=30):
-                        return
-                    img_count += len(weibo['photos'])
-                    wb_count += 1
-                    if check_liked(weibo['id']):
-                        yield weibo
-                    if img_count > max_imgs and wb_count > 5:
-                        return
+            weibo = parse_weibo(weibo_info)
+            if "photos" in weibo and weibo['gender'] != 'm':
+                followers_count = int(normalize_str(weibo['followers_count']))
+                if followers_count > 20000 or followers_count < 500:
+                    continue
+                if weibo['created_at'] < since:
+                    return
+                if check_liked(weibo['id']):
+                    yield weibo
 
         pause(mode='page')
 
@@ -152,8 +140,9 @@ def get_weibo_pages(containerid: str,
                   for w in js['data']['cards'] if w['card_type'] == 9]
 
         for weibo_info in mblogs:
-            if not (weibo := parse_weibo(weibo_info)):
-                continue
+            # if not (weibo := parse_weibo(weibo_info)):
+            #     continue
+            weibo = parse_weibo(weibo_info)
             if (created_at := weibo['created_at']) < since:
                 if weibo['is_pinned']:
                     console.log("略过置顶微博...")
@@ -162,7 +151,8 @@ def get_weibo_pages(containerid: str,
                     console.log(
                         f"时间{created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, 获取完毕")
                     return
-            yield weibo
+            if 'retweeted' not in weibo:
+                yield weibo
         else:
             console.log(f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")
             pause(mode='page')

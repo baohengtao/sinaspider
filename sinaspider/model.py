@@ -4,8 +4,8 @@ from typing import Optional, Generator, Iterator
 
 import pendulum
 from peewee import JOIN
-from peewee import Model
-from playhouse.shortcuts import  model_to_dict
+from peewee import Model, CompositeKey
+from playhouse.shortcuts import model_to_dict
 from playhouse.postgres_ext import (
     PostgresqlExtDatabase,
     IntegerField,
@@ -31,7 +31,7 @@ database = PostgresqlExtDatabase("sinaspider", host="localhost")
 class BaseModel(Model):
     class Meta:
         database = database
-    
+
     def __repr__(self):
         return "\n".join(f'{k}: {v}' for k, v in model_to_dict(self).items())
 
@@ -77,7 +77,7 @@ class User(BaseModel):
     电话 = TextField(null=True)
     邮箱 = TextField(null=True)
     IP = TextField(null=True)
-    
+
     def __repr__(self):
         return super().__repr__()
 
@@ -105,8 +105,8 @@ class User(BaseModel):
                  since: int | str | datetime = "1970-01-01"):
         yield from get_weibo_pages(f"107603{self.id}", start_page, since)
 
-    def liked_photo(self, max_page: int, max_imgs: int):
-        yield from get_liked_pages(self.id, max_page, max_imgs)
+    def liked_photo(self, since: datetime):
+        yield from get_liked_pages(self.id, since)
 
     def friends(self):
         yield from get_friends_pages(self.id)
@@ -231,11 +231,12 @@ class Weibo(BaseModel):
                 text += f"{k}: {v}\n"
         return text.strip()
 
-    
     def __repr__(self):
         return super().__repr__()
 
 # noinspection PyTypeChecker
+
+
 class UserConfig(BaseModel):
     user = ForeignKeyField(User, unique=True)
     username = CharField()
@@ -253,9 +254,10 @@ class UserConfig(BaseModel):
 
     class Meta:
         table_name = "userconfig"
-    
+
     def __repr__(self):
-        return super().__repr__()    
+        return super().__repr__()
+
     def __str__(self):
         text = ""
         fields = [
@@ -353,33 +355,31 @@ class UserConfig(BaseModel):
     def fetch_weibo(self, download_dir, start_page=1):
         if not self.weibo_fetch:
             return
-        console.rule(
-            f"开始获取 {self.username} "
-            f"(update_at:{self.weibo_update_at:%y-%m-%d})"
-        )
+        since = pendulum.instance(self.weibo_update_at)
+        console.rule(f"开始获取 {self.username} (update_at:{since:%y-%m-%d})")
         self.set_visibility()
 
         UserConfig.from_id(self.user_id)
         now = pendulum.now()
-        weibos = self.user.timeline(
-            since=self.weibo_update_at, start_page=start_page)
+        weibos = self.user.timeline(since=since, start_page=start_page)
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        if self.weibo_update_at > pendulum.now().subtract(years=1):
-            user_root = 'users'
+        if since > pendulum.now().subtract(years=1):
+            user_root = 'Users'
         else:
-            user_root = 'new'
+            user_root = 'New'
         imgs = save_weibo(weibos, Path(download_dir)/user_root/self.username)
         download_files(imgs)
         console.log(f"{self.user.username}微博获取完毕")
+
         self.weibo_update_at = now
         self.save()
 
-        weibo_liked = self.user.liked_photo(max_page=3, max_imgs=40)
+        weibo_liked = self.user.liked_photo(since.subtract(months=1))
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
-                                liked_by=self.username,
-                                download_dir=Path(download_dir)/"liked")
+                                liked_by=self.user_id,
+                                download_dir=Path(download_dir)/"Liked")
         download_files(imgs)
         console.log(f"{self.user.username}的赞获取完毕")
 
@@ -391,7 +391,7 @@ class UserConfig(BaseModel):
         with console.status("[magenta]Fetching favorite...",
                             spinner="christmas"):
             console.log(f"Media Saving: {download_dir}")
-            imgs = save_weibo(weibos, Path(download_dir) / "favorite")
+            imgs = save_weibo(weibos, Path(download_dir) / "Favorite")
             download_files(imgs)
         console.log("收藏微博获取完毕")
         pause(mode="user")
@@ -419,6 +419,7 @@ class Artist(BaseModel):
 
     def __repr__(self):
         return super().__repr__()
+
     @classmethod
     def from_id(cls, user_id, update=False):
         user = User.from_id(user_id, update=update)
@@ -448,12 +449,20 @@ class Artist(BaseModel):
         return {"XMP:" + k: v for k, v in xmp.items()}
 
 
-database.create_tables([User, UserConfig, Artist, Weibo])
+class LikedWeibo(BaseModel):
+    weibo_id = BigIntegerField()
+    user_id = BigIntegerField()
+    liked_by = BigIntegerField()
+
+    class Meta:
+        table_name = "liked"
+        pimary_key = CompositeKey('weibo_id', 'liked_by')
 
 
-def save_weibo(
-        weibos: Iterator[dict], download_dir: str | Path, save_to_db=True
-) -> Generator[dict, None, None]:
+database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])
+
+
+def save_weibo(weibos: Iterator[dict], download_dir: str | Path) -> Generator[dict, None, None]:
     """
     Save weibo to database and return media info
     :param weibos: Iterator of weibo dict
@@ -464,12 +473,16 @@ def save_weibo(
     for weibo_dict in weibos:
         wb_id = weibo_dict["id"]
         wb_id = normalize_wb_id(wb_id)
-        if not (weibo := Weibo.get_or_none(id=wb_id)):
-            weibo = Weibo(**weibo_dict)
-            if save_to_db:
-                weibo.user = User.from_id(weibo_dict["user_id"])
-                weibo.username = weibo.user.username
-                weibo.save(force_insert=True)
+        if weibo := Weibo.get_or_none(id=wb_id):
+            force_insert = False
+        else:
+            weibo = Weibo()
+            force_insert = True
+        for k, v in weibo_dict.items():
+            setattr(weibo, k, v)
+        weibo.user = User.from_id(weibo_dict["user_id"])
+        weibo.username = weibo.user.username
+        weibo.save(force_insert=force_insert)
 
         medias = list(weibo.medias(download_dir))
         console.log(weibo)
@@ -480,10 +493,21 @@ def save_weibo(
 
 
 def save_liked_weibo(weibos: Iterator[dict],
-                     liked_by: str,
+                     liked_by: int,
                      download_dir: Path) -> Generator[dict, None, None]:
+
     for weibo_dict in weibos:
         weibo = Weibo(**weibo_dict)
+        if UserConfig.get_or_none(user_id=weibo.user_id):
+            continue
+        if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
+            break
+        is_downloaded = LikedWeibo.get_or_none(weibo_id=weibo.id)
+        LikedWeibo.create(weibo_id=weibo.id,
+                          liked_by=liked_by, user_id=weibo.user_id)
+        if is_downloaded:
+            console.log(f'{weibo.id} already saved, continue...')
+            continue
         filepath = download_dir / str(len(weibo.photos))
         console.log(weibo)
         console.log(
@@ -495,7 +519,7 @@ def save_liked_weibo(weibos: Iterator[dict],
                 ext = "jpg"
             yield {
                 "url": url,
-                "filename": f"{liked_by}_{weibo.username}_{weibo.id}_{sn}.{ext}",
+                "filename": f"{User.from_id(liked_by).username}_{weibo.username}_{weibo.id}_{sn}.{ext}",
                 "xmp_info": weibo.gen_meta(sn),
                 "filepath": filepath
             }

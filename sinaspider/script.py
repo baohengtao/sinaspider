@@ -11,7 +11,7 @@ from sinaspider.model import UserConfig, Weibo
 from typer import Typer
 from time import sleep
 app = Typer()
-default_path = Path.home() / 'Pictures/sinaspider'
+default_path = Path.home() / 'Pictures/Sinaspider'
 
 
 @app.command(help='Add user to database of users whom we want to fetch from')
@@ -110,19 +110,19 @@ def schedule(download_dir: Path = default_path,
             next_fetching_time = max(since.add(days=frequency), pendulum.now())
             console.log(f'next fetching time: {next_fetching_time}')
         finally:
-            log_file = f"sinaspider_{pendulum.now().format('YYMMDD_HHmmss')}.html"
+            log_file = f"sinaspider_{pendulum.now().format('YY-MM-DD_HHmmss')}.html"
             console.log(f'Saving log to {download_dir/log_file}')
             console.save_html(download_dir/log_file, theme=MONOKAI)
 
 
 def tidy_img(download_dir):
     from imgmeta.script import write_meta, rename
-    folders = ['users', 'new']
+    folders = ['Users', 'New']
     for folder in folders:
         ori = download_dir / folder
         if ori.exists():
             write_meta(ori)
-            rename(ori, new_dir=True, root=ori.parent/('tidyed_'+ori.stem))
+            rename(ori, new_dir=True, root=ori.parent/(ori.stem+'Pro'))
 
 
 @app.command(help='Update photos num for user_config')
