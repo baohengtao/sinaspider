@@ -145,8 +145,8 @@ def get_weibo_pages(containerid: str,
                     f"{url.args['page']}", style='warning')
                 return
 
-        mblogs = [w['mblog']
-                  for w in js['data']['cards'] if w['card_type'] == 9]
+        mblogs = [card['mblog']
+                  for card in js['data']['cards'] if card['card_type'] == 9]
 
         for weibo_info in mblogs:
             # if not (weibo := parse_weibo(weibo_info)):

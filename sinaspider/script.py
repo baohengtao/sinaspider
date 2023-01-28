@@ -110,7 +110,7 @@ def schedule(download_dir: Path = default_path,
             # wait for next fetching
             next_fetching_time = max(since.add(days=frequency), pendulum.now())
             console.log(f'next fetching time: {next_fetching_time}')
-        except:
+        except BaseException:
             with console.capture():
                 console.print_exception(show_locals=True)
             raise

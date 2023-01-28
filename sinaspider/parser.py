@@ -194,7 +194,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 assert location_span.attrs['class'] == ['surl-text']
                 location = location_span.text
         return {
-            'text': soup.text,
+            'text': soup.get_text(' ', strip=True),
             'at_users': at_list,
             'topics': topics_list,
             'location': location

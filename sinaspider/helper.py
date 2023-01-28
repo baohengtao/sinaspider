@@ -128,7 +128,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         r = get_url(url)
         if r.status_code == 403:
             from furl import furl
-            if (expires := furl(url).args.get("Expires")):
+            if expires := furl(url).args.get("Expires"):
                 expires = pendulum.from_timestamp(int(expires))
                 console.log(f"{url} expires at {expires}", style="warning")
                 return

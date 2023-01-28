@@ -33,7 +33,7 @@ class BaseModel(Model):
         database = database
 
     def __repr__(self):
-        return "\n".join(f'{k}: {v}' for k, v in model_to_dict(self).items())
+        return "\n".join(f'{k}: {v}' for k, v in model_to_dict(self, recurse=False).items())
 
 
 class User(BaseModel):
@@ -368,9 +368,10 @@ class UserConfig(BaseModel):
             user_root = 'Users'
         else:
             user_root = 'New'
-        imgs = save_weibo(weibos, Path(download_dir) / user_root / self.username)
+        imgs = save_weibo(weibos, Path(download_dir) /
+                          user_root / self.username)
         download_files(imgs)
-        console.log(f"{self.user.username}微博获取完毕")
+        console.log(f"{self.user.username}微博获取完毕\n")
 
         self.weibo_update_at = now
         self.save()
@@ -381,7 +382,7 @@ class UserConfig(BaseModel):
                                 liked_by=self.user_id,
                                 download_dir=Path(download_dir) / "Liked")
         download_files(imgs)
-        console.log(f"{self.user.username}的赞获取完毕")
+        console.log(f"{self.user.username}的赞获取完毕\n")
 
         pause(mode="user")
 
@@ -514,8 +515,7 @@ def save_liked_weibo(weibos: Iterator[dict],
         filepath = download_dir / str(len(weibo.photos))
         console.log(weibo)
         console.log(
-            f"Downloading {len(weibo.photos)} files to {filepath}..")
-        console.print()
+            f"Downloading {len(weibo.photos)} files to {filepath}..\n")
         for sn, (url, _) in weibo.photos.items():
             *_, ext = url.split("/")[-1].split(".")
             if not _:
