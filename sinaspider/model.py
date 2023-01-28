@@ -4,7 +4,7 @@ from typing import Optional, Generator, Iterator
 
 import pendulum
 from peewee import JOIN
-from peewee import Model, CompositeKey
+from peewee import Model
 from playhouse.shortcuts import model_to_dict
 from playhouse.postgres_ext import (
     PostgresqlExtDatabase,
@@ -234,6 +234,7 @@ class Weibo(BaseModel):
     def __repr__(self):
         return super().__repr__()
 
+
 # noinspection PyTypeChecker
 
 
@@ -303,7 +304,6 @@ class UserConfig(BaseModel):
         if self.visible is True:
             return self.visible
         last_page = self.user.statuses_count // 20
-        visibility = True
         while True:
             weibos = get_weibo_pages(f"107603{self.user_id}", last_page)
             try:
@@ -335,11 +335,11 @@ class UserConfig(BaseModel):
         days = 90
         recent_num = (
             User.select(User)
-                .join(Weibo, JOIN.LEFT_OUTER)
-                .where(Weibo.created_at > pendulum.now().subtract(days=days))
-                .where(Weibo.photos != None)
-                .where(User.id == self.user_id)
-                .count()
+            .join(Weibo, JOIN.LEFT_OUTER)
+            .where(Weibo.created_at > pendulum.now().subtract(days=days))
+            .where(Weibo.photos != None)
+            .where(User.id == self.user_id)
+            .count()
         )
         update_interval = math.ceil(4 * days / (recent_num + 1))
         update_interval = max(update_interval, 7)
@@ -357,9 +357,9 @@ class UserConfig(BaseModel):
             return
         since = pendulum.instance(self.weibo_update_at)
         console.rule(f"开始获取 {self.username} (update_at:{since:%y-%m-%d})")
-        self.set_visibility()
 
         UserConfig.from_id(self.user_id)
+        self.set_visibility()
         now = pendulum.now()
         weibos = self.user.timeline(since=since, start_page=start_page)
         console.log(self.user)
@@ -368,7 +368,7 @@ class UserConfig(BaseModel):
             user_root = 'Users'
         else:
             user_root = 'New'
-        imgs = save_weibo(weibos, Path(download_dir)/user_root/self.username)
+        imgs = save_weibo(weibos, Path(download_dir) / user_root / self.username)
         download_files(imgs)
         console.log(f"{self.user.username}微博获取完毕")
 
@@ -379,7 +379,7 @@ class UserConfig(BaseModel):
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
                                 liked_by=self.user_id,
-                                download_dir=Path(download_dir)/"Liked")
+                                download_dir=Path(download_dir) / "Liked")
         download_files(imgs)
         console.log(f"{self.user.username}的赞获取完毕")
 
@@ -453,10 +453,13 @@ class LikedWeibo(BaseModel):
     weibo_id = BigIntegerField()
     user_id = BigIntegerField()
     liked_by = BigIntegerField()
+    added_at = DateTimeTZField(default=pendulum.now())
 
     class Meta:
         table_name = "liked"
-        pimary_key = CompositeKey('weibo_id', 'liked_by')
+        indexes = (
+            (('weibo_id', 'liked_by'), True),
+        )
 
 
 database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])
@@ -488,19 +491,19 @@ def save_weibo(weibos: Iterator[dict], download_dir: str | Path) -> Generator[di
         console.log(weibo)
         if medias:
             console.log(f"Downloading {len(medias)} files to {download_dir}..")
-        print()
+        console.print()
         yield from medias
 
 
 def save_liked_weibo(weibos: Iterator[dict],
                      liked_by: int,
                      download_dir: Path) -> Generator[dict, None, None]:
-
     for weibo_dict in weibos:
         weibo = Weibo(**weibo_dict)
         if UserConfig.get_or_none(user_id=weibo.user_id):
             continue
         if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
+            console.log(f'{weibo.id}: 到达上次爬取的页面位置， 获取完毕。')
             break
         is_downloaded = LikedWeibo.get_or_none(weibo_id=weibo.id)
         LikedWeibo.create(weibo_id=weibo.id,
@@ -512,7 +515,7 @@ def save_liked_weibo(weibos: Iterator[dict],
         console.log(weibo)
         console.log(
             f"Downloading {len(weibo.photos)} files to {filepath}..")
-        print()
+        console.print()
         for sn, (url, _) in weibo.photos.items():
             *_, ext = url.split("/")[-1].split(".")
             if not _:

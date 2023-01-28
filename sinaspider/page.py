@@ -30,6 +30,7 @@ def get_timeline_pages(since: pendulum.DateTime = None):
         r = get_url(url)
         data = r.json()['data']
         next_cursor = data['next_cursor']
+        created_at = None
         for status in data['statuses']:
             created_at = pendulum.parse(status['created_at'], strict=False)
             if created_at < since:
@@ -44,7 +45,7 @@ def get_timeline_pages(since: pendulum.DateTime = None):
 
 def check_liked(weibo_id):
     from peewee import SqliteDatabase, Model, BigIntegerField
-    database = SqliteDatabase(Path.home()/".cache/liked_weibo.db")
+    database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
 
     class BaseModel(Model):
         class Meta:
@@ -63,6 +64,14 @@ def check_liked(weibo_id):
         return True
 
 
+def _yield_from_cards(cards):
+    for card in cards:
+        if card['card_type'] == 9:
+            yield card['mblog']
+        elif card['card_type'] == 11:
+            yield from _yield_from_cards(card['card_group'])
+
+
 def get_liked_pages(uid: int, since: datetime):
     from sinaspider.helper import normalize_str
     url = f'https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0'
@@ -73,21 +82,21 @@ def get_liked_pages(uid: int, since: datetime):
             console.log('sleeping 60 seconds')
             sleep(60)
         js = r.json()
-        try:
-            mblogs = [card['mblog']
-                      for card in js['cards'] if card['card_type'] == 9]
-        except TypeError as e:
-            console.log(
-                f"type error for url: [link={r.url}]r.url[/link]",
-                style='error')
-            raise e
+        if (cards := js['cards']) is None:
+            console.log(f"js[cards] is None for [link={r.url}]r.url[/link]", style='error')
+            break
+        mblogs = _yield_from_cards(cards)
         for weibo_info in mblogs:
+            if weibo_info.get('deleted') == '1':
+                continue
             weibo = parse_weibo(weibo_info)
             if "photos" in weibo and weibo['gender'] != 'm':
                 followers_count = int(normalize_str(weibo['followers_count']))
                 if followers_count > 20000 or followers_count < 500:
                     continue
                 if weibo['created_at'] < since:
+                    console.log(
+                        f"时间{weibo['created_at']:%y-%m-%d} 在 {since:%y-%m-%d}之前, 获取完毕")
                     return
                 if check_liked(weibo['id']):
                     yield weibo
@@ -158,8 +167,7 @@ def get_weibo_pages(containerid: str,
             pause(mode='page')
 
 
-def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[
-        dict, None, None]:
+def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, None, None]:
     """
     获取关注列表
 

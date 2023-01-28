@@ -10,6 +10,7 @@ from sinaspider.helper import (
 from sinaspider.model import UserConfig, Weibo
 from typer import Typer
 from time import sleep
+
 app = Typer()
 default_path = Path.home() / 'Pictures/Sinaspider'
 
@@ -109,10 +110,14 @@ def schedule(download_dir: Path = default_path,
             # wait for next fetching
             next_fetching_time = max(since.add(days=frequency), pendulum.now())
             console.log(f'next fetching time: {next_fetching_time}')
+        except:
+            with console.capture():
+                console.print_exception(show_locals=True)
+            raise
         finally:
             log_file = f"sinaspider_{pendulum.now().format('YY-MM-DD_HHmmss')}.html"
-            console.log(f'Saving log to {download_dir/log_file}')
-            console.save_html(download_dir/log_file, theme=MONOKAI)
+            console.log(f'Saving log to {download_dir / log_file}')
+            console.save_html(download_dir / log_file, theme=MONOKAI)
 
 
 def tidy_img(download_dir):
@@ -122,7 +127,7 @@ def tidy_img(download_dir):
         ori = download_dir / folder
         if ori.exists():
             write_meta(ori)
-            rename(ori, new_dir=True, root=ori.parent/(ori.stem+'Pro'))
+            rename(ori, new_dir=True, root=ori.parent / (ori.stem + 'Pro'))
 
 
 @app.command(help='Update photos num for user_config')

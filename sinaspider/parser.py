@@ -1,6 +1,5 @@
 import json
 from json.decoder import JSONDecodeError
-from time import sleep
 import re
 from itertools import chain
 from typing import Optional
@@ -9,10 +8,8 @@ from typing import Union
 import pendulum
 from bs4 import BeautifulSoup
 from pendulum.parsing.exceptions import ParserError
-
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
-print = console.print
 
 
 def get_weibo_by_id(wb_id) -> Optional[dict]:
@@ -133,7 +130,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             else:
                 pics = [p['large']['url'] for p in pics]
             if not pics and (ids := self.card.get('pic_ids')):
-                pics = [f'https://wx{i%3+1}.sinaimg.cn/large/{id}'
+                pics = [f'https://wx{i % 3 + 1}.sinaimg.cn/large/{id}'
                         for i, id in enumerate(ids)]
             # pics = [p['large']['url'] for p in pics]
             live_photo = {}
