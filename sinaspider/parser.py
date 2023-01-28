@@ -203,21 +203,20 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
     return _WeiboCardParser().wb
 
 
-def get_user_by_id(uid: int, cache_days=30):
-    expire_after = cache_days * 24 * 3600
+def get_user_by_id(uid: int):
     url = weibo_api_url.copy()
 
     # 获取来自m.weibo.com的信息
     url.args = {'containerid': f"230283{uid}_-_INFO"}
-    respond_card = get_url(url, expire_after)
+    respond_card = get_url(url)
     user_card = _parse_user_card(respond_card)
 
     # 获取主信息
     url.args = {'containerid': f"100505{uid}"}
-    respond_info = get_url(url, expire_after)
-    js = json.loads(respond_info.content)
     while True:
         try:
+            respond_info = get_url(url)
+            js = json.loads(respond_info.content)
             user_info = js['data']['userInfo']
             user_info.pop('toolbar_menus', '')
             break
@@ -225,18 +224,17 @@ def get_user_by_id(uid: int, cache_days=30):
             console.log(js, url)
             if js['msg'] == '这里还没有内容':
                 raise e
-            pause(mode='user')
-            get_user_by_id(uid, cache_days=0)
+            pause(mode='page')
 
     # 获取来自cn的信息
-    respond_cn = get_url(f'https://weibo.cn/{uid}/info', expire_after)
+    respond_cn = get_url(f'https://weibo.cn/{uid}/info')
     user_cn = _parse_user_cn(respond_cn)
 
     # 合并信息
     user = user_card | user_cn | user_info
     s = {(k, str(v)) for k, v in chain.from_iterable(
         [user_card.items(), user_cn.items(), user_info.items()])}
-    if emp := {(k, str(v)) for k, v in user.items()} - s:
+    if emp := (s - {(k, str(v)) for k, v in user.items()}):
         console.log(emp, style='error')
     try:
         user = _user_info_fix(user)
@@ -244,12 +242,8 @@ def get_user_by_id(uid: int, cache_days=30):
         console.log(user, user_card)
         raise e
     user['info_updated_at'] = pendulum.now()
-    from_cache = [r.from_cache for r in [
-        respond_card, respond_cn, respond_info]]
-    # assert min(from_cache) is max(from_cache)
-    if not all(from_cache):
-        console.log(f"{user['username']} 信息已从网络获取.")
-        pause(mode='page')
+    console.log(f"{user['username']} 信息已从网络获取.")
+    pause(mode='page')
     return user
 
 

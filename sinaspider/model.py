@@ -87,7 +87,6 @@ class User(BaseModel):
     @classmethod
     def from_id(cls, user_id: int, update=False) -> Optional["User"]:
         user_id = normalize_user_id(user_id)
-        cache_days = 30 if not update else 0
         if (user := User.get_or_none(id=user_id)) is None:
             force_insert = True
             update = True
@@ -95,7 +94,7 @@ class User(BaseModel):
         else:
             force_insert = False
         if update:
-            user_dict = get_user_by_id(user_id, cache_days=cache_days)
+            user_dict = get_user_by_id(user_id)
             for k, v in user_dict.items():
                 setattr(user, k, v)
             user.save(force_insert=force_insert)
