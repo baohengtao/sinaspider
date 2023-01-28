@@ -89,7 +89,7 @@ def get_liked_pages(uid: int, since: datetime):
         for weibo_info in mblogs:
             if weibo_info.get('deleted') == '1':
                 continue
-            weibo = parse_weibo(weibo_info)
+            weibo = parse_weibo(weibo_info, offline=True)
             if "photos" in weibo and weibo['gender'] != 'm':
                 followers_count = int(normalize_str(weibo['followers_count']))
                 if followers_count > 20000 or followers_count < 500:

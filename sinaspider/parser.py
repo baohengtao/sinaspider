@@ -10,26 +10,24 @@ from bs4 import BeautifulSoup
 from pendulum.parsing.exceptions import ParserError
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
+from sinaspider.exceptions import WeiboNotFoundError
 
 
 def get_weibo_by_id(wb_id) -> Optional[dict]:
-    if weibo_info := _get_weibo_info_by_id(wb_id):
-        return parse_weibo(weibo_info)
+    weibo_info = _get_weibo_info_by_id(wb_id)
+    weibo = _parse_weibo_card(weibo_info)
+    return weibo
 
 
-def parse_weibo(weibo_info: dict) -> dict:
+def parse_weibo(weibo_info: dict, offline=False) -> dict:
     """
     对从网页爬取到的微博进行解析.
-    若为转发微博:
-        若原微博已删除, 返回 None;
-        若原微博为长微博, 则爬取原微博并解析
-    若为原创微博, 则直接解析
     Args:
         weibo_info (dict): 原始微博信息
     Returns:
         解析后的微博信息.
     """
-    if weibo_info['pic_num'] > 9:
+    if weibo_info['pic_num'] > 9 and not offline:
         weibo_info |= _get_weibo_info_by_id(weibo_info['id'])
     weibo = _parse_weibo_card(weibo_info)
     return weibo
@@ -37,7 +35,7 @@ def parse_weibo(weibo_info: dict) -> dict:
 
 def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     """
-    爬取指定id的微博, 若原微博已删除, 返回None
+    爬取指定id的微博
 
     Args:
         wb_id (Union[int, str]): 微博id
@@ -46,31 +44,19 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
         Weibo instance if exists, else None
 
     """
-    weibo_info = {}
     url = f'https://m.weibo.cn/detail/{wb_id}'
-    response = get_url(url, expire_after=-1)
+    response = get_url(url)
     invisible = '由于博主设置，目前内容暂不可见。'
     if invisible in response.text:
-        console.log(f'{wb_id}: {invisible}', style='error')
-        return weibo_info
-    rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
+        raise WeiboNotFoundError(invisible)
+    # rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
+    rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] | {};', re.DOTALL)
+
     html = rec.match(response.text)
     html = html.groups(1)[0]
-    try:
-        weibo_info = json.loads(html, strict=False)['status']
-    except JSONDecodeError as e:
-        console.log(html)
-        raise e
-    if not weibo_info:
-        response.revalidate(3600 * 24 * 30)
-        console.log(f'{url} cannot load', style='warning')
-    else:
-        console.log(f'{wb_id} fetched')
-    if response.from_cache:
-        console.log(f'fetching {wb_id} from cache')
-    else:
-        console.log('pausing...')
-        pause(mode='page')
+    weibo_info = json.loads(html, strict=False)['status']
+    console.log(f"{wb_id} fetched in online.")
+    pause(mode='page')
     return weibo_info
 
 
@@ -116,6 +102,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 source=self.card['source'],
                 is_pinned=is_pinned,
                 retweeted=self.card.get('retweeted_status', {}).get('bid'),
+                pic_num=self.card['pic_num']
             )
             for key in ['reposts_count', 'comments_count', 'attitudes_count']:
                 if (v := self.card[key]) == '100万+':

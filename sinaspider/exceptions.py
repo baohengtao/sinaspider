@@ -1,0 +1,2 @@
+class WeiboNotFoundError(Exception):
+    pass

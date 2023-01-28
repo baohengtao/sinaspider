@@ -450,16 +450,14 @@ class Artist(BaseModel):
 
 
 class LikedWeibo(BaseModel):
-    weibo_id = BigIntegerField()
+    weibo_id = BigIntegerField(primary_key=True, unique=True)
     user_id = BigIntegerField()
+    pic_num = IntegerField()
     liked_by = BigIntegerField()
     added_at = DateTimeTZField(default=pendulum.now())
 
     class Meta:
         table_name = "liked"
-        indexes = (
-            (('weibo_id', 'liked_by'), True),
-        )
 
 
 database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])
@@ -500,21 +498,25 @@ def save_liked_weibo(weibos: Iterator[dict],
                      download_dir: Path) -> Generator[dict, None, None]:
     for weibo_dict in weibos:
         weibo = Weibo(**weibo_dict)
+        pic_num = weibo_dict['pic_num']
         if UserConfig.get_or_none(user_id=weibo.user_id):
             continue
         if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
             console.log(f'{weibo.id}: 到达上次爬取的页面位置， 获取完毕。')
             break
-        is_downloaded = LikedWeibo.get_or_none(weibo_id=weibo.id)
-        LikedWeibo.create(weibo_id=weibo.id,
-                          liked_by=liked_by, user_id=weibo.user_id)
-        if is_downloaded:
+        if LikedWeibo.get_or_none(weibo_id=weibo.id):
             console.log(f'{weibo.id} already saved, continue...')
             continue
-        filepath = download_dir / str(len(weibo.photos))
+        LikedWeibo.create(weibo_id=weibo.id, user_id=weibo.user_id,
+                          liked_by=liked_by, pic_num=pic_num)
+        if len(weibo.photos) < pic_num:
+            weibo_full = get_weibo_by_id(weibo.id)
+            weibo = Weibo(**weibo_full)
+            assert pic_num == len(weibo.photos)
+        filepath = download_dir / str(pic_num)
         console.log(weibo)
         console.log(
-            f"Downloading {len(weibo.photos)} files to {filepath}..\n")
+            f"Downloading {pic_num} files to {filepath}..\n")
         for sn, (url, _) in weibo.photos.items():
             *_, ext = url.split("/")[-1].split(".")
             if not _:
