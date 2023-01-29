@@ -50,13 +50,7 @@ def get_url(url, expire_after=0):
 
 
 def write_xmp(tags, img):
-    try:
-        import exiftool
-    except ModuleNotFoundError:
-        console.log(
-            'exiftool not installed...', style='error')
-        return
-
+    import exiftool
     with exiftool.ExifTool() as et:
         et.set_tags(tags, str(img))
         try:
@@ -74,7 +68,7 @@ def convert_user_nick_to_id(users: str):
         yield int(user_id)
 
 
-def normalize_user_id(user_id) -> Optional[int]:
+def normalize_user_id(user_id) -> int:
     from urllib.parse import unquote
     try:
         return int(user_id)
@@ -87,8 +81,7 @@ def normalize_user_id(user_id) -> Optional[int]:
         user_id = r.url.split('/')[-1]
         return int(user_id)
     else:
-        console.log(f'{url} not exist', style='warning')
-        return
+        raise ValueError(f'{url} not exist')
 
 
 def normalize_wb_id(wb_id: int | str) -> int:
@@ -191,8 +184,7 @@ class Pause:
         elif mode == 'user':
             self._pause(self.user_config)
         else:
-            console.log(f'unsupported pause mode {mode}', style='error')
-            assert False
+            raise ValueError(f'unsupported pause mode {mode}')
 
     def _pause(self, record):
         awake, stop = record['awake'], record['stop']

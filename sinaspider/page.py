@@ -137,8 +137,7 @@ def get_weibo_pages(containerid: str,
         js = response.json()
         if not js['ok']:
             if js['msg'] == '请求过于频繁，歇歇吧':
-                console.log('be banned', style='error')
-                raise
+                raise ConnectionError(js['msg'])
             else:
                 console.log(
                     "not js['ok'], seems reached end, no wb return for page "

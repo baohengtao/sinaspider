@@ -160,8 +160,7 @@ class Weibo(BaseModel):
 
         wb_id = normalize_wb_id(id)
         if not (weibo := Weibo.get_or_none(id=wb_id)):
-            if not (weibo_dict := get_weibo_by_id(wb_id)):
-                return
+            weibo_dict = get_weibo_by_id(wb_id)
             weibo = Weibo(**weibo_dict)
             weibo.user = User.from_id(weibo.user_id)
             weibo.save(force_insert=True)
@@ -280,10 +279,7 @@ class UserConfig(BaseModel):
 
     @classmethod
     def from_id(cls, user_id, save=True):
-        try:
-            user = User.from_id(user_id, update=True)
-        except KeyError:
-            user = User.from_id(user_id)
+        user = User.from_id(user_id, update=True)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
         fields = set(cls._meta.fields) - {"id"}

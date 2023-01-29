@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from pendulum.parsing.exceptions import ParserError
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
-from sinaspider.exceptions import WeiboNotFoundError
+from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
 
 
 def get_weibo_by_id(wb_id) -> Optional[dict]:
@@ -45,14 +45,14 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
 
     """
     url = f'https://m.weibo.cn/detail/{wb_id}'
-    response = get_url(url)
-    invisible = '由于博主设置，目前内容暂不可见。'
-    if invisible in response.text:
-        raise WeiboNotFoundError(invisible)
+    text = get_url(url).text
+    soup = BeautifulSoup(text, 'html.parser')
+    if  soup.title.text == '微博-出错了':
+        raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
     # rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
     rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] | {};', re.DOTALL)
 
-    html = rec.match(response.text)
+    html = rec.match(text)
     html = html.groups(1)[0]
     weibo_info = json.loads(html, strict=False)['status']
     console.log(f"{wb_id} fetched in online.")
@@ -73,12 +73,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             self.basic_info()
             self.photos_info()
             self.video_info()
-            try:
-                self.wb |= text_info(self.card['text'])
-            except AssertionError:
-                console.print_exception(show_locals=True)
-                raise
-            # self.retweet_info()
+            self.wb |= text_info(self.card['text'])
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
         def basic_info(self):
@@ -193,6 +188,15 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
 def get_user_by_id(uid: int):
     url = weibo_api_url.copy()
 
+    # 获取来自cn的信息
+    respond_cn = get_url(f'https://weibo.cn/{uid}/info')
+    soup = BeautifulSoup(respond_cn.text, 'lxml')
+    div = soup.body.find('div', class_='ps')
+    if div and div.text == 'User does not exists!':
+        raise UserNotFoundError(f"{uid}: {div.text}")
+    user_cn = _parse_user_cn(respond_cn)
+    
+
     # 获取来自m.weibo.com的信息
     url.args = {'containerid': f"230283{uid}_-_INFO"}
     respond_card = get_url(url)
@@ -200,22 +204,11 @@ def get_user_by_id(uid: int):
 
     # 获取主信息
     url.args = {'containerid': f"100505{uid}"}
-    while True:
-        try:
-            respond_info = get_url(url)
-            js = json.loads(respond_info.content)
-            user_info = js['data']['userInfo']
-            user_info.pop('toolbar_menus', '')
-            break
-        except KeyError as e:
-            console.log(js, url)
-            if js['msg'] == '这里还没有内容':
-                raise e
-            pause(mode='page')
+    respond_info = get_url(url)
+    js = json.loads(respond_info.content)
+    user_info = js['data']['userInfo']
+    user_info.pop('toolbar_menus', '')
 
-    # 获取来自cn的信息
-    respond_cn = get_url(f'https://weibo.cn/{uid}/info')
-    user_cn = _parse_user_cn(respond_cn)
 
     # 合并信息
     user = user_card | user_cn | user_info
