@@ -47,7 +47,7 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     url = f'https://m.weibo.cn/detail/{wb_id}'
     text = get_url(url).text
     soup = BeautifulSoup(text, 'html.parser')
-    if  soup.title.text == '微博-出错了':
+    if soup.title.text == '微博-出错了':
         raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
     # rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
     rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] | {};', re.DOTALL)
@@ -189,7 +189,7 @@ class UserParser:
     def __init__(self, user_id) -> None:
         self.id = user_id
         self._user = None
-    
+
     @property
     def user(self):
         if self._user is not None:
@@ -203,10 +203,8 @@ class UserParser:
         s -= {(k, str(v)) for k, v in user.items()}
         assert not s
         self._user = user
-        return  user
-        
+        return user
 
-        
     def get_user_cn(self):
         """获取来自cn的信息"""
         respond = get_url(f'https://weibo.cn/{self.id}/info')
@@ -215,29 +213,25 @@ class UserParser:
         if div := soup.body.find('div', class_='ps'):
             if div.text == 'User does not exists!':
                 raise UserNotFoundError(f"{self.id}: {div.text}")
-        divs = soup.find_all('div')
-        info = dict()
-        for tip, c in zip(divs[:-1], divs[1:]):
-            if tip.attrs['class'] == ['tip']:
-                assert c.attrs['class'] == ['c']
-                if tip.text == '其他信息':
-                    continue
-                if tip.text == '基本信息':
-                    for line in str(c).split('<br/>'):
-                        if text := BeautifulSoup(line, 'lxml').text:
-                            text = text.replace('\xa0', ' ')
-                            try:
-                                key, value = re.split('[:：]', text, maxsplit=1)
-                                info[key] = value
-                            except ValueError as e:
-                                console.log(f'{text} cannot parsed', style='error')
-                                raise e
 
-                elif tip.text == '学习经历' or '工作经历':
-                    education = c.text.replace('\xa0', ' ').split('·')
-                    info[tip.text] = [e.strip() for e in education if e]
-                else:
-                    info[tip.text] = c.text.replace('\xa0', ' ')
+        info = {}
+        for tip in soup.body.children:
+            assert tip.name == 'div'
+            if tip['class'] != ['tip']:
+                continue
+            else:
+                c = tip.next_sibling
+                assert c.name == 'div'
+                assert c['class'] == ['c']
+
+            if tip.text == '基本信息':
+                for line in c.get_text(separator='\n').split('\n'):
+                    key, value = re.split('[:：]', line, maxsplit=1)
+                    info[key] = value
+            elif tip.text in ['学习经历', '工作经历']:
+                info[tip.text] = c.text.strip('·').replace('\xa0', ' ').split('·')
+            else:
+                assert tip.text == '其他信息'
 
         if info.get('生日') == '01-01':
             info.pop('生日')
@@ -251,16 +245,16 @@ class UserParser:
         user_card = respond_card.json()['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
         user_card = {card['item_name']: card['item_content']
-                    for card in user_card if 'item_name' in card}
+                     for card in user_card if 'item_name' in card}
         if user_card.get('生日', '').strip():
             user_card['生日'] = user_card['生日'].split()[0]
         user_card['IP'] = user_card.pop('IP属地', '').replace(
             "（IP属地以运营商信息为准，如有问题可咨询客服）", "")
         return user_card
-    
+
     def get_user_info(self):
         """获取主信息"""
-        url = weibo_api_url.copy()    
+        url = weibo_api_url.copy()
         url.args = {'containerid': f"100505{self.id}"}
         respond_info = get_url(url)
         js = json.loads(respond_info.content)
@@ -353,6 +347,3 @@ def _user_info_fix(user_info: dict) -> dict:
         'remark', None) or user_info.pop('screen_name')
 
     return user_info
-
-
-

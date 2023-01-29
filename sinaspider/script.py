@@ -37,9 +37,6 @@ def user(download_dir: str = default_path):
 def user_continue(user: str, start_page: int,
                   download_dir: Path = default_path):
     user_id = normalize_user_id(user)
-    if not user_id:
-        console.log(f'{user} not exist', style='error')
-        return
     uc = UserConfig.from_id(user_id)
     uc.weibo_update_at = pendulum.from_timestamp(0)
     uc.fetch_weibo(download_dir=download_dir, start_page=start_page)
