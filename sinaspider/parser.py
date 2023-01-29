@@ -185,42 +185,93 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
     return _WeiboCardParser().wb
 
 
-def get_user_by_id(uid: int):
-    url = weibo_api_url.copy()
-
-    # 获取来自cn的信息
-    respond_cn = get_url(f'https://weibo.cn/{uid}/info')
-    soup = BeautifulSoup(respond_cn.text, 'lxml')
-    div = soup.body.find('div', class_='ps')
-    if div and div.text == 'User does not exists!':
-        raise UserNotFoundError(f"{uid}: {div.text}")
-    user_cn = _parse_user_cn(respond_cn)
+class UserParser:
+    def __init__(self, user_id) -> None:
+        self.id = user_id
+        self._user = None
     
+    @property
+    def user(self):
+        if self._user is not None:
+            return self._user
+        user_cn = self.get_user_cn()
+        user_card = self.get_user_card()
+        user_info = self.get_user_info()
+        user = user_cn | user_card | user_info
+        s = {(k, str(v)) for k, v in chain.from_iterable(
+            [user_card.items(), user_cn.items(), user_info.items()])}
+        s -= {(k, str(v)) for k, v in user.items()}
+        assert not s
+        self._user = user
+        return  user
+        
 
-    # 获取来自m.weibo.com的信息
-    url.args = {'containerid': f"230283{uid}_-_INFO"}
-    respond_card = get_url(url)
-    user_card = _parse_user_card(respond_card)
+        
+    def get_user_cn(self):
+        """获取来自cn的信息"""
+        respond = get_url(f'https://weibo.cn/{self.id}/info')
 
-    # 获取主信息
-    url.args = {'containerid': f"100505{uid}"}
-    respond_info = get_url(url)
-    js = json.loads(respond_info.content)
-    user_info = js['data']['userInfo']
-    user_info.pop('toolbar_menus', '')
+        soup = BeautifulSoup(respond.text, 'lxml')
+        if div := soup.body.find('div', class_='ps'):
+            if div.text == 'User does not exists!':
+                raise UserNotFoundError(f"{self.id}: {div.text}")
+        divs = soup.find_all('div')
+        info = dict()
+        for tip, c in zip(divs[:-1], divs[1:]):
+            if tip.attrs['class'] == ['tip']:
+                assert c.attrs['class'] == ['c']
+                if tip.text == '其他信息':
+                    continue
+                if tip.text == '基本信息':
+                    for line in str(c).split('<br/>'):
+                        if text := BeautifulSoup(line, 'lxml').text:
+                            text = text.replace('\xa0', ' ')
+                            try:
+                                key, value = re.split('[:：]', text, maxsplit=1)
+                                info[key] = value
+                            except ValueError as e:
+                                console.log(f'{text} cannot parsed', style='error')
+                                raise e
+
+                elif tip.text == '学习经历' or '工作经历':
+                    education = c.text.replace('\xa0', ' ').split('·')
+                    info[tip.text] = [e.strip() for e in education if e]
+                else:
+                    info[tip.text] = c.text.replace('\xa0', ' ')
+
+        if info.get('生日') == '01-01':
+            info.pop('生日')
+        return info
+
+    def get_user_card(self):
+        """获取来自m.weibo.com的信息"""
+        url = weibo_api_url.copy()
+        url.args = {'containerid': f"230283{self.id}_-_INFO"}
+        respond_card = get_url(url)
+        user_card = respond_card.json()['data']['cards']
+        user_card = sum([c['card_group'] for c in user_card], [])
+        user_card = {card['item_name']: card['item_content']
+                    for card in user_card if 'item_name' in card}
+        if user_card.get('生日', '').strip():
+            user_card['生日'] = user_card['生日'].split()[0]
+        user_card['IP'] = user_card.pop('IP属地', '').replace(
+            "（IP属地以运营商信息为准，如有问题可咨询客服）", "")
+        return user_card
+    
+    def get_user_info(self):
+        """获取主信息"""
+        url = weibo_api_url.copy()    
+        url.args = {'containerid': f"100505{self.id}"}
+        respond_info = get_url(url)
+        js = json.loads(respond_info.content)
+        user_info = js['data']['userInfo']
+        user_info.pop('toolbar_menus', '')
+        return user_info
 
 
-    # 合并信息
-    user = user_card | user_cn | user_info
-    s = {(k, str(v)) for k, v in chain.from_iterable(
-        [user_card.items(), user_cn.items(), user_info.items()])}
-    if emp := (s - {(k, str(v)) for k, v in user.items()}):
-        console.log(emp, style='error')
-    try:
-        user = _user_info_fix(user)
-    except (KeyError, AssertionError) as e:
-        console.log(user, user_card)
-        raise e
+def get_user_by_id(uid: int):
+    up = UserParser(uid)
+    user = _user_info_fix(up.user)
     user['info_updated_at'] = pendulum.now()
     console.log(f"{user['username']} 信息已从网络获取.")
     pause(mode='page')
@@ -235,16 +286,14 @@ def _user_info_fix(user_info: dict) -> dict:
     user_info['screen_name'] = user_info['screen_name'].replace('-', '_')
 
     if '简介' in user_info:
-        u1, u2 = user_info.get('description', '').strip(), user_info.pop(
+        assert user_info.get('description', '').strip() == user_info.pop(
             '简介', '').replace('暂无简介', '').strip()
-        if u1 != u2:
-            console.log([u1, u2], style='error')
+
     if 'Tap to set alias' in user_info:
         assert user_info.get('remark', '').strip() == user_info.pop(
             'Tap to set alias', '').strip()
     if user_info.get('gender') == 'f':
-        user_info.pop('性别', '女')
-        # assert user_info.pop('性别', '女') == '女'
+        assert user_info.pop('性别', '女') == '女'
         user_info['gender'] = 'female'
     elif user_info.get('gender') == 'm':
         assert user_info.pop('性别', '男') == '男'
@@ -262,19 +311,18 @@ def _user_info_fix(user_info: dict) -> dict:
     # merge location
     keys = ['location', '地区', '所在地']
     values = [user_info.pop(k, '') for k in keys]
-    values = [v for v in values if v]
+    values = {v for v in values if v}
     if values:
-        assert len(set(values)) == 1
-        user_info[keys[0]] = values[0]
+        assert len(values) == 1
+        user_info['location'] = values.pop()
 
     # merge verified_reason
     keys = ['verified_reason', '认证', '认证信息']
     values = [user_info.pop(k, '').strip() for k in keys]
-    values = [v for v in values if v]
+    values = {v for v in values if v}
     if values:
-        if not len(set(values)) == 1:
-            console.log(set(values), style='error')
-        user_info[keys[0]] = values[0]
+        assert len(values) == 1
+        user_info['verified_reason'] = values.pop()
 
     if '生日' in user_info:
         assert ('birthday' not in user_info or
@@ -307,45 +355,4 @@ def _user_info_fix(user_info: dict) -> dict:
     return user_info
 
 
-def _parse_user_cn(respond):
-    """解析weibo.cn的内容"""
-    soup = BeautifulSoup(respond.text, 'lxml')
-    divs = soup.find_all('div')
-    info = dict()
-    for tip, c in zip(divs[:-1], divs[1:]):
-        if tip.attrs['class'] == ['tip']:
-            assert c.attrs['class'] == ['c']
-            if tip.text == '其他信息':
-                continue
-            if tip.text == '基本信息':
-                for line in str(c).split('<br/>'):
-                    if text := BeautifulSoup(line, 'lxml').text:
-                        text = text.replace('\xa0', ' ')
-                        try:
-                            key, value = re.split('[:：]', text, maxsplit=1)
-                            info[key] = value
-                        except ValueError as e:
-                            console.log(f'{text} cannot parsed', style='error')
-                            raise e
 
-            elif tip.text == '学习经历' or '工作经历':
-                education = c.text.replace('\xa0', ' ').split('·')
-                info[tip.text] = [e.strip() for e in education if e]
-            else:
-                info[tip.text] = c.text.replace('\xa0', ' ')
-
-    if info.get('生日') == '01-01':
-        info.pop('生日')
-    return info
-
-
-def _parse_user_card(respond_card):
-    user_card = respond_card.json()['data']['cards']
-    user_card = sum([c['card_group'] for c in user_card], [])
-    user_card = {card['item_name']: card['item_content']
-                 for card in user_card if 'item_name' in card}
-    if user_card.get('生日', '').strip():
-        user_card['生日'] = user_card['生日'].split()[0]
-    user_card['IP'] = user_card.pop('IP属地', '').replace(
-        "（IP属地以运营商信息为准，如有问题可咨询客服）", "")
-    return user_card
