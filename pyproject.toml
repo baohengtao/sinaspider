@@ -13,7 +13,7 @@ requires-python = "~=3.10"
 dependencies=[
     "requests", "pendulum", 'rich', 
     'python-baseconv', 'PyExifTool==0.4.11', "lxml", 
-    'keyring', 'furl', 'requests-cache',
+    'keyring', 'furl', 'requests-cache==0.9.3',
     'typer', 'bs4', 'psycopg2', 'peewee'
 ]
 

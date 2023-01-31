@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import pendulum
 from rich.prompt import Prompt, Confirm, IntPrompt
 from sinaspider import console, get_progress
@@ -112,7 +111,8 @@ def schedule(download_dir: Path = default_path,
                 console.print_exception(show_locals=True)
             raise
         finally:
-            log_file = f"sinaspider_{pendulum.now().format('YY-MM-DD_HHmmss')}.html"
+            time_format = pendulum.now().format('YY-MM-DD_HHmmss')
+            log_file = f"sinaspider_{time_format}.html"
             console.log(f'Saving log to {download_dir / log_file}')
             console.save_html(download_dir / log_file, theme=MONOKAI)
 

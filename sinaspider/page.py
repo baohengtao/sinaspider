@@ -2,7 +2,7 @@ import itertools
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
-from typing import Generator
+from typing import Iterator
 
 import pendulum
 from tqdm import trange
@@ -14,7 +14,8 @@ from sinaspider.parser import parse_weibo
 
 def get_friends_pages(uid):
     for page in itertools.count():
-        url = f"https://api.weibo.cn/2/friendships/bilateral?c=weicoabroad&page={page}&s=c773e7e0&uid={uid}"
+        url = ("https://api.weibo.cn/2/friendships/bilateral?"
+               f"c=weicoabroad&page={page}&s=c773e7e0&uid={uid}")
         js = get_url(url).json()
         if not (users := js['users']):
             break
@@ -74,7 +75,8 @@ def _yield_from_cards(cards):
 
 def get_liked_pages(uid: int, since: datetime):
     from sinaspider.helper import normalize_str
-    url = f'https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0'
+    url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&'
+           f'containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0')
     for page in itertools.count(start=1):
         while (r := get_url(url % page)).status_code != 200:
             console.log(
@@ -83,7 +85,9 @@ def get_liked_pages(uid: int, since: datetime):
             sleep(60)
         js = r.json()
         if (cards := js['cards']) is None:
-            console.log(f"js[cards] is None for [link={r.url}]r.url[/link]", style='error')
+            console.log(
+                f"js[cards] is None for [link={r.url}]r.url[/link]",
+                style='error')
             break
         mblogs = _yield_from_cards(cards)
         for weibo_info in mblogs:
@@ -96,7 +100,8 @@ def get_liked_pages(uid: int, since: datetime):
                     continue
                 if weibo['created_at'] < since:
                     console.log(
-                        f"时间{weibo['created_at']:%y-%m-%d} 在 {since:%y-%m-%d}之前, 获取完毕")
+                        f"时间 {weibo['created_at']:%y-%m-%d}"
+                        "在 {since:%y-%m-%d} 之前, 获取完毕")
                     return
                 if check_liked(weibo['id']):
                     yield weibo
@@ -107,7 +112,7 @@ def get_liked_pages(uid: int, since: datetime):
 def get_weibo_pages(containerid: str,
                     start_page: int = 1,
                     since: int | str | datetime = '1970-01-01',
-                    ) -> Generator[dict, None, None]:
+                    ) -> Iterator:
     """
     爬取某一 containerid 类型的所有微博
 
@@ -166,7 +171,7 @@ def get_weibo_pages(containerid: str,
             pause(mode='page')
 
 
-def get_follow_pages(containerid: str | int, cache_days=30) -> Generator[dict, None, None]:
+def get_follow_pages(containerid: str | int, cache_days=30) -> Iterator:
     """
     获取关注列表
 

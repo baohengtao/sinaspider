@@ -97,8 +97,11 @@ class User(BaseModel):
             user_dict = get_user_by_id(user_id)
             for k, v in user_dict.items():
                 setattr(user, k, v)
+            if extra_fields := set(user_dict) - set(cls._meta.fields):
+                console.log(f'some fields not saved to model: {extra_fields}', style='error')
             user.save(force_insert=force_insert)
-        return user
+        
+        return cls.get_by_id(user_id)
 
     def timeline(self, start_page=1,
                  since: int | str | datetime = "1970-01-01"):

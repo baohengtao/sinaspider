@@ -1,7 +1,5 @@
 import json
-from json.decoder import JSONDecodeError
 import re
-from itertools import chain
 from typing import Optional
 from typing import Union
 
@@ -49,7 +47,8 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     soup = BeautifulSoup(text, 'html.parser')
     if soup.title.text == '微博-出错了':
         raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
-    # rec = re.compile(r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
+    # rec = re.compile(
+        # r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
     rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] | {};', re.DOTALL)
 
     html = rec.match(text)
@@ -191,21 +190,56 @@ class UserParser:
         self._user = None
 
     @property
-    def user(self):
+    def user(self) -> dict:
         if self._user is not None:
             return self._user
         user_cn = self.get_user_cn()
-        user_card = self.get_user_card()
         user_info = self.get_user_info()
-        user = user_cn | user_card | user_info
-        s = {(k, str(v)) for k, v in chain.from_iterable(
-            [user_card.items(), user_cn.items(), user_info.items()])}
-        s -= {(k, str(v)) for k, v in user.items()}
-        assert not s
-        self._user = user
-        return user
 
-    def get_user_cn(self):
+        assert user_cn.pop('昵称') == user_info['screen_name']
+        assert user_cn.pop('备注') == user_info.get('remark', '')
+        assert user_cn.pop('简介') == user_info['description']
+        assert user_cn.pop('认证', None) == user_info.get('verified_reason')
+
+        cn2en = [('生日', 'birthday'), ('学习经历', 'education'),
+                 ('家乡', 'hometown'), ('所在地', 'location')]
+        for key_cn, key_en in cn2en:
+            assert key_en not in user_info
+            if key_cn in user_cn:
+                user_info[key_en] = user_cn.pop(key_cn)
+
+        match gender := user_info['gender']:
+            case 'f':
+                assert user_cn.pop('性别') == '女'
+                user_info['gender'] = 'female'
+            case 'm':
+                assert user_cn.pop('性别') == '男'
+                user_info['gender'] = 'male'
+            case _:
+                raise ValueError(gender)
+
+        for k, v in user_cn.items():
+            assert user_info.setdefault(k, v) == v
+        self._user = user_info
+
+        return self._user
+
+    def get_user_cn(self) -> dict:
+        user_cn = self._fetch_user_cn()
+        user_card = self._fetch_user_card()
+        assert user_card['所在地'] == user_cn.pop('地区')
+        if (birthday := user_cn.pop('生日', '')) != '0001-00-00':
+            assert birthday in user_card.get('生日', '')
+        edu_str = " ".join(user_cn.get('学习经历') or [])
+        for key in ['大学', '海外', '高中', '初中', '中专技校', '小学']:
+            assert user_card.pop(key, '') in edu_str
+        for k, v in user_card.items():
+            assert user_cn.setdefault(k, v) == v
+        if user_cn['简介'] == '暂无简介':
+            user_cn['简介'] = ''
+        return user_cn
+
+    def _fetch_user_cn(self) -> dict:
         """获取来自cn的信息"""
         respond = get_url(f'https://weibo.cn/{self.id}/info')
 
@@ -229,44 +263,50 @@ class UserParser:
                     key, value = re.split('[:：]', line, maxsplit=1)
                     info[key] = value
             elif tip.text in ['学习经历', '工作经历']:
-                info[tip.text] = c.text.strip('·').replace('\xa0', ' ').split('·')
+                info[tip.text] = c.text.strip(
+                    '·').replace('\xa0', ' ').split('·')
             else:
                 assert tip.text == '其他信息'
-
-        if info.get('生日') == '01-01':
-            info.pop('生日')
+        assert info.get('认证') == info.pop('认证信息', None)
         return info
 
-    def get_user_card(self):
+    def _fetch_user_card(self) -> dict:
         """获取来自m.weibo.com的信息"""
         url = weibo_api_url.copy()
         url.args = {'containerid': f"230283{self.id}_-_INFO"}
-        respond_card = get_url(url)
-        user_card = respond_card.json()['data']['cards']
+        js = get_url(url).json()
+        user_card = js['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
         user_card = {card['item_name']: card['item_content']
                      for card in user_card if 'item_name' in card}
-        if user_card.get('生日', '').strip():
-            user_card['生日'] = user_card['生日'].split()[0]
-        user_card['IP'] = user_card.pop('IP属地', '').replace(
-            "（IP属地以运营商信息为准，如有问题可咨询客服）", "")
+        user_card['备注'] = user_card.pop('Tap to set alias', '')
+
+        if ip := user_card.pop('IP属地', ""):
+            user_card['IP'] = ip.replace("（IP属地以运营商信息为准，如有问题可咨询客服）", "")
         return user_card
 
-    def get_user_info(self):
+    def get_user_info(self) -> dict:
         """获取主信息"""
         url = weibo_api_url.copy()
         url.args = {'containerid': f"100505{self.id}"}
-        respond_info = get_url(url)
-        js = json.loads(respond_info.content)
+        js = get_url(url).json()
         user_info = js['data']['userInfo']
-        user_info.pop('toolbar_menus', '')
+        keys = ['cover_image_phone', 'profile_image_url',
+                'profile_url', 'toolbar_menus']
+        for key in keys:
+            user_info.pop(key)
+        assert user_info['followers_count'] == user_info.pop(
+            'followers_count_str')
         return user_info
 
 
 def get_user_by_id(uid: int):
-    up = UserParser(uid)
-    user = _user_info_fix(up.user)
-    user['info_updated_at'] = pendulum.now()
+    user = UserParser(uid).user
+    user = {k: normalize_str(v) for k, v in user.items()}
+    assert 'homepage' not in user
+    assert 'username' not in user
+    user['username'] = user.pop('remark', '') or user['screen_name']
+    user['homepage'] = f'https://weibo.com/u/{user["id"]}'
     console.log(f"{user['username']} 信息已从网络获取.")
     pause(mode='page')
     return user
@@ -275,75 +315,18 @@ def get_user_by_id(uid: int):
 def _user_info_fix(user_info: dict) -> dict:
     """清洗用户信息."""
     user_info = user_info.copy()
-    if '昵称' in user_info:
-        assert user_info.get('screen_name', '') == user_info.pop('昵称', '')
     user_info['screen_name'] = user_info['screen_name'].replace('-', '_')
 
-    if '简介' in user_info:
-        assert user_info.get('description', '').strip() == user_info.pop(
-            '简介', '').replace('暂无简介', '').strip()
-
-    if 'Tap to set alias' in user_info:
-        assert user_info.get('remark', '').strip() == user_info.pop(
-            'Tap to set alias', '').strip()
-    if user_info.get('gender') == 'f':
-        assert user_info.pop('性别', '女') == '女'
-        user_info['gender'] = 'female'
-    elif user_info.get('gender') == 'm':
-        assert user_info.pop('性别', '男') == '男'
-        user_info['gender'] = 'male'
-
-    if 'followers_count_str' in user_info:
-        assert user_info.pop('followers_count_str') == str(
-            user_info['followers_count'])
-
-    # pop items
-    keys = ['cover_image_phone', 'profile_image_url', 'profile_url']
-    for key in keys:
-        user_info.pop(key, '')
-
-    # merge location
-    keys = ['location', '地区', '所在地']
-    values = [user_info.pop(k, '') for k in keys]
-    values = {v for v in values if v}
-    if values:
-        assert len(values) == 1
-        user_info['location'] = values.pop()
-
-    # merge verified_reason
-    keys = ['verified_reason', '认证', '认证信息']
-    values = [user_info.pop(k, '').strip() for k in keys]
-    values = {v for v in values if v}
-    if values:
-        assert len(values) == 1
-        user_info['verified_reason'] = values.pop()
-
-    if '生日' in user_info:
-        assert ('birthday' not in user_info or
-                user_info['birthday'] == user_info['生日'])
-        user_info['birthday'] = user_info.pop('生日')
     if birthday := user_info.get('birthday', '').strip():
         birthday = birthday.split()[0].strip()
-        if birthday == '0001-00-00':
-            pass
-        elif re.match(r'\d{4}-\d{2}-\d{2}', birthday):
+        if re.match(r'\d{4}-\d{2}-\d{2}', birthday):
             try:
                 age = pendulum.parse(birthday).diff().years
                 user_info['age'] = age
             except ParserError:
                 console.log(f'Cannot parse birthday {birthday}', style='error')
             user_info['birthday'] = birthday
-    if education := user_info.pop('学习经历', ''):
-        assert 'education' not in user_info
-        for key in ['大学', '海外', '高中', '初中', '中专技校', '小学']:
-            assert user_info.pop(key, '') in ' '.join(education)
-        user_info['education'] = education
 
-    user_info['homepage'] = f'https://weibo.com/u/{user_info["id"]}'
     user_info = {k: v for k, v in user_info.items() if v or v == 0}
-    user_info['hometown'] = user_info.pop('家乡', '')
-    user_info = {k: normalize_str(v) for k, v in user_info.items()}
-    user_info['username'] = user_info.pop(
-        'remark', None) or user_info.pop('screen_name')
 
     return user_info
