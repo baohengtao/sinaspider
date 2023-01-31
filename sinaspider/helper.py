@@ -3,7 +3,6 @@ import random
 import time
 from pathlib import Path
 from time import sleep
-from typing import Optional
 
 import keyring
 from baseconv import base62
@@ -14,7 +13,9 @@ from requests_cache import CachedSession
 from sinaspider import console
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
-user_agent = 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Mobile Safari/537.36'
+user_agent = ('Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
+              'AppleWebKit/537.36 (KHTML, like Gecko) '
+              'Chrome/100.0.4896.75 Mobile Safari/537.36')
 headers = {
     "User-Agent": user_agent,
     "Cookie": keyring.get_password('sinaspider', 'cookie'),
@@ -46,6 +47,7 @@ def get_url(url, expire_after=0):
                 f"retry[link={url}]{url}[/link]...", style='error')
             sleep(period)
 
+    session.close()
     return r
 
 

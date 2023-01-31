@@ -2,8 +2,10 @@ import json
 import re
 from typing import Optional
 from typing import Union
+import warnings
 
 import pendulum
+import bs4
 from bs4 import BeautifulSoup
 from pendulum.parsing.exceptions import ParserError
 from sinaspider import console
@@ -49,7 +51,7 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
         raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
     # rec = re.compile(
         # r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
-    rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] | {};', re.DOTALL)
+    rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
 
     html = rec.match(text)
     html = html.groups(1)[0]
@@ -228,7 +230,8 @@ class UserParser:
         user_cn = self._fetch_user_cn()
         user_card = self._fetch_user_card()
         assert user_card['所在地'] == user_cn.pop('地区')
-        if (birthday := user_cn.pop('生日', '')) != '0001-00-00':
+        birthday = user_cn.pop('生日', '')
+        if birthday not in ['0001-00-00', '01-01']:
             assert birthday in user_card.get('生日', '')
         edu_str = " ".join(user_cn.get('学习经历') or [])
         for key in ['大学', '海外', '高中', '初中', '中专技校', '小学']:
@@ -241,9 +244,13 @@ class UserParser:
 
     def _fetch_user_cn(self) -> dict:
         """获取来自cn的信息"""
-        respond = get_url(f'https://weibo.cn/{self.id}/info')
+        r = get_url(f'https://weibo.cn/{self.id}/info')
 
-        soup = BeautifulSoup(respond.text, 'lxml')
+        with warnings.catch_warnings(
+            action='ignore',
+            category=bs4.XMLParsedAsHTMLWarning
+        ):
+            soup = BeautifulSoup(r.text, 'lxml')
         if div := soup.body.find('div', class_='ps'):
             if div.text == 'User does not exists!':
                 raise UserNotFoundError(f"{self.id}: {div.text}")

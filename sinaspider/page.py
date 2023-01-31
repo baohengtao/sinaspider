@@ -1,10 +1,12 @@
 import itertools
 from datetime import datetime, timedelta
 from pathlib import Path
+import warnings
 from time import sleep
 from typing import Iterator
 
 import pendulum
+import bs4
 from tqdm import trange
 
 from sinaspider import console
@@ -73,7 +75,7 @@ def _yield_from_cards(cards):
             yield from _yield_from_cards(card['card_group'])
 
 
-def get_liked_pages(uid: int, since: datetime):
+def get_liked_pages(uid: int, since: datetime) -> Iterator[dict]:
     from sinaspider.helper import normalize_str
     url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&'
            f'containerid=230869{uid}-_mix-_like-pic&page=%s&s=c773e7e0')
@@ -93,7 +95,13 @@ def get_liked_pages(uid: int, since: datetime):
         for weibo_info in mblogs:
             if weibo_info.get('deleted') == '1':
                 continue
-            weibo = parse_weibo(weibo_info, offline=True)
+
+            with warnings.catch_warnings(
+                    action='ignore',
+                    category=bs4.MarkupResemblesLocatorWarning
+                    ):
+                weibo = parse_weibo(weibo_info, offline=True)
+
             if "photos" in weibo and weibo['gender'] != 'm':
                 followers_count = int(normalize_str(weibo['followers_count']))
                 if followers_count > 20000 or followers_count < 500:
@@ -101,7 +109,7 @@ def get_liked_pages(uid: int, since: datetime):
                 if weibo['created_at'] < since:
                     console.log(
                         f"时间 {weibo['created_at']:%y-%m-%d}"
-                        "在 {since:%y-%m-%d} 之前, 获取完毕")
+                        f"在 {since:%y-%m-%d} 之前, 获取完毕")
                     return
                 if check_liked(weibo['id']):
                     yield weibo
@@ -110,9 +118,9 @@ def get_liked_pages(uid: int, since: datetime):
 
 
 def get_weibo_pages(containerid: str,
+                    since: datetime = pendulum.from_timestamp(0),
                     start_page: int = 1,
-                    since: int | str | datetime = '1970-01-01',
-                    ) -> Iterator:
+                    ) -> Iterator[dict]:
     """
     爬取某一 containerid 类型的所有微博
 
@@ -127,13 +135,7 @@ def get_weibo_pages(containerid: str,
     Yields:
         Generator[Weibo]: 生成微博实例
     """
-    if isinstance(since, int):
-        assert since > 0
-        since = pendulum.now().subtract(days=since)
-    elif isinstance(since, str):
-        since = pendulum.parse(since)
-    else:
-        since = pendulum.instance(since)
+    since = pendulum.instance(since)
     console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
     url = weibo_api_url.copy()
     url.args = {'containerid': containerid}

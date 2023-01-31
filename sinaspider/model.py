@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Generator, Iterator
+from typing import Optional, Iterator
 
 import pendulum
 from peewee import JOIN
@@ -33,7 +33,8 @@ class BaseModel(Model):
         database = database
 
     def __repr__(self):
-        return "\n".join(f'{k}: {v}' for k, v in model_to_dict(self, recurse=False).items())
+        model = model_to_dict(self, recurse=False)
+        return "\n".join(f'{k}: {v}' for k, v in model.items())
 
 
 class User(BaseModel):
@@ -98,14 +99,15 @@ class User(BaseModel):
             for k, v in user_dict.items():
                 setattr(user, k, v)
             if extra_fields := set(user_dict) - set(cls._meta.fields):
-                console.log(f'some fields not saved to model: {extra_fields}', style='error')
+                console.log(
+                    f'some fields not saved to model: {extra_fields}',
+                    style='error')
             user.save(force_insert=force_insert)
-        
+
         return cls.get_by_id(user_id)
 
-    def timeline(self, start_page=1,
-                 since: int | str | datetime = "1970-01-01"):
-        yield from get_weibo_pages(f"107603{self.id}", start_page, since)
+    def timeline(self, since: datetime, start_page=1):
+        yield from get_weibo_pages(f"107603{self.id}", since, start_page)
 
     def liked_photo(self, since: datetime):
         yield from get_liked_pages(self.id, since)
@@ -171,6 +173,7 @@ class Weibo(BaseModel):
 
     def medias(self, filepath=None):
         photos = self.photos or {}
+        prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
         for sn, urls in photos.items():
             for url in filter(bool, urls):
                 *_, ext = url.split("/")[-1].split(".")
@@ -178,7 +181,7 @@ class Weibo(BaseModel):
                     ext = "jpg"
                 yield {
                     "url": url,
-                    "filename": f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}_{sn}.{ext}",
+                    "filename": f"{prefix}_{sn}.{ext}",
                     "xmp_info": self.gen_meta(sn=sn, url=url),
                     "filepath": filepath,
                 }
@@ -189,7 +192,7 @@ class Weibo(BaseModel):
             else:
                 yield {
                     "url": url,
-                    "filename": f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}.mp4",
+                    "filename": f"{prefix}.mp4",
                     "xmp_info": self.gen_meta(url=url),
                     "filepath": filepath,
                 }
@@ -303,7 +306,8 @@ class UserConfig(BaseModel):
             return self.visible
         last_page = self.user.statuses_count // 20
         while True:
-            weibos = get_weibo_pages(f"107603{self.user_id}", last_page)
+            weibos = get_weibo_pages(
+                f"107603{self.user_id}", start_page=last_page)
             try:
                 weibo = next(weibos)
             except StopIteration:
@@ -335,7 +339,7 @@ class UserConfig(BaseModel):
             User.select(User)
             .join(Weibo, JOIN.LEFT_OUTER)
             .where(Weibo.created_at > pendulum.now().subtract(days=days))
-            .where(Weibo.photos != None)
+            .where(Weibo.photos)
             .where(User.id == self.user_id)
             .count()
         )
@@ -462,7 +466,7 @@ class LikedWeibo(BaseModel):
 database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])
 
 
-def save_weibo(weibos: Iterator[dict], download_dir: str | Path) -> Generator[dict, None, None]:
+def save_weibo(weibos: Iterator[dict], download_dir: Path) -> Iterator[dict]:
     """
     Save weibo to database and return media info
     :param weibos: Iterator of weibo dict
@@ -494,7 +498,8 @@ def save_weibo(weibos: Iterator[dict], download_dir: str | Path) -> Generator[di
 
 def save_liked_weibo(weibos: Iterator[dict],
                      liked_by: int,
-                     download_dir: Path) -> Generator[dict, None, None]:
+                     download_dir: Path) -> Iterator[dict]:
+    liked_by_str = User.from_id(liked_by).username
     for weibo_dict in weibos:
         weibo = Weibo(**weibo_dict)
         pic_num = weibo_dict['pic_num']
@@ -516,13 +521,14 @@ def save_liked_weibo(weibos: Iterator[dict],
         console.log(weibo)
         console.log(
             f"Downloading {pic_num} files to {filepath}..\n")
+        prefix = f"{liked_by_str}_{weibo.username}_{weibo.id}"
         for sn, (url, _) in weibo.photos.items():
             *_, ext = url.split("/")[-1].split(".")
             if not _:
                 ext = "jpg"
             yield {
                 "url": url,
-                "filename": f"{User.from_id(liked_by).username}_{weibo.username}_{weibo.id}_{sn}.{ext}",
+                "filename": f"{prefix}_{sn}.{ext}",
                 "xmp_info": weibo.gen_meta(sn),
                 "filepath": filepath
             }
