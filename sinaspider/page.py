@@ -96,11 +96,7 @@ def get_liked_pages(uid: int, since: datetime) -> Iterator[dict]:
             if weibo_info.get('deleted') == '1':
                 continue
 
-            with warnings.catch_warnings(
-                    action='ignore',
-                    category=bs4.MarkupResemblesLocatorWarning
-                    ):
-                weibo = parse_weibo(weibo_info, offline=True)
+            weibo = parse_weibo(weibo_info, offline=True)
 
             if "photos" in weibo and weibo['gender'] != 'm':
                 followers_count = int(normalize_str(weibo['followers_count']))

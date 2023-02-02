@@ -11,7 +11,7 @@ classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
 requires-python = "~=3.10"
 dependencies=[
-    "requests", "pendulum", 'rich', 
+    "requests", "pendulum", 'rich==12.5.1', 
     'python-baseconv', 'PyExifTool==0.4.11', "lxml", 
     'keyring', 'furl', 'requests-cache==0.9.3',
     'typer', 'bs4', 'psycopg2', 'peewee'

@@ -40,7 +40,7 @@ class BaseModel(Model):
 class User(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
     username = TextField()
-    remark = TextField(null=True)
+    screen_name = TextField()
     following = BooleanField()
     birthday = TextField(null=True)
     age = IntegerField(null=True)
@@ -94,15 +94,16 @@ class User(BaseModel):
             user = User()
         else:
             force_insert = False
-        if update:
-            user_dict = get_user_by_id(user_id)
-            for k, v in user_dict.items():
-                setattr(user, k, v)
-            if extra_fields := set(user_dict) - set(cls._meta.fields):
-                console.log(
-                    f'some fields not saved to model: {extra_fields}',
-                    style='error')
-            user.save(force_insert=force_insert)
+        if not update:
+            return user
+        user_dict = get_user_by_id(user_id)
+        for k, v in user_dict.items():
+            setattr(user, k, v)
+        if extra_fields := set(user_dict) - set(cls._meta.fields):
+            console.log(
+                f'some fields not saved to model: {extra_fields}',
+                style='error')
+        user.save(force_insert=force_insert)
 
         return cls.get_by_id(user_id)
 
@@ -296,7 +297,6 @@ class UserConfig(BaseModel):
                 continue
             else:
                 setattr(user_config, k, v)
-        user_config.username = user.remark or user.username
         if save:
             user_config.save()
         return user_config
@@ -431,12 +431,10 @@ class Artist(BaseModel):
             artist.folder = "new"
             artist.added_at = pendulum.now()
         fields = set(cls._meta.fields) - {"id"}
+        fields &= set(User._meta.fields)
         for k in fields:
-            if v := getattr(user, k, None):
+            if v := getattr(user, k):
                 setattr(artist, k, v)
-        artist.username = user.remark or user.username.lstrip("-")
-        if artist.username == artist.realname:
-            artist.realname = None
         artist.save()
         return artist
 

@@ -156,7 +156,11 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
         if not text.strip():
             return {}
         at_list, topics_list = [], []
-        soup = BeautifulSoup(text, 'html.parser')
+        with warnings.catch_warnings(
+            action='ignore',
+            category=bs4.MarkupResemblesLocatorWarning
+        ):
+            soup = BeautifulSoup(text, 'html.parser')
 
         for a in soup.find_all('a'):
             at_sign, user = a.text[0], a.text[1:]
