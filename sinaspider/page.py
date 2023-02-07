@@ -1,12 +1,10 @@
 import itertools
 from datetime import datetime, timedelta
 from pathlib import Path
-import warnings
 from time import sleep
 from typing import Iterator
 
 import pendulum
-import bs4
 from tqdm import trange
 
 from sinaspider import console

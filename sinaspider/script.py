@@ -43,45 +43,40 @@ def user_continue(user: str, start_page: int,
 
 @app.command(help="Loop through users in database and fetch weibos")
 def loop(download_dir: Path = default_path, new_user_only: bool = False):
-    import time
+
     users = UserConfig.select().order_by(UserConfig.weibo_update_at)
     if new_user_only:
-        users = [uc for uc in users if uc.weibo_update_at <
+        users = [uc.user_id for uc in users if uc.weibo_update_at <
                  pendulum.now().subtract(years=1)]
     else:
-        users = [uc for uc in users if uc.need_fetch]
+        users = [uc.user_id for uc in users if uc.need_fetch]
     with get_progress() as progress:
-        for i, uc in progress.track(enumerate(users, start=1),
-                                    total=len(users)):
-            try:
-                uc.fetch_weibo(download_dir)
-                console.log(f'[yellow]第{i}个用户获取完毕')
-            except KeyError:
-                continue
-            for flag in [20, 10, 5]:
-                if i % flag == 0:
-                    to_sleep = 3 * i
-                    break
-            else:
-                to_sleep = 5
-                time.sleep(5)
-            console.log(f'sleep {to_sleep}...')
-            time.sleep(to_sleep)
+        for i, uid in progress.track(enumerate(users, start=1)):
+            uc = UserConfig.from_id(user_id=uid)
+            uc.fetch_weibo(download_dir)
+            console.log(f'[yellow]第{i}个用户获取完毕')
 
 
 @app.command(help='Update users from timeline')
 def timeline(download_dir: Path = default_path,
-             since=None, days: float = None):
+             since=None, days: float = None,
+             dry_run: bool = False):
     from sinaspider.page import get_timeline_pages
     if since is None:
         since = pendulum.now().subtract(days=days)
     for status in get_timeline_pages(since=since):
-        user = UserConfig.get_or_none(user_id=status['user']['id'])
-        if not user:
+        uid = status['user']['id']
+        if not (uc := UserConfig.get_or_none(user_id=uid)):
             continue
-        created_at = pendulum.parse(status['created_at'], strict=False)
-        if user.weibo_fetch and user.weibo_update_at < created_at:
-            user.fetch_weibo(download_dir)
+        created_at = pendulum.from_format(
+            status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+        update_at = uc.weibo_update_at
+        if uc.weibo_fetch and update_at < created_at:
+            uc = UserConfig.from_id(uid)
+            uc.fetch_weibo(download_dir)
+            if dry_run:
+                uc.weibo_update_at = update_at
+                uc.save()
 
 
 @app.command(help='Schedule timeline command')

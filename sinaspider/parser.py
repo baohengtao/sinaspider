@@ -83,7 +83,8 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             else:
                 is_pinned = False
             user = self.card['user']
-            created_at = pendulum.parse(self.card['created_at'], strict=False)
+            created_at = pendulum.from_format(
+                self.card['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             assert created_at.is_local()
             self.wb.update(
                 user_id=(user_id := user['id']),

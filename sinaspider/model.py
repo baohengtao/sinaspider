@@ -244,7 +244,7 @@ class Weibo(BaseModel):
 
 
 class UserConfig(BaseModel):
-    user = ForeignKeyField(User, unique=True)
+    user = ForeignKeyField(User, unique=True, backref='config')
     username = CharField()
     age = IntegerField(index=True, null=True)
     weibo_fetch = BooleanField(index=True, default=True)
@@ -360,7 +360,6 @@ class UserConfig(BaseModel):
         since = pendulum.instance(self.weibo_update_at)
         console.rule(f"开始获取 {self.username} (update_at:{since:%y-%m-%d})")
 
-        UserConfig.from_id(self.user_id)
         self.set_visibility()
         now = pendulum.now()
         weibos = self.user.timeline(since=since, start_page=start_page)
@@ -403,7 +402,7 @@ class UserConfig(BaseModel):
 class Artist(BaseModel):
     username = CharField(index=True)
     realname = CharField(null=True)
-    user = ForeignKeyField(User, unique=True)
+    user = ForeignKeyField(User, unique=True, backref='artist')
     age = IntegerField(index=True, null=True)
     folder = CharField(index=True, null=True)
     photos_num = IntegerField(default=0)
@@ -524,9 +523,12 @@ def save_liked_weibo(weibos: Iterator[dict],
             *_, ext = url.split("/")[-1].split(".")
             if not _:
                 ext = "jpg"
+
+            xmp_info = weibo.gen_meta(sn)
+            xmp_info['XMP:Title'] = weibo.username
             yield {
                 "url": url,
                 "filename": f"{prefix}_{sn}.{ext}",
-                "xmp_info": weibo.gen_meta(sn),
+                "xmp_info": xmp_info,
                 "filepath": filepath
             }
