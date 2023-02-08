@@ -74,10 +74,8 @@ class User(BaseModel):
     标签 = TextField(null=True)
     注册时间 = TextField(null=True)
     阳光信用 = TextField(null=True)
-    审核时间 = TextField(null=True)
-    电话 = TextField(null=True)
-    邮箱 = TextField(null=True)
     IP = TextField(null=True)
+    svip = IntegerField(null=True)
 
     def __repr__(self):
         return super().__repr__()
@@ -87,6 +85,7 @@ class User(BaseModel):
 
     @classmethod
     def from_id(cls, user_id: int, update=False) -> Optional["User"]:
+        # TODO don't update username when user is not following.
         user_id = normalize_user_id(user_id)
         if (user := User.get_or_none(id=user_id)) is None:
             force_insert = True
@@ -100,9 +99,8 @@ class User(BaseModel):
         for k, v in user_dict.items():
             setattr(user, k, v)
         if extra_fields := set(user_dict) - set(cls._meta.fields):
-            console.log(
-                f'some fields not saved to model: {extra_fields}',
-                style='error')
+            extra_info = {k: user_dict[k] for k in extra_fields}
+            raise ValueError(f'some fields not saved to model: {extra_info}')
         user.save(force_insert=force_insert)
 
         return cls.get_by_id(user_id)
@@ -524,8 +522,9 @@ def save_liked_weibo(weibos: Iterator[dict],
             if not _:
                 ext = "jpg"
 
-            xmp_info = weibo.gen_meta(sn)
+            xmp_info = weibo.gen_meta(sn, url=url)
             xmp_info['XMP:Title'] = weibo.username
+            xmp_info['XMP:Description'] = xmp_info['XMP:BlogURL']
             yield {
                 "url": url,
                 "filename": f"{prefix}_{sn}.{ext}",

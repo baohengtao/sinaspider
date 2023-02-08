@@ -149,9 +149,11 @@ def get_weibo_pages(containerid: str,
                   for card in js['data']['cards'] if card['card_type'] == 9]
 
         for weibo_info in mblogs:
-            # if not (weibo := parse_weibo(weibo_info)):
-            #     continue
             weibo = parse_weibo(weibo_info)
+            if weibo['is_comment']:
+                console.log(f'发现评论过的微博， 略过...{weibo}',
+                            style='warning')
+                continue
             if (created_at := weibo['created_at']) < since:
                 if weibo['is_pinned']:
                     console.log("略过置顶微博...")

@@ -17,10 +17,9 @@ default_path = Path.home() / 'Pictures/Sinaspider'
 @app.command(help='Add user to database of users whom we want to fetch from')
 def user(download_dir: str = default_path):
     while user_id := Prompt.ask('请输入用户名:smile:'):
-        if not (user_id := normalize_user_id(user_id)):
-            continue
+        user_id = normalize_user_id(user_id)
         uc = UserConfig.from_id(user_id, save=False)
-        if uc_in_db := UserConfig.get_or_none(UserConfig.user_id == user_id):
+        if uc_in_db := UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{uc.username}已在列表中')
         uc.weibo_fetch = Confirm.ask(f"是否获取{uc.username}的微博？", default=True)
         if uc.weibo_fetch or uc_in_db:
@@ -51,10 +50,9 @@ def loop(download_dir: Path = default_path, new_user_only: bool = False):
     else:
         users = [uc.user_id for uc in users if uc.need_fetch]
     with get_progress() as progress:
-        for i, uid in progress.track(enumerate(users, start=1)):
+        for uid in progress.track(users):
             uc = UserConfig.from_id(user_id=uid)
             uc.fetch_weibo(download_dir)
-            console.log(f'[yellow]第{i}个用户获取完毕')
 
 
 @app.command(help='Update users from timeline')

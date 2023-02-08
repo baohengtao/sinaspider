@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from typing import Optional
 from typing import Union
 import warnings
@@ -78,10 +79,9 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
         def basic_info(self):
-            if self.card.get('title', {}).get('text') == '置顶':
-                is_pinned = True
-            else:
-                is_pinned = False
+            title = self.card.get('title', {}).get('text', '')
+            is_pinned = title == '置顶'
+            is_comment = '评论过的微博' in title
             user = self.card['user']
             created_at = pendulum.from_format(
                 self.card['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
@@ -98,6 +98,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 created_at=created_at,
                 source=self.card['source'],
                 is_pinned=is_pinned,
+                is_comment=is_comment,
                 retweeted=self.card.get('retweeted_status', {}).get('bid'),
                 pic_num=self.card['pic_num']
             )
@@ -232,6 +233,7 @@ class UserParser:
         return self._user
 
     def get_user_cn(self) -> dict:
+        # TODO: parse birthday
         user_cn = self._fetch_user_cn()
         user_card = self._fetch_user_card()
         assert user_card['所在地'] == user_cn.pop('地区')
@@ -301,7 +303,10 @@ class UserParser:
         """获取主信息"""
         url = weibo_api_url.copy()
         url.args = {'containerid': f"100505{self.id}"}
-        js = get_url(url).json()
+        while not (js := get_url(url).json())['ok']:
+            console.log(
+                f'not js[ok] for {url}, sleeping 60 secs...', style='error')
+            time.sleep(60)
         user_info = js['data']['userInfo']
         keys = ['cover_image_phone', 'profile_image_url',
                 'profile_url', 'toolbar_menus']
