@@ -52,13 +52,9 @@ def get_url(url, expire_after=0):
 
 
 def write_xmp(tags, img):
-    import exiftool
-    with exiftool.ExifTool() as et:
-        et.set_tags(tags, str(img))
-        try:
-            Path(img).with_name(Path(img).name + '_original').unlink()
-        except FileNotFoundError:
-            pass
+    from exiftool import ExifToolHelper
+    with ExifToolHelper() as et:
+        et.set_tags(img, tags, params=['-overwrite_original'])
 
 
 def convert_user_nick_to_id(users: str):
