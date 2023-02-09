@@ -85,7 +85,6 @@ class User(BaseModel):
 
     @classmethod
     def from_id(cls, user_id: int, update=False) -> Optional["User"]:
-        # TODO don't update username when user is not following.
         user_id = normalize_user_id(user_id)
         if (user := User.get_or_none(id=user_id)) is None:
             force_insert = True
@@ -98,6 +97,7 @@ class User(BaseModel):
         user_dict = get_user_by_id(user_id)
         for k, v in user_dict.items():
             setattr(user, k, v)
+        user.username = user.username or user.screen_name
         if extra_fields := set(user_dict) - set(cls._meta.fields):
             extra_info = {k: user_dict[k] for k in extra_fields}
             raise ValueError(f'some fields not saved to model: {extra_info}')

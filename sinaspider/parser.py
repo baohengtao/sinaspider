@@ -322,9 +322,10 @@ def get_user_by_id(uid: int):
     user = {k: normalize_str(v) for k, v in user.items()}
     assert 'homepage' not in user
     assert 'username' not in user
-    user['username'] = user.pop('remark', '') or user['screen_name']
+    if remark := user.pop('remark', ''):
+        user['username'] = remark
     user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-    console.log(f"{user['username']} 信息已从网络获取.")
+    console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
     pause(mode='page')
     return user
 
