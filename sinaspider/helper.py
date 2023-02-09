@@ -51,10 +51,13 @@ def get_url(url, expire_after=0):
     return r
 
 
-def write_xmp(tags, img):
+def write_xmp(img: Path, tags: dict):
     from exiftool import ExifToolHelper
+    for k, v in tags.items():
+        if isinstance(v, str):
+            tags[k] = v.replace('\n', '&#x0a;')
     with ExifToolHelper() as et:
-        et.set_tags(img, tags, params=['-overwrite_original'])
+        et.set_tags(img, tags, params=['-overwrite_original', '-E'])
 
 
 def convert_user_nick_to_id(users: str):
@@ -137,7 +140,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
 
     img.write_bytes(downloaded)
     if xmp_info:
-        write_xmp(xmp_info, img)
+        write_xmp(img, xmp_info)
 
 
 def download_files(imgs):
