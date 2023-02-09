@@ -51,6 +51,12 @@ def get_url(url, expire_after=0):
     return r
 
 
+def parse_url_extension(url):
+    from urllib.parse import urlparse
+    parse = urlparse(url)
+    return Path(parse.path).suffix or Path(url).suffix
+
+
 def write_xmp(img: Path, tags: dict):
     from exiftool import ExifToolHelper
     for k, v in tags.items():
@@ -123,7 +129,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         if r.status_code == 403:
             from furl import furl
             if expires := furl(url).args.get("Expires"):
-                expires = pendulum.from_timestamp(int(expires))
+                expires = pendulum.from_timestamp(int(expires), tz='local')
                 console.log(f"{url} expires at {expires}", style="warning")
                 return
         if r.status_code != 200:
@@ -133,7 +139,8 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
             time.sleep(15)
             continue
         else:
-            downloaded = get_url(url).content
+            r = get_url(url)
+            downloaded = r.content
             if len(downloaded) < 1024:
                 console.log([len(downloaded), url, filepath], style='warning')
             break

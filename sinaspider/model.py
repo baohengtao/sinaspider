@@ -20,7 +20,7 @@ from playhouse.postgres_ext import (
 )
 
 from sinaspider import console
-from sinaspider.helper import download_files
+from sinaspider.helper import download_files, parse_url_extension
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import get_weibo_pages, get_friends_pages, get_liked_pages
 from sinaspider.parser import get_weibo_by_id, get_user_by_id
@@ -175,12 +175,11 @@ class Weibo(BaseModel):
         prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
         for sn, urls in photos.items():
             for url in filter(bool, urls):
-                *_, ext = url.split("/")[-1].split(".")
-                if not _:
-                    ext = "jpg"
+                assert (ext := parse_url_extension(url))
+
                 yield {
                     "url": url,
-                    "filename": f"{prefix}_{sn}.{ext}",
+                    "filename": f"{prefix}_{sn}{ext}",
                     "xmp_info": self.gen_meta(sn=sn, url=url),
                     "filepath": filepath,
                 }
@@ -189,9 +188,10 @@ class Weibo(BaseModel):
             if (duration := self.video_duration) and duration > 600:
                 console.log(f"video_duration is {duration})...skipping...")
             else:
+                assert (ext := parse_url_extension(url)) == '.mp4'
                 yield {
                     "url": url,
-                    "filename": f"{prefix}.mp4",
+                    "filename": f"{prefix}{ext}",
                     "xmp_info": self.gen_meta(url=url),
                     "filepath": filepath,
                 }
@@ -337,11 +337,11 @@ class UserConfig(BaseModel):
             User.select(User)
             .join(Weibo, JOIN.LEFT_OUTER)
             .where(Weibo.created_at > pendulum.now().subtract(days=days))
-            .where(Weibo.photos)
+            .where(Weibo.photos.is_null(False))
             .where(User.id == self.user_id)
             .count()
         )
-        update_interval = math.ceil(4 * days / (recent_num + 1))
+        update_interval = math.ceil(days / (recent_num + 1))
         update_interval = max(update_interval, 7)
         update_interval = min(update_interval, 90)
         update_at = pendulum.instance(self.weibo_update_at)
@@ -518,16 +518,14 @@ def save_liked_weibo(weibos: Iterator[dict],
             f"Downloading {pic_num} files to {filepath}..\n")
         prefix = f"{liked_by_str}_{weibo.username}_{weibo.id}"
         for sn, (url, _) in weibo.photos.items():
-            *_, ext = url.split("/")[-1].split(".")
-            if not _:
-                ext = "jpg"
+            assert (ext := parse_url_extension(url))
 
             xmp_info = weibo.gen_meta(sn, url=url)
             xmp_info['XMP:Title'] = weibo.username
             xmp_info['XMP:Description'] = xmp_info['XMP:BlogURL']
             yield {
                 "url": url,
-                "filename": f"{prefix}_{sn}.{ext}",
+                "filename": f"{prefix}_{sn}{ext}",
                 "xmp_info": xmp_info,
                 "filepath": filepath
             }
