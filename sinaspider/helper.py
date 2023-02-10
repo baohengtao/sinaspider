@@ -129,11 +129,11 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         time.sleep(15)
         console.log(f'retrying download for {url}...')
 
-    if len(downloaded := r.content) < 1024:
-        console.log(f'downloaded size small then {len(downloaded)} '
-                    f'({url}, {filepath})', style='warning')
+    if urlparse(r.url).path == '/images/default_d_w_large.gif':
+        img = img.with_suffix('.gif')
 
-    img.write_bytes(downloaded)
+    img.write_bytes(r.content)
+
     if xmp_info:
         try:
             write_xmp(img, xmp_info)
