@@ -1,14 +1,13 @@
 import itertools
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 from typing import Iterator
 
 import pendulum
-from tqdm import trange
 
 from sinaspider import console
-from sinaspider.helper import weibo_api_url, get_url, pause
+from sinaspider.helper import get_url, pause, weibo_api_url
 from sinaspider.parser import parse_weibo
 
 
@@ -45,7 +44,7 @@ def get_timeline_pages(since: pendulum.DateTime = None):
 
 
 def check_liked(weibo_id):
-    from peewee import SqliteDatabase, Model, BigIntegerField
+    from peewee import BigIntegerField, Model, SqliteDatabase
     database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
 
     class BaseModel(Model):
@@ -58,10 +57,10 @@ def check_liked(weibo_id):
     database.create_tables([LikedWeibo])
 
     if LikedWeibo.get_or_none(weibo_id=weibo_id):
-        console.log(f'{weibo_id} already in {database.database}')
+        console.log(f'{weibo_id} already in {database.database}',
+                    style='error')
         return False
     else:
-        # LikedWeibo.create(weibo_id=weibo_id)
         return True
 
 
@@ -166,54 +165,4 @@ def get_weibo_pages(containerid: str,
                 yield weibo
         else:
             console.log(f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")
-            pause(mode='page')
-
-
-def get_follow_pages(containerid: str | int, cache_days=30) -> Iterator:
-    """
-    获取关注列表
-
-    Args:
-        containerid (Union[str, int]):
-            - 用户的关注列表: f'231051_-_followers_-_{user_id}'
-        cache_days: 页面缓冲时间时间, 若为0, 则不缓存
-
-    Yields:
-        Iterator[dict]: 返回用户字典
-    """
-    url = weibo_api_url.set(args={'containerid': containerid})
-    for url.args['page'] in itertools.count():
-        if 'fans' in containerid:
-            url.args['since_id'] = 21 * url.args.pop('page') - 1
-        response = get_url(url, expire_after=timedelta(days=cache_days))
-        js = response.json()
-        if not js['ok']:
-            if js['msg'] == '请求过于频繁，歇歇吧':
-                response.revalidate(0)
-                for i in trange(1800, desc='sleeping...'):
-                    sleep(i / 4)
-            else:
-                console.print("关注信息已更新完毕")
-                console.print(f'js==>{js}')
-                break
-        cards_ = js['data']['cards'][0]['card_group']
-
-        users = [card.get('following') or card.get('user')
-                 for card in cards_ if card['card_type'] == 10]
-        for user in users:
-            no_key = ['cover_image_phone',
-                      'profile_url', 'profile_image_url']
-            user = {k: v for k, v in user.items() if v and k not in no_key}
-            if user.get('remark'):
-                user['screen_name'] = user.pop('remark')
-            user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-            if user['gender'] == 'f':
-                user['gender'] = 'female'
-            elif user['gender'] == 'm':
-                user['gender'] = 'male'
-
-            yield user
-        if not response.from_cache and js['ok']:
-            console.log(f'页面 {url.args["page"]} 已获取完毕')
-        if not response.from_cache:
             pause(mode='page')
