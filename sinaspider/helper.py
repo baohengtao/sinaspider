@@ -1,15 +1,20 @@
 import os
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
+from urllib.parse import unquote, urlparse
 
 import keyring
-from baseconv import base62
-from furl import furl
 import pendulum
-from requests.exceptions import ProxyError, SSLError, ConnectionError
+from baseconv import base62
+from exiftool import ExifToolHelper
+from exiftool.exceptions import ExifToolExecuteException
+from furl import furl
+from requests.exceptions import ConnectionError, ProxyError, SSLError
 from requests_cache import CachedSession
+
 from sinaspider import console
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
@@ -24,6 +29,7 @@ headers = {
 
 
 def get_url(url, expire_after=0):
+    # TODO: remove requests_cache dependency
     xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
     session = CachedSession(
         cache_name=f'{xdg_cache_home}/sinaspider/http_cache')
@@ -52,13 +58,11 @@ def get_url(url, expire_after=0):
 
 
 def parse_url_extension(url):
-    from urllib.parse import urlparse
     parse = urlparse(url)
     return Path(parse.path).suffix or Path(url).suffix
 
 
 def write_xmp(img: Path, tags: dict):
-    from exiftool import ExifToolHelper
     for k, v in tags.items():
         if isinstance(v, str):
             tags[k] = v.replace('\n', '&#x0a;')
@@ -76,7 +80,6 @@ def convert_user_nick_to_id(users: str):
 
 
 def normalize_user_id(user_id) -> int:
-    from urllib.parse import unquote
     try:
         return int(user_id)
     except ValueError:
@@ -124,34 +127,35 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
     if img.exists():
         console.log(f'{img} already exists..skipping...', style='info')
         return
-    while True:
-        r = get_url(url)
-        if r.status_code == 403:
-            from furl import furl
-            if expires := furl(url).args.get("Expires"):
-                expires = pendulum.from_timestamp(int(expires), tz='local')
-                console.log(f"{url} expires at {expires}", style="warning")
-                return
-        if r.status_code != 200:
-            console.log(f"{url}, {r.status_code}")
-            if r.status_code == 404:
-                return
-            time.sleep(15)
-            continue
-        else:
-            r = get_url(url)
-            downloaded = r.content
-            if len(downloaded) < 1024:
-                console.log([len(downloaded), url, filepath], style='warning')
-            break
+
+    if expires := furl(url).args.get("Expires"):
+        expires = pendulum.from_timestamp(int(expires), tz='local')
+        if expires < pendulum.now():
+            console.log(f"{url} expires at {expires}, skip...", style="error")
+            return
+
+    while (r := get_url(url)).status_code != 200:
+        console.log(f"{url}, {r.status_code}", style="error")
+        if r.status_code == 404:
+            return
+        time.sleep(15)
+        console.log(f'retrying download for {url}...')
+
+    if len(downloaded := r.content) < 1024:
+        console.log(f'downloaded size small then {len(downloaded)} '
+                    f'({url}, {filepath})', style='warning')
 
     img.write_bytes(downloaded)
     if xmp_info:
-        write_xmp(img, xmp_info)
+        try:
+            write_xmp(img, xmp_info)
+        except ExifToolExecuteException as e:
+            console.log(e.stderr, style='error')
+            raise e
 
 
 def download_files(imgs):
-    from concurrent.futures import ThreadPoolExecutor
+    # TODO: gracefully handle exception and keyboardinterrupt
     with ThreadPoolExecutor(max_workers=7) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
     for future in futures:
