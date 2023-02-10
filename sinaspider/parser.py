@@ -8,7 +8,6 @@ import warnings
 import pendulum
 import bs4
 from bs4 import BeautifulSoup
-from pendulum.parsing.exceptions import ParserError
 from sinaspider import console
 from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
 from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
@@ -247,13 +246,16 @@ class UserParser:
         return self._user
 
     def get_user_cn(self) -> dict:
-        # TODO: parse birthday
         user_cn = self._fetch_user_cn()
         user_card = self._fetch_user_card()
         assert user_card['所在地'] == user_cn.pop('地区')
-        birthday = user_cn.pop('生日', '')
-        if birthday not in ['0001-00-00', '01-01']:
-            assert birthday in user_card.get('生日', '')
+        birthday_cn = user_cn.pop('生日', '')
+        birthday_card = user_card.pop('生日', '')
+        if birthday_cn not in ['0001-00-00', '01-01']:
+            assert birthday_cn in birthday_card
+        if match := re.search(r'(\d{4}-\d{2}-\d{2})', birthday_card):
+            user_cn['生日'] = match.group(1)
+
         edu_str = " ".join(user_cn.get('学习经历') or [])
         for key in ['大学', '海外', '高中', '初中', '中专技校', '小学']:
             assert user_card.pop(key, '') in edu_str
@@ -336,29 +338,14 @@ def get_user_by_id(uid: int):
     user = {k: normalize_str(v) for k, v in user.items()}
     assert 'homepage' not in user
     assert 'username' not in user
+    assert 'age' not in user
     if remark := user.pop('remark', ''):
         user['username'] = remark
+    if birthday := user.get('birthday'):
+        user['age'] = pendulum.parse(birthday).diff().years
     user['homepage'] = f'https://weibo.com/u/{user["id"]}'
     console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
+    for v in user.values():
+        assert v or v == 0
     pause(mode='page')
     return user
-
-
-def _user_info_fix(user_info: dict) -> dict:
-    """清洗用户信息."""
-    user_info = user_info.copy()
-    user_info['screen_name'] = user_info['screen_name'].replace('-', '_')
-
-    if birthday := user_info.get('birthday', '').strip():
-        birthday = birthday.split()[0].strip()
-        if re.match(r'\d{4}-\d{2}-\d{2}', birthday):
-            try:
-                age = pendulum.parse(birthday).diff().years
-                user_info['age'] = age
-            except ParserError:
-                console.log(f'Cannot parse birthday {birthday}', style='error')
-            user_info['birthday'] = birthday
-
-    user_info = {k: v for k, v in user_info.items() if v or v == 0}
-
-    return user_info
