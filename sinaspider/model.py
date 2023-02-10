@@ -521,7 +521,7 @@ def save_liked_weibo(weibos: Iterator[dict],
             assert (ext := parse_url_extension(url))
 
             xmp_info = weibo.gen_meta(sn, url=url)
-            xmp_info['XMP:Title'] = f'{weibo.username}_{liked_by_str}'
+            xmp_info['XMP:Title'] = f'{weibo.username}⭐️{liked_by_str}'
             xmp_info['XMP:Description'] = xmp_info['XMP:BlogURL']
             yield {
                 "url": url,

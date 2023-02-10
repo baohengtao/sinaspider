@@ -73,7 +73,7 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
         def parse_card(self):
             self.basic_info()
             self.photos_info_v2()
-            self.video_info()
+            self.video_info_v2()
             self.wb |= text_info(self.card['text'])
             self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
@@ -143,6 +143,22 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 assert max(live_photo) < len(pics)
             self.wb['photos'] = {str(i + 1): [pic, live_photo.get(i)]
                                  for i, pic in enumerate(pics)}
+
+        def video_info_v2(self):
+            page_info = self.card.get('page_info', {})
+            if not page_info.get('type') == "video":
+                return
+            keys = ['mp4_1080p_mp4', 'mp4_720p_mp4',
+                    'mp4_hd_mp4', 'mp4_ld_mp4']
+            for key in keys:
+                if url := page_info['urls'].get(key):
+                    self.wb['video_url'] = url
+                    break
+            else:
+                console.log(f'no video info:==>{page_info}', style='error')
+                raise ValueError('no video info')
+
+            self.wb['video_duration'] = page_info['media_info']['duration']
 
         def video_info(self):
             page_info = self.card.get('page_info', {})
@@ -241,6 +257,10 @@ class UserParser:
 
         for k, v in user_cn.items():
             assert user_info.setdefault(k, v) == v
+
+        if user_info['description'] == '':
+            user_info.pop('description')
+
         self._user = user_info
 
         return self._user
