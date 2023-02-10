@@ -99,7 +99,6 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 is_pinned=is_pinned,
                 is_comment=is_comment,
                 retweeted=self.card.get('retweeted_status', {}).get('bid'),
-                pic_num=self.card['pic_num']
             )
             for key in ['reposts_count', 'comments_count', 'attitudes_count']:
                 if (v := self.card[key]) == '100万+':
@@ -107,7 +106,8 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 self.wb[key] = v
 
         def photos_info_v2(self):
-            if self.card['pic_num'] == 0:
+            self.wb['pic_num'] = self.card['pic_num']
+            if self.wb['pic_num'] == 0:
                 return
             photos = {}
             if 'pic_infos' in self.card:
@@ -115,10 +115,20 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                     pic_info = self.card['pic_infos'][pic_id]
                     photos[i] = [
                         pic_info['largest']['url'], pic_info.get('video')]
-            else:
+            elif 'pics' in self.card:
                 for i, pic in enumerate(self.card['pics'], start=1):
                     photos[i] = [pic['large']['url'], pic.get('videoSrc')]
-            self.wb['photos'] = photos
+            else:
+                page_info = self.card['page_info']
+                assert 'article' in [
+                    page_info['object_type'], page_info['type']]
+                console.log(f"Article found for {self.wb['url_m']}, "
+                            "skiping parse image url...",
+                            style='error')
+                self.wb['pic_num'] = 0
+
+            if photos:
+                self.wb['photos'] = photos
 
         def photos_info(self):
             pics = self.card.get('pics', [])
