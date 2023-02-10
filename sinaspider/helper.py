@@ -13,7 +13,7 @@ from exiftool import ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteException
 from furl import furl
 from requests.exceptions import ConnectionError, ProxyError, SSLError
-from requests_cache import CachedSession
+import requests
 
 from sinaspider import console
 
@@ -28,19 +28,11 @@ headers = {
 }
 
 
-def get_url(url, expire_after=0):
-    # TODO: remove requests_cache dependency
-    xdg_cache_home = os.environ.get('XDG_CACHE_HOME') or os.environ.get('HOME')
-    session = CachedSession(
-        cache_name=f'{xdg_cache_home}/sinaspider/http_cache')
-
-    if expire_after == 0:
-        session.cache.delete_url(url)
+def get_url(url):
 
     while True:
         try:
-            r = session.get(url, headers=headers, expire_after=expire_after)
-            break
+            return requests.get(url, headers=headers)
         except (TimeoutError, ConnectionError, SSLError, ProxyError) as e:
             if type(e) is ConnectionError:
                 period = 600
@@ -52,9 +44,6 @@ def get_url(url, expire_after=0):
                 f"{e}: Timeout sleep {period} seconds and "
                 f"retry[link={url}]{url}[/link]...", style='error')
             sleep(period)
-
-    session.close()
-    return r
 
 
 def parse_url_extension(url):

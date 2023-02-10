@@ -4,24 +4,40 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "sinaspider"
-authors = [{name = "BaoHengtao", email = "baohengtao@users.noreply.github.com"}]
+authors = [
+    { name = "BaoHengtao", email = "baohengtao@users.noreply.github.com" },
+]
 readme = "README.md"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
 requires-python = ">=3.10"
 
-dependencies=[
-    "requests", "pendulum", 'rich==12.5.1', 
-    'python-baseconv', 'PyExifTool', "lxml", 
-    'keyring', 'furl', 'requests-cache==0.9.3',
-    'typer', 'bs4', 'psycopg2', 'peewee'
+dependencies = [
+    "requests",
+    "pendulum",
+    'rich==12.5.1',
+    'python-baseconv',
+    'PyExifTool',
+    "lxml",
+    'keyring',
+    'furl',
+    'typer',
+    'bs4',
+    'psycopg2',
+    'peewee',
 ]
 
 [project.optional-dependencies]
 test = ['pytest', 'python_on_whales']
-dev = ['jupyterlab', 'JLDracula', 'jupyterlab_vim', 
-        'ptpython', 'jupyterlab-lsp', 'python-lsp-server']
+dev = [
+    'jupyterlab',
+    'JLDracula',
+    'jupyterlab_vim',
+    'ptpython',
+    'jupyterlab-lsp',
+    'python-lsp-server',
+]
 
 
 [project.urls]
