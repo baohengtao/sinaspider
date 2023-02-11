@@ -54,8 +54,9 @@ def write_xmp(img: Path, tags: dict):
     for k, v in tags.items():
         if isinstance(v, str):
             tags[k] = v.replace('\n', '&#x0a;')
+    params = ['-overwrite_original', '-ignoreMinorErrors', '-escapeHTML']
     with ExifToolHelper() as et:
-        et.set_tags(img, tags, params=['-overwrite_original', '-E'])
+        et.set_tags(img, tags, params=params)
 
 
 def convert_user_nick_to_id(users: str):
