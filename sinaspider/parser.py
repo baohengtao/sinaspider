@@ -119,16 +119,21 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
                 for i, pic in enumerate(self.card['pics'], start=1):
                     photos[i] = [pic['large']['url'], pic.get('videoSrc')]
             else:
+                assert self.wb['pic_num'] == 1
                 page_info = self.card['page_info']
-                assert 'article' in [
-                    page_info['object_type'], page_info['type']]
-                console.log(f"Article found for {self.wb['url_m']}, "
-                            "skiping parse image url...",
-                            style='error')
-                self.wb['pic_num'] = 0
+                page_pic = page_info['page_pic']
+                url = page_pic if isinstance(
+                    page_pic, str) else page_pic['url']
+                photos[1] = [url, None]
 
-            if photos:
-                self.wb['photos'] = photos
+                # assert 'article' in [
+                #     page_info['object_type'], page_info['type']]
+                # console.log(f"Article found for {self.wb['url_m']}, "
+                #             "skiping parse image url...",
+                #             style='error')
+                # self.wb['pic_num'] = 0
+
+            self.wb['photos'] = photos
 
         def photos_info(self):
             pics = self.card.get('pics', [])
