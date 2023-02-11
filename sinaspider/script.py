@@ -1,7 +1,7 @@
 from pathlib import Path
 import pendulum
 from rich.prompt import Prompt, Confirm, IntPrompt
-from sinaspider import console, get_progress
+from sinaspider import console
 from sinaspider.helper import (
     normalize_user_id,
     download_files,
@@ -45,14 +45,13 @@ def loop(download_dir: Path = default_path, new_user_only: bool = False):
 
     users = UserConfig.select().order_by(UserConfig.weibo_update_at)
     if new_user_only:
-        users = [uc.user_id for uc in users if uc.weibo_update_at <
-                 pendulum.now().subtract(years=1)]
+        uids = [uc.user_id for uc in users if uc.weibo_update_at <
+                pendulum.now().subtract(years=1)]
     else:
-        users = [uc.user_id for uc in users if uc.need_fetch]
-    with get_progress() as progress:
-        for uid in progress.track(users):
-            uc = UserConfig.from_id(user_id=uid)
-            uc.fetch_weibo(download_dir)
+        uids = [uc.user_id for uc in users if uc.need_fetch]
+    for uid in uids:
+        uc = UserConfig.from_id(user_id=uid)
+        uc.fetch_weibo(download_dir)
 
 
 @app.command(help='Update users from timeline')
@@ -134,8 +133,12 @@ def weibo(download_dir: Path = default_path):
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
         if not (weibo_id := normalize_wb_id(weibo_id)):
             continue
-        files = Weibo.from_id(weibo_id).medias(download_dir)
-        download_files(files)
+        weibo = Weibo.from_id(weibo_id)
+        console.log(weibo)
+        if medias := list(weibo.medias(download_dir)):
+            console.log(
+                f'Downloading {len(medias)} files to dir {download_dir}')
+            download_files(medias)
 
 
 @app.command(help='save favorite')

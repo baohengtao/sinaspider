@@ -341,9 +341,8 @@ class UserConfig(BaseModel):
             .where(User.id == self.user_id)
             .count()
         )
-        update_interval = math.ceil(days / (recent_num + 1))
+        update_interval = math.ceil(days / (recent_num + 2))
         update_interval = max(update_interval, 7)
-        update_interval = min(update_interval, 90)
         update_at = pendulum.instance(self.weibo_update_at)
         if update_at.diff().days < update_interval:
             console.log(f"skipping {self.username}"
