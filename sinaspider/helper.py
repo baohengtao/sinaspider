@@ -1,4 +1,5 @@
 import random
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -7,12 +8,12 @@ from urllib.parse import unquote, urlparse
 
 import keyring
 import pendulum
+import requests
 from baseconv import base62
 from exiftool import ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteException
 from furl import furl
 from requests.exceptions import ConnectionError, ProxyError, SSLError
-import requests
 
 from sinaspider import console
 
@@ -56,7 +57,20 @@ def write_xmp(img: Path, tags: dict):
             tags[k] = v.replace('\n', '&#x0a;')
     params = ['-overwrite_original', '-ignoreMinorErrors', '-escapeHTML']
     with ExifToolHelper() as et:
-        et.set_tags(img, tags, params=params)
+        try:
+            et.set_tags(img, tags, params=params)
+        except ExifToolExecuteException as e:
+            pattern = r'Error: Not a valid .* \(looks more like a (.*)\)'
+            if not (match := re.match(pattern, e.stderr)):
+                raise e
+            ext, i = match.group(1), 1
+            while (img_new := Path(f'{img}_problem{i}.{ext}')).exists():
+                i += 1
+            img.rename(img_new)
+            console.log(
+                f'wrong format of {img}, rename to {img_new}', style='error')
+
+            et.set_tags(img_new, tags, params=params)
 
 
 def convert_user_nick_to_id(users: str):

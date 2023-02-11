@@ -374,7 +374,7 @@ class UserConfig(BaseModel):
         self.weibo_update_at = now
         self.save()
 
-        weibo_liked = self.user.liked_photo(since.subtract(months=1))
+        weibo_liked = self.user.liked_photo(since.subtract(years=5))
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
                                 liked_by=self.user_id,
