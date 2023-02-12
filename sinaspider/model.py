@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Iterator
+from typing import Iterator, Self
 
 import pendulum
 from peewee import JOIN
@@ -35,6 +35,8 @@ class BaseModel(Model):
     def __repr__(self):
         model = model_to_dict(self, recurse=False)
         return "\n".join(f'{k}: {v}' for k, v in model.items())
+
+# TODO: add Blocked for liked weibo
 
 
 class User(BaseModel):
@@ -84,7 +86,7 @@ class User(BaseModel):
         table_name = "user"
 
     @classmethod
-    def from_id(cls, user_id: int, update=False) -> Optional["User"]:
+    def from_id(cls, user_id: int, update=False) -> Self:
         user_id = normalize_user_id(user_id)
         if (user := User.get_or_none(id=user_id)) is None:
             force_insert = True
@@ -160,14 +162,37 @@ class Weibo(BaseModel):
         table_name = "weibo"
 
     @classmethod
-    def from_id(cls, id):
+    def from_id(cls, wb_id, update=False) -> Self:
+        wb_id = normalize_wb_id(wb_id)
+        if not (weibo := cls.get_or_none(id=wb_id)):
+            force_insert = True
+            update = True,
+            weibo = cls()
+        else:
+            force_insert = False
+        if not update:
+            return weibo
 
+        weibo_dict = get_weibo_by_id(wb_id)
+        for k, v in weibo_dict.items():
+            setattr(weibo, k, v)
+        weibo.save(force_insert=force_insert)
+        return cls.get_by_id(wb_id)
+
+    @classmethod
+    def from_id_old(cls, id, update=False) -> Self:
         wb_id = normalize_wb_id(id)
         if not (weibo := Weibo.get_or_none(id=wb_id)):
             weibo_dict = get_weibo_by_id(wb_id)
             weibo = Weibo(**weibo_dict)
             weibo.user = User.from_id(weibo.user_id)
             weibo.save(force_insert=True)
+        elif update:
+            weibo_dict = get_weibo_by_id(wb_id)
+            for k, v in weibo_dict.items():
+                if v is not None:
+                    setattr(weibo, k, v)
+            weibo.save()
         return weibo
 
     def medias(self, filepath=None):
@@ -243,8 +268,9 @@ class Weibo(BaseModel):
 class UserConfig(BaseModel):
     user = ForeignKeyField(User, unique=True, backref='config')
     username = CharField()
-    age = IntegerField(index=True, null=True)
-    weibo_fetch = BooleanField(index=True, default=True)
+    age = IntegerField(null=True)
+    weibo_fetch = BooleanField(default=True)
+    liked_fetch = BooleanField(default=False)
     weibo_update_at = DateTimeTZField(
         index=True, default=pendulum.datetime(1970, 1, 1))
     following = BooleanField(null=True)
@@ -282,7 +308,7 @@ class UserConfig(BaseModel):
         return text.strip()
 
     @classmethod
-    def from_id(cls, user_id, save=True):
+    def from_id(cls, user_id, save=True) -> Self:
         user = User.from_id(user_id, update=True)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
@@ -298,7 +324,7 @@ class UserConfig(BaseModel):
             user_config.save()
         return user_config
 
-    def set_visibility(self):
+    def set_visibility(self) -> bool:
         if self.visible is True:
             return self.visible
         last_page = self.user.statuses_count // 20
@@ -325,7 +351,7 @@ class UserConfig(BaseModel):
         return self.visible
 
     @property
-    def need_fetch(self):
+    def need_fetch(self) -> bool:
         import math
 
         if not self.weibo_fetch:
@@ -373,6 +399,8 @@ class UserConfig(BaseModel):
         self.weibo_update_at = now
         self.save()
 
+        if not self.liked_fetch:
+            return
         weibo_liked = self.user.liked_photo(since.subtract(years=5))
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
