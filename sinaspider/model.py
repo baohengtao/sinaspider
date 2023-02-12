@@ -175,8 +175,7 @@ class Weibo(BaseModel):
         prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
         for sn, urls in photos.items():
             for url in filter(bool, urls):
-                assert (ext := parse_url_extension(url))
-
+                ext = parse_url_extension(url)
                 yield {
                     "url": url,
                     "filename": f"{prefix}_{sn}{ext}",

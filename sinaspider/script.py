@@ -104,7 +104,7 @@ def schedule(download_dir: Path = default_path,
             raise
         finally:
             time_format = pendulum.now().format('YY-MM-DD_HHmmss')
-            log_file = f"sinaspider_{time_format}.html"
+            log_file = f"schedule_{time_format}.html"
             console.log(f'Saving log to {download_dir / log_file}')
             console.save_html(download_dir / log_file, theme=MONOKAI)
 
@@ -133,7 +133,7 @@ def weibo(download_dir: Path = default_path):
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
         if not (weibo_id := normalize_wb_id(weibo_id)):
             continue
-        weibo = Weibo.from_id(weibo_id)
+        weibo = Weibo.from_id(weibo_id, update=True)
         console.log(weibo)
         if medias := list(weibo.medias(download_dir)):
             console.log(

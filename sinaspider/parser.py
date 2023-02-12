@@ -1,7 +1,6 @@
 import json
 import re
 import time
-from typing import Optional
 from typing import Union
 import warnings
 
@@ -13,7 +12,7 @@ from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
 from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
 
 
-def get_weibo_by_id(wb_id) -> Optional[dict]:
+def get_weibo_by_id(wb_id) -> dict:
     weibo_info = _get_weibo_info_by_id(wb_id)
     weibo = _parse_weibo_card(weibo_info)
     return weibo
@@ -62,6 +61,7 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
 
 
 def _parse_weibo_card(weibo_card: dict) -> dict:
+    # TODO: refactor this
     class _WeiboCardParser:
         """用于解析原始微博内容"""
 
