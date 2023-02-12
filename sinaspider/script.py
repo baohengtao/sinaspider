@@ -31,17 +31,7 @@ def user(download_dir: str = default_path):
             uc.fetch_weibo(download_dir, start_page=start_page)
 
 
-@app.command(help="Continue fetch user weibos from certain page")
-def user_continue(user: str, start_page: int,
-                  download_dir: Path = default_path):
-    user_id = normalize_user_id(user)
-    uc = UserConfig.from_id(user_id)
-    uc.weibo_update_at = pendulum.from_timestamp(0)
-    uc.fetch_weibo(download_dir=download_dir, start_page=start_page)
-
-
-@app.command(help="Loop through users in database and fetch weibos")
-def loop(download_dir: Path = default_path, new_user_only: bool = False):
+def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
 
     users = UserConfig.select().order_by(UserConfig.weibo_update_at)
     if new_user_only:
@@ -54,13 +44,23 @@ def loop(download_dir: Path = default_path, new_user_only: bool = False):
         uc.fetch_weibo(download_dir)
 
 
+@app.command(help="Loop through users in database and fetch weibos")
+def loop(download_dir: Path = default_path):
+    get_loop(download_dir)
+
+
 @app.command(help='Update users from timeline')
 def timeline(download_dir: Path = default_path,
-             since=None, days: float = None,
+             days: float = None,
              dry_run: bool = False):
+    since = pendulum.now().subtract(days=days)
+    get_timeline(download_dir, since, dry_run)
+
+
+def get_timeline(download_dir: Path,
+                 since: pendulum.DateTime,
+                 dry_run: bool = False):
     from sinaspider.page import get_timeline_pages
-    if since is None:
-        since = pendulum.now().subtract(days=days)
     for status in get_timeline_pages(since=since):
         uid = status['user']['id']
         if not (uc := UserConfig.get_or_none(user_id=uid)):
@@ -89,9 +89,9 @@ def schedule(download_dir: Path = default_path,
             next_since = pendulum.now()
             update_user_config()
             console.rule('[bold red]Timeline...', style="magenta")
-            timeline(download_dir, since)
+            get_timeline(download_dir, since)
             console.rule('[bold red]New users...', style="magenta")
-            loop(download_dir, new_user_only=True)
+            get_loop(download_dir, new_user_only=True)
             tidy_img(download_dir)
             # updat since
             since = next_since
@@ -119,8 +119,10 @@ def tidy_img(download_dir):
             rename(ori, new_dir=True, root=ori.parent / (ori.stem + 'Pro'))
 
 
-@app.command(help='Update photos num for user_config')
 def update_user_config():
+    """
+    Update photos num for user_config
+    """
     from sinaspider.model import Artist
     for uc in UserConfig:
         if artist := Artist.get_or_none(user=uc.user):
