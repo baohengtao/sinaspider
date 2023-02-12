@@ -1,7 +1,7 @@
 import json
 import re
 import time
-from typing import Union
+from typing import Self
 import warnings
 
 import pendulum
@@ -13,9 +13,7 @@ from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
 
 
 def get_weibo_by_id(wb_id) -> dict:
-    weibo_info = _get_weibo_info_by_id(wb_id)
-    weibo = WeiboParser(weibo_info).wb
-    return weibo
+    return WeiboParser.from_id(wb_id).weibo
 
 
 def parse_weibo(weibo_info: dict, offline=False) -> dict:
@@ -26,99 +24,94 @@ def parse_weibo(weibo_info: dict, offline=False) -> dict:
     Returns:
         解析后的微博信息.
     """
-    if weibo_info['pic_num'] > 9 and not offline:
-        weibo_info |= _get_weibo_info_by_id(weibo_info['id'])
-    weibo = WeiboParser(weibo_info).wb
-    return weibo
-
-
-def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
-    """
-    爬取指定id的微博
-
-    Args:
-        wb_id (Union[int, str]): 微博id
-
-    Returns:
-        Weibo instance if exists, else None
-
-    """
-    url = f'https://m.weibo.cn/detail/{wb_id}'
-    text = get_url(url).text
-    soup = BeautifulSoup(text, 'html.parser')
-    if soup.title.text == '微博-出错了':
-        raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
-    # rec = re.compile(
-        # r'.*var \$render_data = \[(.*)\]\[0\] || {};', re.DOTALL)
-    rec = re.compile(r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
-
-    html = rec.match(text)
-    html = html.groups(1)[0]
-    weibo_info = json.loads(html, strict=False)['status']
-    console.log(f"{wb_id} fetched in online.")
-    pause(mode='page')
-    return weibo_info
+    parser = WeiboParser(weibo_info, offline=offline)
+    return parser.weibo
 
 
 class WeiboParser:
     """用于解析原始微博内容"""
 
-    def __init__(self, weibo_info):
-        self.card = weibo_info
-        self.wb = {}
+    def __init__(self, weibo_info: dict, offline=False):
+        if weibo_info['pic_num'] > 9 and not offline:
+            weibo_info = self._fetch_info(weibo_info['id'])
+        self.info = weibo_info
+        self.weibo = {}
         self.parse_card()
+        if not offline:
+            pic_num = len(self.weibo.get('photos', {}))
+            assert pic_num == self.weibo['pic_num']
+
+    @classmethod
+    def from_id(cls, id: str | int) -> Self:
+        weibo_info = cls._fetch_info(id)
+        return cls(weibo_info)
+
+    @staticmethod
+    def _fetch_info(weibo_id: str | int) -> dict:
+        url = f'https://m.weibo.cn/detail/{weibo_id}'
+        text = get_url(url).text
+        soup = BeautifulSoup(text, 'html.parser')
+        if soup.title.text == '微博-出错了':
+            raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
+        rec = re.compile(
+            r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
+        html = rec.match(text).groups(1)[0]
+        weibo_info = json.loads(html, strict=False)['status']
+        console.log(f"{weibo_id} fetched in online.")
+        pause(mode='page')
+        return weibo_info
 
     def parse_card(self):
         self.basic_info()
         self.photos_info_v2()
         self.video_info_v2()
-        self.wb |= self.text_info(self.card['text'])
-        self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
+        self.weibo |= self.text_info(self.info['text'])
+        self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
 
     def basic_info(self):
-        title = self.card.get('title', {}).get('text', '')
+        title = self.info.get('title', {}).get('text', '')
         is_pinned = title == '置顶'
         is_comment = '评论过的微博' in title
-        user = self.card['user']
+        user = self.info['user']
         created_at = pendulum.from_format(
-            self.card['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            self.info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
         assert created_at.is_local()
-        self.wb.update(
+        self.weibo.update(
             user_id=(user_id := user['id']),
-            id=(id := int(self.card['id'])),
-            bid=(bid := self.card.get('bid')),
+            id=(id := int(self.info['id'])),
+            bid=(bid := self.info.get('bid')),
             username=user['screen_name'],
             gender=user['gender'],
             followers_count=user['followers_count'],
             url=f'https://weibo.com/{user_id}/{bid or id}',
             url_m=f'https://m.weibo.cn/detail/{id}',
             created_at=created_at,
-            source=self.card['source'],
+            source=self.info['source'],
             is_pinned=is_pinned,
             is_comment=is_comment,
-            retweeted=self.card.get('retweeted_status', {}).get('bid'),
+            retweeted=self.info.get('retweeted_status', {}).get('bid'),
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
-            if (v := self.card[key]) == '100万+':
+            if (v := self.info[key]) == '100万+':
                 v = 1000000
-            self.wb[key] = v
+            self.weibo[key] = v
 
     def photos_info_v2(self):
-        self.wb['pic_num'] = self.card['pic_num']
-        if self.wb['pic_num'] == 0:
+        self.weibo['pic_num'] = self.info['pic_num']
+        if self.weibo['pic_num'] == 0:
             return
         photos = {}
-        if 'pic_infos' in self.card:
-            for i, pic_id in enumerate(self.card['pic_ids'], start=1):
-                pic_info = self.card['pic_infos'][pic_id]
+        if 'pic_infos' in self.info:
+            for i, pic_id in enumerate(self.info['pic_ids'], start=1):
+                pic_info = self.info['pic_infos'][pic_id]
                 photos[i] = [
                     pic_info['largest']['url'], pic_info.get('video')]
-        elif 'pics' in self.card:
-            for i, pic in enumerate(self.card['pics'], start=1):
+        elif 'pics' in self.info:
+            for i, pic in enumerate(self.info['pics'], start=1):
                 photos[i] = [pic['large']['url'], pic.get('videoSrc')]
         else:
-            assert self.wb['pic_num'] == 1
-            page_info = self.card['page_info']
+            assert self.weibo['pic_num'] == 1
+            page_info = self.info['page_info']
             page_pic = page_info['page_pic']
             url = page_pic if isinstance(
                 page_pic, str) else page_pic['url']
@@ -131,16 +124,16 @@ class WeiboParser:
             #             style='error')
             # self.wb['pic_num'] = 0
 
-        self.wb['photos'] = photos
+        self.weibo['photos'] = photos
 
     def photos_info(self):
-        pics = self.card.get('pics', [])
+        pics = self.info.get('pics', [])
         if isinstance(pics, dict):
             pics = [p['large']['url']
                     for p in pics.values() if 'large' in p]
         else:
             pics = [p['large']['url'] for p in pics]
-        if not pics and (ids := self.card.get('pic_ids')):
+        if not pics and (ids := self.info.get('pic_ids')):
             pics = [f'https://wx{i % 3 + 1}.sinaimg.cn/large/{id}'
                     for i, id in enumerate(ids)]
         # pics = [p['large']['url'] for p in pics]
@@ -148,33 +141,33 @@ class WeiboParser:
         live_photo_prefix = (
             'https://video.weibo.com/media/play?'
             'livephoto=//us.sinaimg.cn/')
-        if pic_video := self.card.get('pic_video'):
+        if pic_video := self.info.get('pic_video'):
             live_photo = {}
             for p in pic_video.split(','):
                 sn, path = p.split(':')
                 live_photo[int(sn)] = f'{live_photo_prefix}{path}.mov'
             assert max(live_photo) < len(pics)
-        self.wb['photos'] = {str(i + 1): [pic, live_photo.get(i)]
-                             for i, pic in enumerate(pics)}
+        self.weibo['photos'] = {str(i + 1): [pic, live_photo.get(i)]
+                                for i, pic in enumerate(pics)}
 
     def video_info_v2(self):
-        page_info = self.card.get('page_info', {})
+        page_info = self.info.get('page_info', {})
         if not page_info.get('type') == "video":
             return
         keys = ['mp4_1080p_mp4', 'mp4_720p_mp4',
                 'mp4_hd_mp4', 'mp4_ld_mp4']
         for key in keys:
             if url := page_info['urls'].get(key):
-                self.wb['video_url'] = url
+                self.weibo['video_url'] = url
                 break
         else:
             console.log(f'no video info:==>{page_info}', style='error')
             raise ValueError('no video info')
 
-        self.wb['video_duration'] = page_info['media_info']['duration']
+        self.weibo['video_duration'] = page_info['media_info']['duration']
 
     def video_info(self):
-        page_info = self.card.get('page_info', {})
+        page_info = self.info.get('page_info', {})
         if not page_info.get('type') == "video":
             return
         media_info = page_info['urls'] or page_info['media_info']
@@ -192,9 +185,9 @@ class WeiboParser:
         if not urls:
             console.log(f'no video info:==>{page_info}', style='warning')
         else:
-            self.wb['video_url'] = urls[0]
+            self.weibo['video_url'] = urls[0]
             if duration := float(media_info.get('duration', 0)):
-                self.wb['video_duration'] = duration
+                self.weibo['video_duration'] = duration
 
     @staticmethod
     def text_info(text):
