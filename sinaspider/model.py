@@ -411,17 +411,6 @@ class UserConfig(BaseModel):
 
         pause(mode="user")
 
-    @staticmethod
-    def fetch_favorite(download_dir):
-        weibos = get_weibo_pages(containerid="230259")
-        with console.status("[magenta]Fetching favorite...",
-                            spinner="christmas"):
-            console.log(f"Media Saving: {download_dir}")
-            imgs = save_weibo(weibos, Path(download_dir) / "Favorite")
-            download_files(imgs)
-        console.log("收藏微博获取完毕")
-        pause(mode="user")
-
 
 class Artist(BaseModel):
     username = CharField(index=True)

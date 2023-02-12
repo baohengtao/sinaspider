@@ -141,8 +141,3 @@ def weibo(download_dir: Path = default_path):
             console.log(
                 f'Downloading {len(medias)} files to dir {download_dir}')
             download_files(medias)
-
-
-@app.command(help='save favorite')
-def favorite(download_dir: Path = default_path):
-    UserConfig.fetch_favorite(download_dir)
