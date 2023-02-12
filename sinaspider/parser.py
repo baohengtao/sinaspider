@@ -14,7 +14,7 @@ from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
 
 def get_weibo_by_id(wb_id) -> dict:
     weibo_info = _get_weibo_info_by_id(wb_id)
-    weibo = _parse_weibo_card(weibo_info)
+    weibo = WeiboParser(weibo_info).wb
     return weibo
 
 
@@ -28,7 +28,7 @@ def parse_weibo(weibo_info: dict, offline=False) -> dict:
     """
     if weibo_info['pic_num'] > 9 and not offline:
         weibo_info |= _get_weibo_info_by_id(weibo_info['id'])
-    weibo = _parse_weibo_card(weibo_info)
+    weibo = WeiboParser(weibo_info).wb
     return weibo
 
 
@@ -60,144 +60,143 @@ def _get_weibo_info_by_id(wb_id: Union[int, str]) -> dict:
     return weibo_info
 
 
-def _parse_weibo_card(weibo_card: dict) -> dict:
-    # TODO: refactor this
-    class _WeiboCardParser:
-        """用于解析原始微博内容"""
+class WeiboParser:
+    """用于解析原始微博内容"""
 
-        def __init__(self):
-            self.card = weibo_card
-            self.wb = {}
-            self.parse_card()
+    def __init__(self, weibo_info):
+        self.card = weibo_info
+        self.wb = {}
+        self.parse_card()
 
-        def parse_card(self):
-            self.basic_info()
-            self.photos_info_v2()
-            self.video_info_v2()
-            self.wb |= text_info(self.card['text'])
-            self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
+    def parse_card(self):
+        self.basic_info()
+        self.photos_info_v2()
+        self.video_info_v2()
+        self.wb |= self.text_info(self.card['text'])
+        self.wb = {k: v for k, v in self.wb.items() if v or v == 0}
 
-        def basic_info(self):
-            title = self.card.get('title', {}).get('text', '')
-            is_pinned = title == '置顶'
-            is_comment = '评论过的微博' in title
-            user = self.card['user']
-            created_at = pendulum.from_format(
-                self.card['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            assert created_at.is_local()
-            self.wb.update(
-                user_id=(user_id := user['id']),
-                id=(id := int(self.card['id'])),
-                bid=(bid := self.card.get('bid')),
-                username=user['screen_name'],
-                gender=user['gender'],
-                followers_count=user['followers_count'],
-                url=f'https://weibo.com/{user_id}/{bid or id}',
-                url_m=f'https://m.weibo.cn/detail/{id}',
-                created_at=created_at,
-                source=self.card['source'],
-                is_pinned=is_pinned,
-                is_comment=is_comment,
-                retweeted=self.card.get('retweeted_status', {}).get('bid'),
-            )
-            for key in ['reposts_count', 'comments_count', 'attitudes_count']:
-                if (v := self.card[key]) == '100万+':
-                    v = 1000000
-                self.wb[key] = v
+    def basic_info(self):
+        title = self.card.get('title', {}).get('text', '')
+        is_pinned = title == '置顶'
+        is_comment = '评论过的微博' in title
+        user = self.card['user']
+        created_at = pendulum.from_format(
+            self.card['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+        assert created_at.is_local()
+        self.wb.update(
+            user_id=(user_id := user['id']),
+            id=(id := int(self.card['id'])),
+            bid=(bid := self.card.get('bid')),
+            username=user['screen_name'],
+            gender=user['gender'],
+            followers_count=user['followers_count'],
+            url=f'https://weibo.com/{user_id}/{bid or id}',
+            url_m=f'https://m.weibo.cn/detail/{id}',
+            created_at=created_at,
+            source=self.card['source'],
+            is_pinned=is_pinned,
+            is_comment=is_comment,
+            retweeted=self.card.get('retweeted_status', {}).get('bid'),
+        )
+        for key in ['reposts_count', 'comments_count', 'attitudes_count']:
+            if (v := self.card[key]) == '100万+':
+                v = 1000000
+            self.wb[key] = v
 
-        def photos_info_v2(self):
-            self.wb['pic_num'] = self.card['pic_num']
-            if self.wb['pic_num'] == 0:
-                return
-            photos = {}
-            if 'pic_infos' in self.card:
-                for i, pic_id in enumerate(self.card['pic_ids'], start=1):
-                    pic_info = self.card['pic_infos'][pic_id]
-                    photos[i] = [
-                        pic_info['largest']['url'], pic_info.get('video')]
-            elif 'pics' in self.card:
-                for i, pic in enumerate(self.card['pics'], start=1):
-                    photos[i] = [pic['large']['url'], pic.get('videoSrc')]
-            else:
-                assert self.wb['pic_num'] == 1
-                page_info = self.card['page_info']
-                page_pic = page_info['page_pic']
-                url = page_pic if isinstance(
-                    page_pic, str) else page_pic['url']
-                photos[1] = [url, None]
+    def photos_info_v2(self):
+        self.wb['pic_num'] = self.card['pic_num']
+        if self.wb['pic_num'] == 0:
+            return
+        photos = {}
+        if 'pic_infos' in self.card:
+            for i, pic_id in enumerate(self.card['pic_ids'], start=1):
+                pic_info = self.card['pic_infos'][pic_id]
+                photos[i] = [
+                    pic_info['largest']['url'], pic_info.get('video')]
+        elif 'pics' in self.card:
+            for i, pic in enumerate(self.card['pics'], start=1):
+                photos[i] = [pic['large']['url'], pic.get('videoSrc')]
+        else:
+            assert self.wb['pic_num'] == 1
+            page_info = self.card['page_info']
+            page_pic = page_info['page_pic']
+            url = page_pic if isinstance(
+                page_pic, str) else page_pic['url']
+            photos[1] = [url, None]
 
-                # assert 'article' in [
-                #     page_info['object_type'], page_info['type']]
-                # console.log(f"Article found for {self.wb['url_m']}, "
-                #             "skiping parse image url...",
-                #             style='error')
-                # self.wb['pic_num'] = 0
+            # assert 'article' in [
+            #     page_info['object_type'], page_info['type']]
+            # console.log(f"Article found for {self.wb['url_m']}, "
+            #             "skiping parse image url...",
+            #             style='error')
+            # self.wb['pic_num'] = 0
 
-            self.wb['photos'] = photos
+        self.wb['photos'] = photos
 
-        def photos_info(self):
-            pics = self.card.get('pics', [])
-            if isinstance(pics, dict):
-                pics = [p['large']['url']
-                        for p in pics.values() if 'large' in p]
-            else:
-                pics = [p['large']['url'] for p in pics]
-            if not pics and (ids := self.card.get('pic_ids')):
-                pics = [f'https://wx{i % 3 + 1}.sinaimg.cn/large/{id}'
-                        for i, id in enumerate(ids)]
-            # pics = [p['large']['url'] for p in pics]
+    def photos_info(self):
+        pics = self.card.get('pics', [])
+        if isinstance(pics, dict):
+            pics = [p['large']['url']
+                    for p in pics.values() if 'large' in p]
+        else:
+            pics = [p['large']['url'] for p in pics]
+        if not pics and (ids := self.card.get('pic_ids')):
+            pics = [f'https://wx{i % 3 + 1}.sinaimg.cn/large/{id}'
+                    for i, id in enumerate(ids)]
+        # pics = [p['large']['url'] for p in pics]
+        live_photo = {}
+        live_photo_prefix = (
+            'https://video.weibo.com/media/play?'
+            'livephoto=//us.sinaimg.cn/')
+        if pic_video := self.card.get('pic_video'):
             live_photo = {}
-            live_photo_prefix = (
-                'https://video.weibo.com/media/play?'
-                'livephoto=//us.sinaimg.cn/')
-            if pic_video := self.card.get('pic_video'):
-                live_photo = {}
-                for p in pic_video.split(','):
-                    sn, path = p.split(':')
-                    live_photo[int(sn)] = f'{live_photo_prefix}{path}.mov'
-                assert max(live_photo) < len(pics)
-            self.wb['photos'] = {str(i + 1): [pic, live_photo.get(i)]
-                                 for i, pic in enumerate(pics)}
+            for p in pic_video.split(','):
+                sn, path = p.split(':')
+                live_photo[int(sn)] = f'{live_photo_prefix}{path}.mov'
+            assert max(live_photo) < len(pics)
+        self.wb['photos'] = {str(i + 1): [pic, live_photo.get(i)]
+                             for i, pic in enumerate(pics)}
 
-        def video_info_v2(self):
-            page_info = self.card.get('page_info', {})
-            if not page_info.get('type') == "video":
-                return
-            keys = ['mp4_1080p_mp4', 'mp4_720p_mp4',
-                    'mp4_hd_mp4', 'mp4_ld_mp4']
-            for key in keys:
-                if url := page_info['urls'].get(key):
-                    self.wb['video_url'] = url
-                    break
-            else:
-                console.log(f'no video info:==>{page_info}', style='error')
-                raise ValueError('no video info')
+    def video_info_v2(self):
+        page_info = self.card.get('page_info', {})
+        if not page_info.get('type') == "video":
+            return
+        keys = ['mp4_1080p_mp4', 'mp4_720p_mp4',
+                'mp4_hd_mp4', 'mp4_ld_mp4']
+        for key in keys:
+            if url := page_info['urls'].get(key):
+                self.wb['video_url'] = url
+                break
+        else:
+            console.log(f'no video info:==>{page_info}', style='error')
+            raise ValueError('no video info')
 
-            self.wb['video_duration'] = page_info['media_info']['duration']
+        self.wb['video_duration'] = page_info['media_info']['duration']
 
-        def video_info(self):
-            page_info = self.card.get('page_info', {})
-            if not page_info.get('type') == "video":
-                return
-            media_info = page_info['urls'] or page_info['media_info']
-            keys = [
-                'mp4_1080p_mp4', 'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4',
-                'mp4_hd', 'mp4_hd_url', 'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld',
-                'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
-                'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
-            ]
-            if not set(media_info).issubset(keys):
-                console.log(media_info)
-                console.log(str(set(media_info) - set(keys)), style='error')
-                # assert False
-            urls = [v for k in keys if (v := media_info.get(k))]
-            if not urls:
-                console.log(f'no video info:==>{page_info}', style='warning')
-            else:
-                self.wb['video_url'] = urls[0]
-                if duration := float(media_info.get('duration', 0)):
-                    self.wb['video_duration'] = duration
+    def video_info(self):
+        page_info = self.card.get('page_info', {})
+        if not page_info.get('type') == "video":
+            return
+        media_info = page_info['urls'] or page_info['media_info']
+        keys = [
+            'mp4_1080p_mp4', 'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4',
+            'mp4_hd', 'mp4_hd_url', 'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld',
+            'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
+            'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
+        ]
+        if not set(media_info).issubset(keys):
+            console.log(media_info)
+            console.log(str(set(media_info) - set(keys)), style='error')
+            # assert False
+        urls = [v for k in keys if (v := media_info.get(k))]
+        if not urls:
+            console.log(f'no video info:==>{page_info}', style='warning')
+        else:
+            self.wb['video_url'] = urls[0]
+            if duration := float(media_info.get('duration', 0)):
+                self.wb['video_duration'] = duration
 
+    @staticmethod
     def text_info(text):
         if not text.strip():
             return {}
@@ -232,8 +231,6 @@ def _parse_weibo_card(weibo_card: dict) -> dict:
             'topics': topics_list,
             'location': location
         }
-
-    return _WeiboCardParser().wb
 
 
 class UserParser:
