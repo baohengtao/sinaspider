@@ -16,7 +16,7 @@ class Page:
         self.id = user_id
 
     def friends(self):
-
+        """get user's friends"""
         for page in itertools.count():
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
                    f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
@@ -28,6 +28,7 @@ class Page:
 
     @staticmethod
     def timeline(since: pendulum.DateTime):
+        """get status on my timeline"""
         next_cursor = None
         seed = 'https://m.weibo.cn/feed/friends'
         while True:
@@ -47,9 +48,12 @@ class Page:
             console.log(f'created_at:{created_at}')
             pause(mode='page')
 
-    def liked(self) -> Iterator[dict]:
+    def liked(self, parse=True) -> Iterator[dict]:
         """
-        获取用户点赞的微博
+        fetch user's liked weibo.
+
+        Args:
+            parse: whether to parse weibo, default True
         """
         from sinaspider.helper import normalize_str
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
@@ -80,23 +84,32 @@ class Page:
                     if followers_count > 20000 or followers_count < 500:
                         continue
                     if _check_liked(weibo['id']):
-                        yield weibo
+                        yield weibo if parse else weibo_info
 
             pause(mode='page')
 
     def homepage(self,
                  since: datetime = pendulum.from_timestamp(0),
-                 start_page=1) -> Iterator[dict]:
+                 start_page=1, parse=True) -> Iterator[dict]:
         """
-        爬取用户主页的微博
+        fetch user's homepage weibo
+
+        Args:
+            since: the day from which to fetch weibo
+            start_page: the start page to fetch
+            parse: whether to parse weibo, default True
         """
         yield from self._weibo_pages(
-            f"107603{self.id}", since=since, start_page=start_page)
+            f"107603{self.id}",
+            since=since,
+            start_page=start_page,
+            parse=parse)
 
     @staticmethod
     def _weibo_pages(containerid: str,
-                     since: datetime = pendulum.from_timestamp(0),
+                     since: datetime,
                      start_page: int = 1,
+                     parse: bool = True,
                      ) -> Iterator[dict]:
         """
         爬取某一 containerid 类型的所有微博
@@ -106,11 +119,8 @@ class Page:
                 - 获取用户页面的微博: f"107603{user_id}"
                 - 获取收藏页面的微博: 230259
             start_page(int): 指定从哪一页开始爬取, 默认第一页.
-            since: 若为整数, 从哪天开始爬取, 默认所有时间
-
-
-        Yields:
-            Generator[Weibo]: 生成微博实例
+            since: 从哪天开始爬取
+            parse: 是否解析微博, 默认解析
         """
         since = pendulum.instance(since)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
@@ -147,7 +157,7 @@ class Page:
                             "获取完毕")
                         return
                 if 'retweeted' not in weibo:
-                    yield weibo
+                    yield weibo if parse else weibo_info
             else:
                 console.log(
                     f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")

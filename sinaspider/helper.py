@@ -74,15 +74,6 @@ def write_xmp(img: Path, tags: dict):
             et.set_tags(img_new, tags, params=params)
 
 
-def convert_user_nick_to_id(users: str):
-    users = [u for u in users.split() if u]
-    for user_id in users:
-        if not user_id.isdigit():
-            r = get_url(f'https://m.weibo.cn/n/{user_id}')
-            user_id = r.url.split('/')[-1]
-        yield int(user_id)
-
-
 def normalize_user_id(user_id) -> int:
     try:
         return int(user_id)
