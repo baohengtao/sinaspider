@@ -23,7 +23,7 @@ from sinaspider import console
 from sinaspider.helper import download_files, parse_url_extension
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import get_weibo_pages, get_friends_pages, get_liked_pages
-from sinaspider.parser import get_weibo_by_id, get_user_by_id
+from sinaspider.parser import WeiboParser, get_user_by_id
 
 database = PostgresqlExtDatabase("sinaspider", host="localhost")
 
@@ -173,27 +173,11 @@ class Weibo(BaseModel):
         if not update:
             return weibo
 
-        weibo_dict = get_weibo_by_id(wb_id)
+        weibo_dict = WeiboParser.from_id(wb_id).weibo
         for k, v in weibo_dict.items():
             setattr(weibo, k, v)
         weibo.save(force_insert=force_insert)
         return cls.get_by_id(wb_id)
-
-    @classmethod
-    def from_id_old(cls, id, update=False) -> Self:
-        wb_id = normalize_wb_id(id)
-        if not (weibo := Weibo.get_or_none(id=wb_id)):
-            weibo_dict = get_weibo_by_id(wb_id)
-            weibo = Weibo(**weibo_dict)
-            weibo.user = User.from_id(weibo.user_id)
-            weibo.save(force_insert=True)
-        elif update:
-            weibo_dict = get_weibo_by_id(wb_id)
-            for k, v in weibo_dict.items():
-                if v is not None:
-                    setattr(weibo, k, v)
-            weibo.save()
-        return weibo
 
     def medias(self, filepath=None):
         photos = self.photos or {}
@@ -524,7 +508,7 @@ def save_liked_weibo(weibos: Iterator[dict],
         LikedWeibo.create(weibo_id=weibo.id, user_id=weibo.user_id,
                           liked_by=liked_by, pic_num=pic_num)
         if len(weibo.photos) < pic_num:
-            weibo_full = get_weibo_by_id(weibo.id)
+            weibo_full = WeiboParser.from_id(weibo.id).weibo
             weibo = Weibo(**weibo_full)
             assert pic_num == len(weibo.photos)
         filepath = download_dir / str(pic_num)

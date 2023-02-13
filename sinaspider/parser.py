@@ -12,41 +12,26 @@ from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
 from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
 
 
-def get_weibo_by_id(wb_id) -> dict:
-    return WeiboParser.from_id(wb_id).weibo
-
-
-def parse_weibo(weibo_info: dict, offline=False) -> dict:
-    """
-    对从网页爬取到的微博进行解析.
-    Args:
-        weibo_info (dict): 原始微博信息
-    Returns:
-        解析后的微博信息.
-    """
-    parser = WeiboParser(weibo_info, offline=offline)
-    return parser.weibo
-
-
 class WeiboParser:
     """用于解析原始微博内容"""
 
     def __init__(self, weibo_info: dict, offline=False):
-        if weibo_info['pic_num'] > 9 and not offline:
+        pic_match = weibo_info['pic_num'] == len(weibo_info['pic_ids'])
+        if not (pic_match or offline):
+            assert weibo_info['pic_num'] > 9
             weibo_info = self._fetch_info(weibo_info['id'])
+            assert weibo_info['pic_num'] == len(weibo_info['pic_ids'])
         self.info = weibo_info
         self.weibo = {}
         self.parse_card()
-        if not offline:
-            pic_num = len(self.weibo.get('photos', {}))
-            assert pic_num == self.weibo['pic_num']
 
     @classmethod
     def from_id(cls, id: str | int) -> Self:
         weibo_info = cls._fetch_info(id)
+        assert weibo_info['pic_num'] == len(weibo_info['pic_ids'])
         return cls(weibo_info)
 
-    @staticmethod
+    @ staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
         url = f'https://m.weibo.cn/detail/{weibo_id}'
         text = get_url(url).text
@@ -101,13 +86,13 @@ class WeiboParser:
         if self.weibo['pic_num'] == 0:
             return
         photos = {}
-        if 'pic_infos' in self.info:
-            for i, pic_id in enumerate(self.info['pic_ids'], start=1):
-                pic_info = self.info['pic_infos'][pic_id]
-                photos[i] = [
-                    pic_info['largest']['url'], pic_info.get('video')]
-        elif 'pics' in self.info:
-            for i, pic in enumerate(self.info['pics'], start=1):
+        # if 'pic_infos' in self.info:
+        #     for i, pic_id in enumerate(self.info['pic_ids'], start=1):
+        #         pic_info = self.info['pic_infos'][pic_id]
+        #         photos[i] = [
+        #             pic_info['largest']['url'], pic_info.get('video')]
+        if pics := self.info.get('pics'):
+            for i, pic in enumerate(pics, start=1):
                 photos[i] = [pic['large']['url'], pic.get('videoSrc')]
         else:
             assert self.weibo['pic_num'] == 1
@@ -124,6 +109,7 @@ class WeiboParser:
             #             style='error')
             # self.wb['pic_num'] = 0
 
+        assert len(photos) == len(self.info['pic_ids'])
         self.weibo['photos'] = photos
 
     def photos_info(self):
