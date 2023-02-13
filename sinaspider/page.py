@@ -93,7 +93,7 @@ def get_liked_pages(uid: int, since: datetime) -> Iterator[dict]:
             if weibo_info.get('deleted') == '1':
                 continue
 
-            weibo = WeiboParser(weibo_info, offline=True).weibo
+            weibo = WeiboParser(weibo_info).parse(online=False)
 
             if "photos" in weibo and weibo['gender'] != 'm':
                 followers_count = int(normalize_str(weibo['followers_count']))
@@ -148,7 +148,7 @@ def get_weibo_pages(containerid: str,
                   for card in js['data']['cards'] if card['card_type'] == 9]
 
         for weibo_info in mblogs:
-            weibo = WeiboParser(weibo_info).weibo
+            weibo = WeiboParser(weibo_info).parse()
             if weibo['is_comment']:
                 console.log(f'发现评论过的微博， 略过...{weibo}',
                             style='warning')

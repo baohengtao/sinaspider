@@ -173,7 +173,7 @@ class Weibo(BaseModel):
         if not update:
             return weibo
 
-        weibo_dict = WeiboParser.from_id(wb_id).weibo
+        weibo_dict = WeiboParser.from_id(wb_id).parse()
         for k, v in weibo_dict.items():
             setattr(weibo, k, v)
         weibo.save(force_insert=force_insert)
@@ -508,7 +508,7 @@ def save_liked_weibo(weibos: Iterator[dict],
         LikedWeibo.create(weibo_id=weibo.id, user_id=weibo.user_id,
                           liked_by=liked_by, pic_num=pic_num)
         if len(weibo.photos) < pic_num:
-            weibo_full = WeiboParser.from_id(weibo.id).weibo
+            weibo_full = WeiboParser.from_id(weibo.id).parse()
             weibo = Weibo(**weibo_full)
             assert pic_num == len(weibo.photos)
         filepath = download_dir / str(pic_num)

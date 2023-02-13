@@ -15,23 +15,19 @@ from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
 class WeiboParser:
     """用于解析原始微博内容"""
 
-    def __init__(self, weibo_info: dict, offline=False):
-        pic_match = weibo_info['pic_num'] == len(weibo_info['pic_ids'])
-        if not (pic_match or offline):
-            assert weibo_info['pic_num'] > 9
-            weibo_info = self._fetch_info(weibo_info['id'])
-            assert weibo_info['pic_num'] == len(weibo_info['pic_ids'])
+    def __init__(self, weibo_info: dict):
         self.info = weibo_info
+        self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
         self.weibo = {}
-        self.parse_card()
 
     @classmethod
     def from_id(cls, id: str | int) -> Self:
         weibo_info = cls._fetch_info(id)
-        assert weibo_info['pic_num'] == len(weibo_info['pic_ids'])
-        return cls(weibo_info)
+        parser = cls(weibo_info)
+        assert parser.pic_match
+        return parser
 
-    @ staticmethod
+    @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
         url = f'https://m.weibo.cn/detail/{weibo_id}'
         text = get_url(url).text
@@ -46,12 +42,18 @@ class WeiboParser:
         pause(mode='page')
         return weibo_info
 
-    def parse_card(self):
+    def parse(self, online=True):
+        if online and not self.pic_match:
+            assert self.info['pic_num'] > 9
+            self.info = self._fetch_info(self.info['id'])
+            self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
+            assert self.pic_match
         self.basic_info()
         self.photos_info_v2()
         self.video_info_v2()
         self.weibo |= self.text_info(self.info['text'])
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
+        return self.weibo
 
     def basic_info(self):
         title = self.info.get('title', {}).get('text', '')
