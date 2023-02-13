@@ -22,7 +22,7 @@ from playhouse.postgres_ext import (
 from sinaspider import console
 from sinaspider.helper import download_files, parse_url_extension
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
-from sinaspider.page import get_weibo_pages, get_friends_pages, get_liked_pages
+from sinaspider.page import Page
 from sinaspider.parser import WeiboParser, get_user_by_id
 
 database = PostgresqlExtDatabase("sinaspider", host="localhost")
@@ -106,15 +106,6 @@ class User(BaseModel):
         user.save(force_insert=force_insert)
 
         return cls.get_by_id(user_id)
-
-    def timeline(self, since: datetime, start_page=1):
-        yield from get_weibo_pages(f"107603{self.id}", since, start_page)
-
-    def liked_photo(self, since: datetime):
-        yield from get_liked_pages(self.id, since)
-
-    def friends(self):
-        yield from get_friends_pages(self.id)
 
     def __str__(self):
         text = ""
@@ -268,6 +259,10 @@ class UserConfig(BaseModel):
     class Meta:
         table_name = "userconfig"
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.page = Page(self.user_id)
+
     def __repr__(self):
         return super().__repr__()
 
@@ -313,8 +308,7 @@ class UserConfig(BaseModel):
             return self.visible
         last_page = self.user.statuses_count // 20
         while True:
-            weibos = get_weibo_pages(
-                f"107603{self.user_id}", start_page=last_page)
+            weibos = self.page.homepage(start_page=last_page)
             try:
                 weibo = next(weibos)
             except StopIteration:
@@ -360,7 +354,7 @@ class UserConfig(BaseModel):
         else:
             return True
 
-    def fetch_weibo(self, download_dir, start_page=1):
+    def fetch_weibo(self, download_dir):
         if not self.weibo_fetch:
             return
         since = pendulum.instance(self.weibo_update_at)
@@ -368,7 +362,7 @@ class UserConfig(BaseModel):
 
         self.set_visibility()
         now = pendulum.now()
-        weibos = self.user.timeline(since=since, start_page=start_page)
+        weibos = self.page.homepage(since=since)
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         if since > pendulum.now().subtract(years=1):
@@ -385,7 +379,7 @@ class UserConfig(BaseModel):
 
         if not self.liked_fetch:
             return
-        weibo_liked = self.user.liked_photo(since.subtract(years=5))
+        weibo_liked = self.page.liked(since.subtract(years=5))
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
                                 liked_by=self.user_id,
