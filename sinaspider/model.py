@@ -23,7 +23,7 @@ from sinaspider import console
 from sinaspider.helper import download_files, parse_url_extension
 from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
 from sinaspider.page import Page
-from sinaspider.parser import WeiboParser, get_user_by_id
+from sinaspider.parser import WeiboParser, UserParser
 
 database = PostgresqlExtDatabase("sinaspider", host="localhost")
 
@@ -96,7 +96,7 @@ class User(BaseModel):
             force_insert = False
         if not update:
             return user
-        user_dict = get_user_by_id(user_id)
+        user_dict = UserParser(user_id).user
         for k, v in user_dict.items():
             setattr(user, k, v)
         user.username = user.username or user.screen_name
@@ -379,7 +379,7 @@ class UserConfig(BaseModel):
 
         if not self.liked_fetch:
             return
-        weibo_liked = self.page.liked(since.subtract(years=5))
+        weibo_liked = self.page.liked()
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
                                 liked_by=self.user_id,

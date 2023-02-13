@@ -222,7 +222,7 @@ class UserParser:
     @property
     def user(self) -> dict:
         if self._user is not None:
-            return self._user
+            return self._user.copy()
         user_cn = self.get_user_cn()
         user_info = self.get_user_info()
 
@@ -254,9 +254,26 @@ class UserParser:
         if user_info['description'] == '':
             user_info.pop('description')
 
-        self._user = user_info
+        self._user = self._normalize(user_info)
 
-        return self._user
+        return self._user.copy()
+
+    @staticmethod
+    def _normalize(user_info):
+        user = {k: normalize_str(v) for k, v in user_info.items()}
+        assert 'homepage' not in user
+        assert 'username' not in user
+        assert 'age' not in user
+        if remark := user.pop('remark', ''):
+            user['username'] = remark
+        if birthday := user.get('birthday'):
+            user['age'] = pendulum.parse(birthday).diff().years
+        user['homepage'] = f'https://weibo.com/u/{user["id"]}'
+        console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
+        for v in user.values():
+            assert v or v == 0
+        pause(mode='page')
+        return user
 
     def get_user_cn(self) -> dict:
         user_cn = self._fetch_user_cn()
@@ -344,21 +361,3 @@ class UserParser:
         assert user_info['followers_count'] == user_info.pop(
             'followers_count_str')
         return user_info
-
-
-def get_user_by_id(uid: int):
-    user = UserParser(uid).user
-    user = {k: normalize_str(v) for k, v in user.items()}
-    assert 'homepage' not in user
-    assert 'username' not in user
-    assert 'age' not in user
-    if remark := user.pop('remark', ''):
-        user['username'] = remark
-    if birthday := user.get('birthday'):
-        user['age'] = pendulum.parse(birthday).diff().years
-    user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-    console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
-    for v in user.values():
-        assert v or v == 0
-    pause(mode='page')
-    return user

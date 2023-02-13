@@ -27,7 +27,7 @@ class Page:
             pause(mode='page')
 
     @staticmethod
-    def timeline(since: pendulum.DateTime = None):
+    def timeline(since: pendulum.DateTime):
         next_cursor = None
         seed = 'https://m.weibo.cn/feed/friends'
         while True:
@@ -47,7 +47,7 @@ class Page:
             console.log(f'created_at:{created_at}')
             pause(mode='page')
 
-    def liked(self, since: datetime) -> Iterator[dict]:
+    def liked(self) -> Iterator[dict]:
         """
         获取用户点赞的微博
         """
@@ -79,11 +79,6 @@ class Page:
                         normalize_str(weibo['followers_count']))
                     if followers_count > 20000 or followers_count < 500:
                         continue
-                    if weibo['created_at'] < since:
-                        console.log(
-                            f"时间 {weibo['created_at']:%y-%m-%d}"
-                            f"在 {since:%y-%m-%d} 之前, 获取完毕")
-                        return
                     if _check_liked(weibo['id']):
                         yield weibo
 
