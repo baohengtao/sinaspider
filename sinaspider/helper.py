@@ -1,3 +1,4 @@
+import itertools
 import mimetypes
 import random
 import re
@@ -128,37 +129,45 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         if expires < pendulum.now():
             console.log(f"{url} expires at {expires}, skip...", style="error")
             return
+    for tried_time in itertools.count(start=1):
+        while (r := get_url(url)).status_code != 200:
+            console.log(f"{url}, {r.status_code}", style="error")
+            if r.status_code == 404:
+                return
+            time.sleep(15)
+            console.log(f'retrying download for {url}...')
 
-    while (r := get_url(url)).status_code != 200:
-        console.log(f"{url}, {r.status_code}", style="error")
-        if r.status_code == 404:
-            return
-        time.sleep(15)
-        console.log(f'retrying download for {url}...')
+        if urlparse(r.url).path == '/images/default_d_w_large.gif':
+            img = img.with_suffix('.gif')
 
-    if urlparse(r.url).path == '/images/default_d_w_large.gif':
-        img = img.with_suffix('.gif')
+        if not img.suffix:
+            suffix = mimetypes.guess_extension(r.headers['Content-Type'])
+            console.log(f'no suffix found from {url}, '
+                        f'guess from content-type: {suffix}', style='error')
+            img = img.with_suffix(suffix)
+            count = 1
+            while img.exists():
+                img = img.with_name(f'{filename}({count}){suffix}')
+                count += 1
+            console.log(f'save to {img}', style='error')
+        assert img.suffix
 
-    if not img.suffix:
-        suffix = mimetypes.guess_extension(r.headers['Content-Type'])
-        console.log(f'no suffix found from {url}, '
-                    f'guess from content-type: {suffix}', style='error')
-        img = img.with_suffix(suffix)
-        count = 1
-        while img.exists():
-            img = img.with_name(f'{filename}({count}){suffix}')
-            count += 1
-        console.log(f'save to {img}', style='error')
-    assert img.suffix
+        img.write_bytes(r.content)
 
-    img.write_bytes(r.content)
-
-    if xmp_info:
-        try:
-            write_xmp(img, xmp_info)
-        except ExifToolExecuteException as e:
-            console.log(e.stderr, style='error')
-            raise e
+        if xmp_info:
+            try:
+                write_xmp(img, xmp_info)
+            except ExifToolExecuteException as e:
+                if tried_time < 3:
+                    console.log(
+                        f'{img}:write xmp failed, retrying {url}', style='error')
+                    continue
+                console.log(e.stderr, style='error')
+                img_failed = img.parent / 'problem' / img.name
+                img_failed.parent.mkdir(parents=True, exist_ok=True)
+                img.rename(img_failed)
+                raise e
+        break
 
 
 def download_files(imgs):

@@ -468,7 +468,8 @@ def save_weibo(weibos: Iterator[dict], download_dir: Path) -> Iterator[dict]:
     """
 
     for weibo_dict in weibos:
-        if extra_fields := set(weibo_dict) - set(Weibo._meta.fields):
+        current_fields = set(Weibo._meta.fields) | {"user_id", "pic_num"}
+        if extra_fields := set(weibo_dict) - current_fields:
             console.log(f"find extra fields: {extra_fields}", style='error')
         wb_id = weibo_dict["id"]
         if weibo := Weibo.get_or_none(id=wb_id):
