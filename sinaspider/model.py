@@ -173,12 +173,15 @@ class Weibo(BaseModel):
     def medias(self, filepath=None):
         photos = self.photos or {}
         prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
-        for sn, urls in photos.items():
-            for url in filter(bool, urls):
+        for sn, [photo_url, video_url] in photos.items():
+            for i, url in enumerate([photo_url, video_url]):
+                if url is None:
+                    continue
+                aux = '_video' if i == 1 else ''
                 ext = parse_url_extension(url)
                 yield {
                     "url": url,
-                    "filename": f"{prefix}_{sn}{ext}",
+                    "filename": f"{prefix}_{sn}{aux}{ext}",
                     "xmp_info": self.gen_meta(sn=sn, url=url),
                     "filepath": filepath,
                 }

@@ -1,5 +1,4 @@
 import itertools
-import mimetypes
 import random
 import re
 import time
@@ -59,20 +58,32 @@ def write_xmp(img: Path, tags: dict):
             tags[k] = v.replace('\n', '&#x0a;')
     params = ['-overwrite_original', '-ignoreMinorErrors', '-escapeHTML']
     with ExifToolHelper() as et:
+        ext = et.get_tags(img, 'File:FileTypeExtension')[
+            0]['File:FileTypeExtension'].lower()
+        if (suffix := f'.{ext}') != img.suffix:
+            new_img = img.with_suffix(suffix)
+            console.log(
+                f'{img}: suffix is not right, moving to {new_img}...',
+                style='error')
+            img = img.rename(new_img)
+
         try:
             et.set_tags(img, tags, params=params)
         except ExifToolExecuteException as e:
             pattern = r'Error: Not a valid .* \(looks more like a (.*)\)'
-            if not (match := re.match(pattern, e.stderr)):
+            if not re.match(pattern, e.stderr):
                 raise e
-            ext, i = match.group(1), 1
-            while (img_new := Path(f'{img}_problem({i}).{ext}')).exists():
-                i += 1
-            img.rename(img_new)
-            console.log(
-                f'wrong format of {img}, rename to {img_new}', style='error')
+            else:
+                # impossible since img has been renamed to new ext
+                assert False
+            # ext, i = match.group(1), 1
+            # while (img_new := Path(f'{img}_problem({i}).{ext}')).exists():
+            #     i += 1
+            # img.rename(img_new)
+            # console.log(
+            #     f'wrong format of {img}, rename to {img_new}', style='error')
 
-            et.set_tags(img_new, tags, params=params)
+            # et.set_tags(img_new, tags, params=params)
 
 
 def normalize_user_id(user_id) -> int:
@@ -140,17 +151,17 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         if urlparse(r.url).path == '/images/default_d_w_large.gif':
             img = img.with_suffix('.gif')
 
-        if not img.suffix:
-            suffix = mimetypes.guess_extension(r.headers['Content-Type'])
-            console.log(f'no suffix found from {url}, '
-                        f'guess from content-type: {suffix}', style='error')
-            img = img.with_suffix(suffix)
-            count = 1
-            while img.exists():
-                img = img.with_name(f'{filename}({count}){suffix}')
-                count += 1
-            console.log(f'save to {img}', style='error')
-        assert img.suffix
+        # if not img.suffix:
+        #     suffix = mimetypes.guess_extension(r.headers['Content-Type'])
+        #     console.log(f'no suffix found from {url}, '
+        #                 f'guess from content-type: {suffix}', style='error')
+        #     img = img.with_suffix(suffix)
+        #     count = 1
+        #     while img.exists():
+        #         img = img.with_name(f'{filename}({count}){suffix}')
+        #         count += 1
+        #     console.log(f'save to {img}', style='error')
+        # assert img.suffix
 
         img.write_bytes(r.content)
 
