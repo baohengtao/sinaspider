@@ -88,6 +88,8 @@ class WeiboParser:
                 photos[i] = [
                     pic_info['largest']['url'], pic_info.get('video')]
         elif pics := self.info.get('pics'):
+            if isinstance(pics, dict):
+                pics = [p for p in pics.values() if 'pid' in p]
             for i, pic in enumerate(pics, start=1):
                 photos[i] = [pic['large']['url'], pic.get('videoSrc')]
         else:

@@ -79,8 +79,8 @@ class Page:
         fetch user's liked weibo.
 
         Args:
-            until: fetch until this weibo id reached, default None
             parse: whether to parse weibo, default True
+            until: fetch until this weibo id reached, default None
         """
         from sinaspider.helper import normalize_str
         for weibo_info in self._liked_card():
@@ -161,13 +161,13 @@ class Page:
                       if card['card_type'] == 9]
 
             for weibo_info in mblogs:
-                weibo = WeiboParser(weibo_info).parse(online=False)
                 title = weibo_info.get('title', {}).get('text', '')
+                created_at = pendulum.from_format(
+                    weibo_info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 if '评论过的微博' in title:
-                    console.log(f'发现评论过的微博， 略过...{weibo}',
-                                style='warning')
+                    console.log('发现评论过的微博， 略过...', style='warning')
                     continue
-                if (created_at := weibo['created_at']) < since:
+                if created_at < since:
                     if title == '置顶':
                         console.log("略过置顶微博...")
                         continue
@@ -176,7 +176,7 @@ class Page:
                             f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
                             "获取完毕")
                         return
-                if 'retweeted' in weibo:
+                if 'retweeted_status' in weibo_info:
                     continue
                 yield WeiboParser(weibo_info).parse() if parse else weibo_info
             else:
