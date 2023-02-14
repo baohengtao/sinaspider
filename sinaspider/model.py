@@ -246,6 +246,7 @@ class UserConfig(BaseModel):
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=True)
     liked_fetch = BooleanField(default=False)
+    liked_last_id = BigIntegerField(null=True)
     weibo_update_at = DateTimeTZField(
         index=True, default=pendulum.datetime(1970, 1, 1))
     following = BooleanField(null=True)
@@ -358,7 +359,7 @@ class UserConfig(BaseModel):
         if not self.weibo_fetch:
             return
         since = pendulum.instance(self.weibo_update_at)
-        console.rule(f"开始获取 {self.username} (update_at:{since:%y-%m-%d})")
+        console.rule(f"开始获取 {self.username} 的主页(update_at:{since:%y-%m-%d})")
 
         self.set_visibility()
         now = pendulum.now()
@@ -377,16 +378,20 @@ class UserConfig(BaseModel):
         self.weibo_update_at = now
         self.save()
 
+    def fetch_liked(self, download_dir):
         if not self.liked_fetch:
             return
-        weibo_liked = self.page.liked()
+        console.rule(f"开始获取 {self.username} 的赞")
+        current_id = self.page.liked_last_id()
+        weibo_liked = self.page.liked(until=self.liked_last_id)
         console.log(f"Media Saving: {download_dir}")
         imgs = save_liked_weibo(weibo_liked,
                                 liked_by=self.user_id,
                                 download_dir=Path(download_dir) / "Liked")
         download_files(imgs)
         console.log(f"{self.user.username}的赞获取完毕\n")
-
+        self.liked_last_id = current_id
+        self.save()
         pause(mode="user")
 
 
@@ -463,8 +468,9 @@ def save_weibo(weibos: Iterator[dict], download_dir: Path) -> Iterator[dict]:
     """
 
     for weibo_dict in weibos:
+        if extra_fields := set(weibo_dict) - set(Weibo._meta.fields):
+            console.log(f"find extra fields: {extra_fields}", style='error')
         wb_id = weibo_dict["id"]
-        wb_id = normalize_wb_id(wb_id)
         if weibo := Weibo.get_or_none(id=wb_id):
             force_insert = False
         else:
@@ -472,7 +478,6 @@ def save_weibo(weibos: Iterator[dict], download_dir: Path) -> Iterator[dict]:
             force_insert = True
         for k, v in weibo_dict.items():
             setattr(weibo, k, v)
-        weibo.user = User.from_id(weibo_dict["user_id"])
         weibo.username = weibo.user.username
         weibo.save(force_insert=force_insert)
 
@@ -493,9 +498,9 @@ def save_liked_weibo(weibos: Iterator[dict],
         pic_num = weibo_dict['pic_num']
         if UserConfig.get_or_none(user_id=weibo.user_id):
             continue
-        if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
-            console.log(f'{weibo.id}: 到达上次爬取的页面位置， 获取完毕。')
-            break
+        # if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
+        #     console.log(f'{weibo.id}: 到达上次爬取的页面位置， 获取完毕。')
+        #     break
         if LikedWeibo.get_or_none(weibo_id=weibo.id):
             console.log(f'{weibo.id} already saved, continue...')
             continue
@@ -514,8 +519,13 @@ def save_liked_weibo(weibos: Iterator[dict],
             assert (ext := parse_url_extension(url))
 
             xmp_info = weibo.gen_meta(sn, url=url)
-            xmp_info['XMP:Title'] = f'{weibo.username}⭐️{liked_by_str}'
-            xmp_info['XMP:Description'] = xmp_info['XMP:BlogURL']
+            xmp_info.update({
+                'XMP:Title': f'{weibo.username}⭐️{liked_by_str}',
+                'XMP:Description': weibo.url,
+                'XMP:Artist': weibo.username,
+                'XMP:ImageSupplierName': 'WeiboLiked',
+            })
+
             yield {
                 "url": url,
                 "filename": f"{prefix}_{sn}{ext}",

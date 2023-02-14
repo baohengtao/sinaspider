@@ -48,13 +48,22 @@ class Page:
             console.log(f'created_at:{created_at}')
             pause(mode='page')
 
-    def liked(self, parse=True) -> Iterator[dict]:
+    def liked_last_id(self) -> int:
+        """get last liked weibo id"""
+        info = next(self.liked(filter=False))
+        return info['id']
+
+    def liked(self, until: int = None,
+              parse=True, filter=True) -> Iterator[dict]:
         """
         fetch user's liked weibo.
 
         Args:
             parse: whether to parse weibo, default True
+            filter: whether filter out unwanted weibo, default True
+            until: fetch until this weibo id reached, default None
         """
+        # TODO: check if until is reached
         from sinaspider.helper import normalize_str
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
@@ -73,18 +82,29 @@ class Page:
                 break
             mblogs = _yield_from_cards(cards)
             for weibo_info in mblogs:
+                if weibo_info["id"] == until:
+                    console.log(f'reached {until}, stopping...')
+                    return
+                if not filter:
+                    yield weibo_info
+                    continue
                 if weibo_info.get('deleted') == '1':
                     continue
-
-                weibo = WeiboParser(weibo_info).parse(online=False)
-
-                if "photos" in weibo and weibo['gender'] != 'm':
-                    followers_count = int(
-                        normalize_str(weibo['followers_count']))
-                    if followers_count > 20000 or followers_count < 500:
-                        continue
-                    if _check_liked(weibo['id']):
-                        yield weibo if parse else weibo_info
+                if weibo_info['pic_num'] == 0:
+                    continue
+                user_info = weibo_info['user']
+                if user_info['gender'] == 'm':
+                    continue
+                followers_count = int(
+                    normalize_str(user_info['followers_count']))
+                if followers_count > 20000 or followers_count < 500:
+                    continue
+                if not _check_liked(weibo_info['id']):
+                    continue
+                if parse:
+                    yield WeiboParser(weibo_info).parse(online=False)
+                else:
+                    yield weibo_info
 
             pause(mode='page')
 
@@ -142,13 +162,14 @@ class Page:
                       if card['card_type'] == 9]
 
             for weibo_info in mblogs:
-                weibo = WeiboParser(weibo_info).parse()
-                if weibo['is_comment']:
+                weibo = WeiboParser(weibo_info).parse(online=False)
+                title = weibo_info.get('title', {}).get('text', '')
+                if '评论过的微博' in title:
                     console.log(f'发现评论过的微博， 略过...{weibo}',
                                 style='warning')
                     continue
                 if (created_at := weibo['created_at']) < since:
-                    if weibo['is_pinned']:
+                    if title == '置顶':
                         console.log("略过置顶微博...")
                         continue
                     else:
@@ -156,8 +177,9 @@ class Page:
                             f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
                             "获取完毕")
                         return
-                if 'retweeted' not in weibo:
-                    yield weibo if parse else weibo_info
+                if 'retweeted' in weibo:
+                    continue
+                yield WeiboParser(weibo_info).parse() if parse else weibo_info
             else:
                 console.log(
                     f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")

@@ -57,6 +57,13 @@ def timeline(download_dir: Path = default_path,
     get_timeline(download_dir, since, dry_run)
 
 
+@app.command(help="Fetch users' liked weibo")
+def liked(download_dir: Path = default_path):
+    for uc in UserConfig:
+        if uc.liked_fetch and not uc.liked_last_id:
+            uc.fetch_liked(download_dir)
+
+
 def get_timeline(download_dir: Path,
                  since: pendulum.DateTime,
                  dry_run: bool = False):
@@ -74,6 +81,8 @@ def get_timeline(download_dir: Path,
             if dry_run:
                 uc.weibo_update_at = update_at
                 uc.save()
+        if uc.liked_fetch and uc.liked_last_id:
+            uc.fetch_liked(download_dir)
 
 
 @app.command(help='Schedule timeline command')

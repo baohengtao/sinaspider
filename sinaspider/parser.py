@@ -17,6 +17,7 @@ class WeiboParser:
 
     def __init__(self, weibo_info: dict):
         self.info = weibo_info
+        assert self.info['pic_num'] >= len(self.info['pic_ids'])
         self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
         self.weibo = {}
 
@@ -56,9 +57,6 @@ class WeiboParser:
         return self.weibo
 
     def basic_info(self):
-        title = self.info.get('title', {}).get('text', '')
-        is_pinned = title == '置顶'
-        is_comment = '评论过的微博' in title
         user = self.info['user']
         created_at = pendulum.from_format(
             self.info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
@@ -68,14 +66,10 @@ class WeiboParser:
             id=(id := int(self.info['id'])),
             bid=(bid := self.info.get('bid')),
             username=user['screen_name'],
-            gender=user['gender'],
-            followers_count=user['followers_count'],
             url=f'https://weibo.com/{user_id}/{bid or id}',
             url_m=f'https://m.weibo.cn/detail/{id}',
             created_at=created_at,
             source=self.info['source'],
-            is_pinned=is_pinned,
-            is_comment=is_comment,
             retweeted=self.info.get('retweeted_status', {}).get('bid'),
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
@@ -88,12 +82,12 @@ class WeiboParser:
         if self.weibo['pic_num'] == 0:
             return
         photos = {}
-        # if 'pic_infos' in self.info:
-        #     for i, pic_id in enumerate(self.info['pic_ids'], start=1):
-        #         pic_info = self.info['pic_infos'][pic_id]
-        #         photos[i] = [
-        #             pic_info['largest']['url'], pic_info.get('video')]
-        if pics := self.info.get('pics'):
+        if 'pic_infos' in self.info:
+            for i, pic_id in enumerate(self.info['pic_ids'], start=1):
+                pic_info = self.info['pic_infos'][pic_id]
+                photos[i] = [
+                    pic_info['largest']['url'], pic_info.get('video')]
+        elif pics := self.info.get('pics'):
             for i, pic in enumerate(pics, start=1):
                 photos[i] = [pic['large']['url'], pic.get('videoSrc')]
         else:
