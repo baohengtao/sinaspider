@@ -50,21 +50,10 @@ class Page:
 
     def liked_last_id(self) -> int:
         """get last liked weibo id"""
-        info = next(self.liked(filter=False))
+        info = next(self._liked_card())
         return info['id']
 
-    def liked(self, until: int = None,
-              parse=True, filter=True) -> Iterator[dict]:
-        """
-        fetch user's liked weibo.
-
-        Args:
-            parse: whether to parse weibo, default True
-            filter: whether filter out unwanted weibo, default True
-            until: fetch until this weibo id reached, default None
-        """
-        # TODO: check if until is reached
-        from sinaspider.helper import normalize_str
+    def _liked_card(self) -> Iterator[dict]:
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
         for page in itertools.count(start=1):
@@ -81,32 +70,42 @@ class Page:
                     style='error')
                 break
             mblogs = _yield_from_cards(cards)
-            for weibo_info in mblogs:
-                if weibo_info["id"] == until:
-                    console.log(f'reached {until}, stopping...')
-                    return
-                if not filter:
-                    yield weibo_info
-                    continue
-                if weibo_info.get('deleted') == '1':
-                    continue
-                if weibo_info['pic_num'] == 0:
-                    continue
-                user_info = weibo_info['user']
-                if user_info['gender'] == 'm':
-                    continue
-                followers_count = int(
-                    normalize_str(user_info['followers_count']))
-                if followers_count > 20000 or followers_count < 500:
-                    continue
-                if not _check_liked(weibo_info['id']):
-                    continue
-                if parse:
-                    yield WeiboParser(weibo_info).parse(online=False)
-                else:
-                    yield weibo_info
-
+            yield from mblogs
             pause(mode='page')
+
+    def liked(self, until: int = None,
+              parse=True) -> Iterator[dict]:
+        """
+        fetch user's liked weibo.
+
+        Args:
+            until: fetch until this weibo id reached, default None
+            parse: whether to parse weibo, default True
+        """
+        from sinaspider.helper import normalize_str
+        for weibo_info in self._liked_card():
+            if weibo_info["id"] == until:
+                console.log(f'reached {until}, stopping...')
+                break
+            if weibo_info.get('deleted') == '1':
+                continue
+            if weibo_info['pic_num'] == 0:
+                continue
+            user_info = weibo_info['user']
+            if user_info['gender'] == 'm':
+                continue
+            followers_count = int(
+                normalize_str(user_info['followers_count']))
+            if followers_count > 20000 or followers_count < 500:
+                continue
+            if not _check_liked(weibo_info['id']):
+                continue
+            if parse:
+                yield WeiboParser(weibo_info).parse(online=False)
+            else:
+                yield weibo_info
+        else:
+            assert until is None
 
     def homepage(self,
                  since: datetime = pendulum.from_timestamp(0),
