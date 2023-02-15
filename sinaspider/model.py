@@ -242,7 +242,7 @@ class Weibo(BaseModel):
 
 
 class UserConfig(BaseModel):
-    user = ForeignKeyField(User, unique=True, backref='config')
+    user: User = ForeignKeyField(User, unique=True, backref='config')
     username = CharField()
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=True)
@@ -436,11 +436,12 @@ class UserConfig(BaseModel):
             if UserConfig.get_or_none(user_id=weibo.user_id):
                 continue
             if LikedWeibo.get_or_none(
-                    weibo_id=weibo.id, liked_by=self.user_id):
-                console.log(
-                    f'{weibo.id}: Stopped by LikedWeibo, '
-                    f'not liked_last_id:{self.liked_last_id}',
-                    style='warning')
+                    weibo_id=weibo.id, user_id=self.user_id):
+                if self.liked_last_id is not None:
+                    console.log(
+                        f'{weibo.id}: Stopped by LikedWeibo, '
+                        f'not liked_last_id: {self.liked_last_id}',
+                        style='error')
                 break
             if len(weibo.photos) < weibo.pic_num:
                 weibo_full = WeiboParser.from_id(weibo.id).parse()
@@ -468,8 +469,7 @@ class UserConfig(BaseModel):
                 }
             bulk.append(weibo)
         bulk.reverse()
-        liked_latest = (LikedWeibo.select()
-                        .where(LikedWeibo.liked_by == self.user_id)
+        liked_latest = (self.user.liked_weibos
                         .order_by(LikedWeibo.order_num.desc())
                         .get_or_none())
         base_order = liked_latest.order_num if liked_latest else 0
@@ -477,9 +477,9 @@ class UserConfig(BaseModel):
         for i, weibo in enumerate(bulk, start=1):
             bulk_insert.append({
                 'weibo_id': weibo.id,
-                'user_id': weibo.user_id,
+                'weibo_by': weibo.user_id,
                 'pic_num': weibo.pic_num,
-                'liked_by': self.user_id,
+                'user_id': self.user_id,
                 'order_num': base_order + i
             })
         assert getattr(self, '_liked_insert', None) is None
@@ -538,17 +538,17 @@ class Artist(BaseModel):
 
 class LikedWeibo(BaseModel):
     weibo_id = BigIntegerField()
-    user_id = BigIntegerField()
+    weibo_by = BigIntegerField()
     pic_num = IntegerField()
-    liked_by = BigIntegerField()
-    added_at = DateTimeTZField(default=pendulum.now())
+    user = ForeignKeyField(User, backref='liked_weibos')
     order_num = IntegerField()
+    added_at = DateTimeTZField(default=pendulum.now)
 
     class Meta:
         table_name = "liked"
         indexes = (
-            (('liked_by', 'order_num'), True),
-            (('weibo_id', 'liked_by'), True),
+            (('user_id', 'order_num'), True),
+            (('weibo_id', 'user_id'), True),
         )
 
     def __repr__(self):

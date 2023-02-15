@@ -102,7 +102,8 @@ class Page:
             else:
                 yield weibo_info
         else:
-            assert until is None
+            console.log(f'weibo id {until} is not reached, '
+                        'all liked weibo has been fetched.', style='warning')
 
     def homepage(self,
                  since: datetime = pendulum.from_timestamp(0),
