@@ -18,15 +18,19 @@ default_path = Path.home() / 'Pictures/Sinaspider'
 def user(download_dir: str = default_path):
     while user_id := Prompt.ask('请输入用户名:smile:'):
         user_id = normalize_user_id(user_id)
-        uc = UserConfig.from_id(user_id, save=False)
-        if uc_in_db := UserConfig.get_or_none(user_id=user_id):
+        if uc := UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{uc.username}已在列表中')
+        uc = UserConfig.from_id(user_id)
         uc.weibo_fetch = Confirm.ask(f"是否获取{uc.username}的微博？", default=True)
-        if uc.weibo_fetch or uc_in_db:
-            uc.save()
-            console.log(f'用户{uc.username}更新完成')
+        uc.save()
         console.log(uc, '\n')
-        if uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
+        console.log(f'用户{uc.username}更新完成')
+        if not uc.weibo_fetch and Confirm.ask('是否删除该用户？', default=False):
+            uc.delete_instance()
+            console.log('用户已删除')
+            if uc.following:
+                console.log('记得取消关注', style='warning')
+        elif uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
             start_page = IntPrompt.ask('start_page', default=1)
             uc.fetch_weibo(download_dir, start_page=start_page)
 
@@ -81,8 +85,8 @@ def get_timeline(download_dir: Path,
             if dry_run:
                 uc.weibo_update_at = update_at
                 uc.save()
-        if uc.liked_fetch and uc.liked_last_id:
-            uc.fetch_liked(download_dir)
+        # if uc.liked_fetch and uc.liked_last_id:
+        #     uc.fetch_liked(download_dir)
 
 
 @app.command(help='Schedule timeline command')

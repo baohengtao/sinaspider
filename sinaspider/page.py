@@ -1,6 +1,5 @@
 import itertools
 from datetime import datetime
-from pathlib import Path
 from time import sleep
 from typing import Iterator
 
@@ -98,8 +97,6 @@ class Page:
                 normalize_str(user_info['followers_count']))
             if followers_count > 20000 or followers_count < 500:
                 continue
-            if not _check_liked(weibo_info['id']):
-                continue
             if parse:
                 yield WeiboParser(weibo_info).parse(online=False)
             else:
@@ -118,29 +115,7 @@ class Page:
             start_page: the start page to fetch
             parse: whether to parse weibo, default True
         """
-        yield from self._weibo_pages(
-            f"107603{self.id}",
-            since=since,
-            start_page=start_page,
-            parse=parse)
-
-    @staticmethod
-    def _weibo_pages(containerid: str,
-                     since: datetime,
-                     start_page: int = 1,
-                     parse: bool = True,
-                     ) -> Iterator[dict]:
-        """
-        爬取某一 containerid 类型的所有微博
-
-        Args:
-            containerid(str):
-                - 获取用户页面的微博: f"107603{user_id}"
-                - 获取收藏页面的微博: 230259
-            start_page(int): 指定从哪一页开始爬取, 默认第一页.
-            since: 从哪天开始爬取
-            parse: 是否解析微博, 默认解析
-        """
+        containerid = f"107603{self.id}",
         since = pendulum.instance(since)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         url = weibo_api_url.copy()
@@ -185,25 +160,25 @@ class Page:
                 pause(mode='page')
 
 
-def _check_liked(weibo_id):
-    from peewee import BigIntegerField, Model, SqliteDatabase
-    database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
+# def _check_liked(weibo_id):
+#     from peewee import BigIntegerField, Model, SqliteDatabase
+#     database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
 
-    class BaseModel(Model):
-        class Meta:
-            database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
+#     class BaseModel(Model):
+#         class Meta:
+#             database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
 
-    class LikedWeibo(BaseModel):
-        weibo_id = BigIntegerField()
+#     class LikedWeibo(BaseModel):
+#         weibo_id = BigIntegerField()
 
-    database.create_tables([LikedWeibo])
+#     database.create_tables([LikedWeibo])
 
-    if LikedWeibo.get_or_none(weibo_id=weibo_id):
-        console.log(f'{weibo_id} already in {database.database}',
-                    style='error')
-        return False
-    else:
-        return True
+#     if LikedWeibo.get_or_none(weibo_id=weibo_id):
+#         console.log(f'{weibo_id} already in {database.database}',
+#                     style='error')
+#         return False
+#     else:
+#         return True
 
 
 def _yield_from_cards(cards):

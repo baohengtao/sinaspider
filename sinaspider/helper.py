@@ -1,6 +1,5 @@
 import itertools
 import random
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -66,24 +65,7 @@ def write_xmp(img: Path, tags: dict):
                 f'{img}: suffix is not right, moving to {new_img}...',
                 style='error')
             img = img.rename(new_img)
-
-        try:
-            et.set_tags(img, tags, params=params)
-        except ExifToolExecuteException as e:
-            pattern = r'Error: Not a valid .* \(looks more like a (.*)\)'
-            if not re.match(pattern, e.stderr):
-                raise e
-            else:
-                # impossible since img has been renamed to new ext
-                assert False
-            # ext, i = match.group(1), 1
-            # while (img_new := Path(f'{img}_problem({i}).{ext}')).exists():
-            #     i += 1
-            # img.rename(img_new)
-            # console.log(
-            #     f'wrong format of {img}, rename to {img_new}', style='error')
-
-            # et.set_tags(img_new, tags, params=params)
+        et.set_tags(img, tags, params=params)
 
 
 def normalize_user_id(user_id) -> int:
@@ -151,32 +133,22 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         if urlparse(r.url).path == '/images/default_d_w_large.gif':
             img = img.with_suffix('.gif')
 
-        # if not img.suffix:
-        #     suffix = mimetypes.guess_extension(r.headers['Content-Type'])
-        #     console.log(f'no suffix found from {url}, '
-        #                 f'guess from content-type: {suffix}', style='error')
-        #     img = img.with_suffix(suffix)
-        #     count = 1
-        #     while img.exists():
-        #         img = img.with_name(f'{filename}({count}){suffix}')
-        #         count += 1
-        #     console.log(f'save to {img}', style='error')
-        # assert img.suffix
-
         img.write_bytes(r.content)
 
         if xmp_info:
             try:
                 write_xmp(img, xmp_info)
             except ExifToolExecuteException as e:
+                console.log(e.stderr, style='error')
                 if tried_time < 3:
                     console.log(
-                        f'{img}:write xmp failed, retrying {url}', style='error')
+                        f'{img}:write xmp failed, retrying {url}',
+                        style='error')
                     continue
-                console.log(e.stderr, style='error')
                 img_failed = img.parent / 'problem' / img.name
                 img_failed.parent.mkdir(parents=True, exist_ok=True)
                 img.rename(img_failed)
+                console.log(f'move {img} to {img_failed}', style='error')
                 raise e
         break
 

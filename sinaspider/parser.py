@@ -100,39 +100,8 @@ class WeiboParser:
                 page_pic, str) else page_pic['url']
             photos[1] = [url, None]
 
-            # assert 'article' in [
-            #     page_info['object_type'], page_info['type']]
-            # console.log(f"Article found for {self.wb['url_m']}, "
-            #             "skiping parse image url...",
-            #             style='error')
-            # self.wb['pic_num'] = 0
-
         assert len(photos) == len(self.info['pic_ids'])
         self.weibo['photos'] = photos
-
-    def photos_info(self):
-        pics = self.info.get('pics', [])
-        if isinstance(pics, dict):
-            pics = [p['large']['url']
-                    for p in pics.values() if 'large' in p]
-        else:
-            pics = [p['large']['url'] for p in pics]
-        if not pics and (ids := self.info.get('pic_ids')):
-            pics = [f'https://wx{i % 3 + 1}.sinaimg.cn/large/{id}'
-                    for i, id in enumerate(ids)]
-        # pics = [p['large']['url'] for p in pics]
-        live_photo = {}
-        live_photo_prefix = (
-            'https://video.weibo.com/media/play?'
-            'livephoto=//us.sinaimg.cn/')
-        if pic_video := self.info.get('pic_video'):
-            live_photo = {}
-            for p in pic_video.split(','):
-                sn, path = p.split(':')
-                live_photo[int(sn)] = f'{live_photo_prefix}{path}.mov'
-            assert max(live_photo) < len(pics)
-        self.weibo['photos'] = {str(i + 1): [pic, live_photo.get(i)]
-                                for i, pic in enumerate(pics)}
 
     def video_info_v2(self):
         page_info = self.info.get('page_info', {})
@@ -149,29 +118,6 @@ class WeiboParser:
             raise ValueError('no video info')
 
         self.weibo['video_duration'] = page_info['media_info']['duration']
-
-    def video_info(self):
-        page_info = self.info.get('page_info', {})
-        if not page_info.get('type') == "video":
-            return
-        media_info = page_info['urls'] or page_info['media_info']
-        keys = [
-            'mp4_1080p_mp4', 'mp4_720p', 'mp4_720p_mp4', 'mp4_hd_mp4',
-            'mp4_hd', 'mp4_hd_url', 'hevc_mp4_hd', 'mp4_ld_mp4', 'mp4_ld',
-            'hevc_mp4_ld', 'stream_url_hd', 'stream_url',
-            'inch_4_mp4_hd', 'inch_5_mp4_hd', 'inch_5_5_mp4_hd', 'duration'
-        ]
-        if not set(media_info).issubset(keys):
-            console.log(media_info)
-            console.log(str(set(media_info) - set(keys)), style='error')
-            # assert False
-        urls = [v for k in keys if (v := media_info.get(k))]
-        if not urls:
-            console.log(f'no video info:==>{page_info}', style='warning')
-        else:
-            self.weibo['video_url'] = urls[0]
-            if duration := float(media_info.get('duration', 0)):
-                self.weibo['video_duration'] = duration
 
     @staticmethod
     def text_info(text):

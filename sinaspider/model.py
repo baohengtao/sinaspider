@@ -291,7 +291,7 @@ class UserConfig(BaseModel):
         return text.strip()
 
     @classmethod
-    def from_id(cls, user_id, save=True) -> Self:
+    def from_id(cls, user_id) -> Self:
         user = User.from_id(user_id, update=True)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
@@ -303,8 +303,8 @@ class UserConfig(BaseModel):
                 continue
             else:
                 setattr(user_config, k, v)
-        if save:
-            user_config.save()
+
+        user_config.save()
         return user_config
 
     def set_visibility(self) -> bool:
