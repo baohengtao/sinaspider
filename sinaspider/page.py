@@ -85,7 +85,7 @@ class Page:
         for weibo_info in self._liked_card():
             if weibo_info["id"] == until:
                 console.log(f'reached {until}, stopping...')
-                break
+                return
             if weibo_info.get('deleted') == '1':
                 continue
             if weibo_info['pic_num'] == 0:
@@ -101,9 +101,11 @@ class Page:
                 yield WeiboParser(weibo_info).parse(online=False)
             else:
                 yield weibo_info
-        else:
-            console.log(f'weibo id {until} is not reached, '
-                        'all liked weibo has been fetched.', style='warning')
+
+        if until is not None:
+            console.log(
+                f'weibo id {until} is not reached, all liked weibo '
+                'has been fetched.', style='warning')
 
     def homepage(self,
                  since: datetime = pendulum.from_timestamp(0),

@@ -16,6 +16,7 @@ from playhouse.postgres_ext import (
     ArrayField,
     CharField,
     ForeignKeyField,
+    DeferredForeignKey,
     JSONField,
 )
 
@@ -37,212 +38,8 @@ class BaseModel(Model):
         return "\n".join(f'{k}: {v}' for k, v in model.items())
 
 
-class User(BaseModel):
-    id = BigIntegerField(primary_key=True, unique=True)
-    username = TextField()
-    screen_name = TextField()
-    following = BooleanField()
-    birthday = TextField(null=True)
-    age = IntegerField(null=True)
-    gender = TextField()
-    education = ArrayField(field_class=TextField, null=True)
-    location = TextField(null=True)
-
-    hometown = TextField(null=True)
-    description = TextField(null=True)
-    homepage = TextField(null=True)
-    statuses_count = IntegerField(null=True)
-    followers_count = IntegerField(null=True)
-    follow_count = IntegerField(null=True)
-    follow_me = BooleanField(null=True)
-
-    avatar_hd = TextField(null=True)
-    close_blue_v = BooleanField(null=True)
-    like = BooleanField(null=True)
-    like_me = BooleanField(null=True)
-    mbrank = BigIntegerField(null=True)
-    mbtype = BigIntegerField(null=True)
-    urank = BigIntegerField(null=True)
-    verified = BooleanField(null=True)
-    verified_reason = TextField(null=True)
-    verified_type = BigIntegerField(null=True)
-    verified_type_ext = BigIntegerField(null=True)
-    公司 = TextField(null=True)
-    工作经历 = TextField(null=True)
-    性取向 = TextField(null=True)
-    感情状况 = TextField(null=True)
-    标签 = TextField(null=True)
-    注册时间 = TextField(null=True)
-    阳光信用 = TextField(null=True)
-    IP = TextField(null=True)
-    svip = IntegerField(null=True)
-
-    def __repr__(self):
-        return super().__repr__()
-
-    class Meta:
-        table_name = "user"
-
-    @classmethod
-    def from_id(cls, user_id: int, update=False) -> Self:
-        user_id = normalize_user_id(user_id)
-        if (user := User.get_or_none(id=user_id)) is None:
-            force_insert = True
-            update = True
-            user = User()
-        else:
-            force_insert = False
-        if not update:
-            return user
-        user_dict = UserParser(user_id).user
-        for k, v in user_dict.items():
-            setattr(user, k, v)
-        user.username = user.username or user.screen_name
-        if extra_fields := set(user_dict) - set(cls._meta.fields):
-            extra_info = {k: user_dict[k] for k in extra_fields}
-            raise ValueError(f'some fields not saved to model: {extra_info}')
-        user.save(force_insert=force_insert)
-
-        return cls.get_by_id(user_id)
-
-    def __str__(self):
-        text = ""
-        keys = [
-            "id",
-            "username",
-            "following",
-            "gender",
-            "birthday",
-            "location",
-            "homepage",
-            "description",
-            "statuses_count",
-            "followers_count",
-            "follow_count",
-            "IP"
-        ]
-        for k in keys:
-            if (v := getattr(self, k, None)) is not None:
-                text += f"{k}: {v}\n"
-        return text.strip()
-
-
-class Weibo(BaseModel):
-    id = BigIntegerField(primary_key=True, unique=True)
-    bid = TextField(null=True)
-    user = ForeignKeyField(User, backref="weibos")
-    username = TextField(null=True)
-    created_at = DateTimeTZField(null=True)
-    text = TextField(null=True)
-    url = TextField(null=True)
-    url_m = TextField(null=True)
-    at_users = ArrayField(field_class=TextField, null=True)
-    location = TextField(null=True)
-    attitudes_count = IntegerField(null=True)
-    comments_count = IntegerField(null=True)
-    reposts_count = IntegerField(null=True)
-    source = TextField(null=True)
-    topics = ArrayField(field_class=TextField, null=True)
-    photos = JSONField(null=True)
-    video_duration = BigIntegerField(null=True)
-    video_url = TextField(null=True)
-
-    class Meta:
-        table_name = "weibo"
-
-    @classmethod
-    def from_id(cls, wb_id, update=False) -> Self:
-        wb_id = normalize_wb_id(wb_id)
-        if not (weibo := cls.get_or_none(id=wb_id)):
-            force_insert = True
-            update = True,
-            weibo = cls()
-        else:
-            force_insert = False
-        if not update:
-            return weibo
-
-        weibo_dict = WeiboParser.from_id(wb_id).parse()
-        for k, v in weibo_dict.items():
-            setattr(weibo, k, v)
-        weibo.save(force_insert=force_insert)
-        return cls.get_by_id(wb_id)
-
-    def medias(self, filepath=None):
-        photos = self.photos or {}
-        prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
-        for sn, [photo_url, video_url] in photos.items():
-            for i, url in enumerate([photo_url, video_url]):
-                if url is None:
-                    continue
-                aux = '_video' if i == 1 else ''
-                ext = parse_url_extension(url)
-                yield {
-                    "url": url,
-                    "filename": f"{prefix}_{sn}{aux}{ext}",
-                    "xmp_info": self.gen_meta(sn=sn, url=url),
-                    "filepath": filepath,
-                }
-        if url := self.video_url:
-            assert ";" not in url
-            if (duration := self.video_duration) and duration > 600:
-                console.log(f"video_duration is {duration})...skipping...")
-            else:
-                assert (ext := parse_url_extension(url)) == '.mp4'
-                yield {
-                    "url": url,
-                    "filename": f"{prefix}{ext}",
-                    "xmp_info": self.gen_meta(url=url),
-                    "filepath": filepath,
-                }
-
-    def gen_meta(self, sn: str | int = 0, url: str = "") -> dict:
-        sn = int(sn) if sn else 0
-        xmp_info = {
-            "ImageUniqueID": self.bid,
-            "ImageSupplierID": self.user_id,
-            "ImageSupplierName": "Weibo",
-            "ImageCreatorName": self.username,
-            "BlogTitle": self.text,
-            "BlogURL": self.url,
-            "Location": self.location,
-            "DateCreated": (self.created_at +
-                            pendulum.Duration(microseconds=int(sn))),
-            "SeriesNumber": sn if sn else '',
-            "URLUrl": url
-        }
-
-        xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
-            "%Y:%m:%d %H:%M:%S.%f"
-        )
-        return {"XMP:" + k: v for k, v in xmp_info.items() if v}
-
-    def __str__(self):
-        text = ""
-        keys = [
-            "user_id",
-            "username",
-            "id",
-            "text",
-            "location",
-            "created_at",
-            "at_users",
-            "url",
-        ]
-        for k in keys:
-            if (v := getattr(self, k, None)) is not None:
-                text += f"{k}: {v}\n"
-        return text.strip()
-
-    def __repr__(self):
-        return super().__repr__()
-
-
-# noinspection PyTypeChecker
-
-
 class UserConfig(BaseModel):
-    user: User = ForeignKeyField(User, unique=True, backref='config')
+    user: "User" = DeferredForeignKey("User", unique=True, backref='config')
     username = CharField()
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=True)
@@ -484,6 +281,207 @@ class UserConfig(BaseModel):
             })
         assert getattr(self, '_liked_insert', None) is None
         self._liked_insert: list = bulk_insert
+
+
+class User(BaseModel):
+    id = BigIntegerField(primary_key=True, unique=True)
+    username = TextField()
+    screen_name = TextField()
+    following = BooleanField()
+    birthday = TextField(null=True)
+    age = IntegerField(null=True)
+    gender = TextField()
+    education = ArrayField(field_class=TextField, null=True)
+    location = TextField(null=True)
+
+    hometown = TextField(null=True)
+    description = TextField(null=True)
+    homepage = TextField(null=True)
+    statuses_count = IntegerField(null=True)
+    followers_count = IntegerField(null=True)
+    follow_count = IntegerField(null=True)
+    follow_me = BooleanField(null=True)
+
+    avatar_hd = TextField(null=True)
+    close_blue_v = BooleanField(null=True)
+    like = BooleanField(null=True)
+    like_me = BooleanField(null=True)
+    mbrank = BigIntegerField(null=True)
+    mbtype = BigIntegerField(null=True)
+    urank = BigIntegerField(null=True)
+    verified = BooleanField(null=True)
+    verified_reason = TextField(null=True)
+    verified_type = BigIntegerField(null=True)
+    verified_type_ext = BigIntegerField(null=True)
+    公司 = TextField(null=True)
+    工作经历 = TextField(null=True)
+    性取向 = TextField(null=True)
+    感情状况 = TextField(null=True)
+    标签 = TextField(null=True)
+    注册时间 = TextField(null=True)
+    阳光信用 = TextField(null=True)
+    IP = TextField(null=True)
+    svip = IntegerField(null=True)
+
+    def __repr__(self):
+        return super().__repr__()
+
+    class Meta:
+        table_name = "user"
+
+    @classmethod
+    def from_id(cls, user_id: int, update=False) -> Self:
+        user_id = normalize_user_id(user_id)
+        if (user := User.get_or_none(id=user_id)) is None:
+            force_insert = True
+            update = True
+            user = User()
+        else:
+            force_insert = False
+        if not update:
+            return user
+        user_dict = UserParser(user_id).user
+        for k, v in user_dict.items():
+            setattr(user, k, v)
+        user.username = user.username or user.screen_name
+        if extra_fields := set(user_dict) - set(cls._meta.fields):
+            extra_info = {k: user_dict[k] for k in extra_fields}
+            raise ValueError(f'some fields not saved to model: {extra_info}')
+        user.save(force_insert=force_insert)
+
+        return cls.get_by_id(user_id)
+
+    def __str__(self):
+        text = ""
+        keys = [
+            "id",
+            "username",
+            "following",
+            "gender",
+            "birthday",
+            "location",
+            "homepage",
+            "description",
+            "statuses_count",
+            "followers_count",
+            "follow_count",
+            "IP"
+        ]
+        for k in keys:
+            if (v := getattr(self, k, None)) is not None:
+                text += f"{k}: {v}\n"
+        return text.strip()
+
+
+class Weibo(BaseModel):
+    id = BigIntegerField(primary_key=True, unique=True)
+    bid = TextField(null=True)
+    user = ForeignKeyField(User, backref="weibos")
+    username = TextField(null=True)
+    created_at = DateTimeTZField(null=True)
+    text = TextField(null=True)
+    url = TextField(null=True)
+    url_m = TextField(null=True)
+    at_users = ArrayField(field_class=TextField, null=True)
+    location = TextField(null=True)
+    attitudes_count = IntegerField(null=True)
+    comments_count = IntegerField(null=True)
+    reposts_count = IntegerField(null=True)
+    source = TextField(null=True)
+    topics = ArrayField(field_class=TextField, null=True)
+    photos = JSONField(null=True)
+    video_duration = BigIntegerField(null=True)
+    video_url = TextField(null=True)
+
+    class Meta:
+        table_name = "weibo"
+
+    @classmethod
+    def from_id(cls, wb_id, update=False) -> Self:
+        wb_id = normalize_wb_id(wb_id)
+        if not (weibo := cls.get_or_none(id=wb_id)):
+            force_insert = True
+            update = True,
+            weibo = cls()
+        else:
+            force_insert = False
+        if not update:
+            return weibo
+
+        weibo_dict = WeiboParser.from_id(wb_id).parse()
+        for k, v in weibo_dict.items():
+            setattr(weibo, k, v)
+        weibo.save(force_insert=force_insert)
+        return cls.get_by_id(wb_id)
+
+    def medias(self, filepath=None):
+        photos = self.photos or {}
+        prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
+        for sn, [photo_url, video_url] in photos.items():
+            for i, url in enumerate([photo_url, video_url]):
+                if url is None:
+                    continue
+                aux = '_video' if i == 1 else ''
+                ext = parse_url_extension(url)
+                yield {
+                    "url": url,
+                    "filename": f"{prefix}_{sn}{aux}{ext}",
+                    "xmp_info": self.gen_meta(sn=sn, url=url),
+                    "filepath": filepath,
+                }
+        if url := self.video_url:
+            assert ";" not in url
+            if (duration := self.video_duration) and duration > 600:
+                console.log(f"video_duration is {duration})...skipping...")
+            else:
+                assert (ext := parse_url_extension(url)) == '.mp4'
+                yield {
+                    "url": url,
+                    "filename": f"{prefix}{ext}",
+                    "xmp_info": self.gen_meta(url=url),
+                    "filepath": filepath,
+                }
+
+    def gen_meta(self, sn: str | int = 0, url: str = "") -> dict:
+        sn = int(sn) if sn else 0
+        xmp_info = {
+            "ImageUniqueID": self.bid,
+            "ImageSupplierID": self.user_id,
+            "ImageSupplierName": "Weibo",
+            "ImageCreatorName": self.username,
+            "BlogTitle": self.text,
+            "BlogURL": self.url,
+            "Location": self.location,
+            "DateCreated": (self.created_at +
+                            pendulum.Duration(microseconds=int(sn))),
+            "SeriesNumber": sn if sn else '',
+            "URLUrl": url
+        }
+
+        xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
+            "%Y:%m:%d %H:%M:%S.%f"
+        )
+        return {"XMP:" + k: v for k, v in xmp_info.items() if v}
+
+    def __str__(self):
+        text = ""
+        keys = [
+            "user_id",
+            "username",
+            "id",
+            "text",
+            "location",
+            "created_at",
+            "at_users",
+            "url",
+        ]
+        for k in keys:
+            if (v := getattr(self, k, None)) is not None:
+                text += f"{k}: {v}\n"
+        return text.strip()
+
+    def __repr__(self):
+        return super().__repr__()
 
 
 class Artist(BaseModel):
