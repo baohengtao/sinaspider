@@ -356,28 +356,63 @@ class UserConfig(BaseModel):
         else:
             return True
 
-    def fetch_weibo(self, download_dir):
+    def fetch_weibo(self, download_dir: Path):
         if not self.weibo_fetch:
             return
         since = pendulum.instance(self.weibo_update_at)
         console.rule(f"开始获取 {self.username} 的主页(update_at:{since:%y-%m-%d})")
-
-        self.set_visibility()
-        now = pendulum.now()
-        weibos = self.page.homepage(since=since)
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        if since > pendulum.now().subtract(years=1):
-            user_root = 'Users'
-        else:
-            user_root = 'New'
-        imgs = self.save_weibo(weibos, Path(download_dir) /
-                               user_root / self.username)
+        self.set_visibility()
+        now = pendulum.now()
+        imgs = self._save_weibo(since, download_dir)
         download_files(imgs)
         console.log(f"{self.user.username}微博获取完毕\n")
 
         self.weibo_update_at = now
         self.save()
+
+    def _save_weibo(
+            self,
+            since: pendulum.DateTime,
+            download_dir: Path) -> Iterator[dict]:
+        """
+        Save weibo to database and return media info
+        :param weibos: Iterator of weibo dict
+        :param download_dir:
+        :return: generator of medias to downloads
+        """
+
+        if since > pendulum.now().subtract(years=1):
+            user_root = 'Users'
+        else:
+            user_root = 'New'
+        download_dir = Path(download_dir) / user_root / self.username
+
+        for weibo_dict in self.page.homepage(since=since):
+            assert weibo_dict['user_id'] == self.user_id
+            current_fields = set(Weibo._meta.fields) | {"user_id", "pic_num"}
+            if extra_fields := set(weibo_dict) - current_fields:
+                console.log(
+                    f"find extra fields: {extra_fields}", style='error')
+            wb_id = weibo_dict["id"]
+            if weibo := Weibo.get_or_none(id=wb_id):
+                force_insert = False
+            else:
+                weibo = Weibo()
+                force_insert = True
+            for k, v in weibo_dict.items():
+                setattr(weibo, k, v)
+            weibo.username = self.username
+            weibo.save(force_insert=force_insert)
+
+            medias = list(weibo.medias(download_dir))
+            console.log(weibo)
+            if medias:
+                console.log(
+                    f"Downloading {len(medias)} files to {download_dir}..")
+            console.print()
+            yield from medias
 
     def fetch_liked(self, download_dir):
         if not self.liked_fetch:
@@ -394,39 +429,6 @@ class UserConfig(BaseModel):
         self.liked_last_id = current_id
         self.save()
         pause(mode="user")
-
-    @staticmethod
-    def save_weibo(weibos: Iterator[dict], download_dir: Path) -> Iterator[dict]:
-        """
-        Save weibo to database and return media info
-        :param weibos: Iterator of weibo dict
-        :param download_dir:
-        :return: generator of medias to downloads
-        """
-
-        for weibo_dict in weibos:
-            current_fields = set(Weibo._meta.fields) | {"user_id", "pic_num"}
-            if extra_fields := set(weibo_dict) - current_fields:
-                console.log(
-                    f"find extra fields: {extra_fields}", style='error')
-            wb_id = weibo_dict["id"]
-            if weibo := Weibo.get_or_none(id=wb_id):
-                force_insert = False
-            else:
-                weibo = Weibo()
-                force_insert = True
-            for k, v in weibo_dict.items():
-                setattr(weibo, k, v)
-            weibo.username = weibo.user.username
-            weibo.save(force_insert=force_insert)
-
-            medias = list(weibo.medias(download_dir))
-            console.log(weibo)
-            if medias:
-                console.log(
-                    f"Downloading {len(medias)} files to {download_dir}..")
-            console.print()
-            yield from medias
 
     @staticmethod
     def save_liked_weibo(weibos: Iterator[dict],
