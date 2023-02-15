@@ -246,10 +246,10 @@ class UserConfig(BaseModel):
     username = CharField()
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=True)
+    weibo_update_at = DateTimeTZField(default=pendulum.datetime(1970, 1, 1))
     liked_fetch = BooleanField(default=False)
     liked_last_id = BigIntegerField(null=True)
-    weibo_update_at = DateTimeTZField(
-        index=True, default=pendulum.datetime(1970, 1, 1))
+    liked_update_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
@@ -378,8 +378,6 @@ class UserConfig(BaseModel):
             download_dir: Path) -> Iterator[dict]:
         """
         Save weibo to database and return media info
-        :param weibos: Iterator of weibo dict
-        :param download_dir:
         :return: generator of medias to downloads
         """
 
@@ -419,30 +417,29 @@ class UserConfig(BaseModel):
             return
         console.rule(f"开始获取 {self.username} 的赞")
         current_id = self.page.liked_last_id()
-        weibo_liked = self.page.liked(until=self.liked_last_id)
+        now = pendulum.now()
         console.log(f"Media Saving: {download_dir}")
-        imgs = self.save_liked_weibo(weibo_liked,
-                                     liked_by=self.user_id,
-                                     download_dir=Path(download_dir) / "Liked")
+        imgs = self._save_liked(download_dir=Path(download_dir) / "Liked")
         download_files(imgs)
+        LikedWeibo.insert_many(self._liked_insert).execute()
+        self._liked_insert = None
         console.log(f"{self.user.username}的赞获取完毕\n")
         self.liked_last_id = current_id
+        self.liked_update_at = now
         self.save()
         pause(mode="user")
 
-    @staticmethod
-    def save_liked_weibo(weibos: Iterator[dict],
-                         liked_by: int,
-                         download_dir: Path) -> Iterator[dict]:
-        liked_by_str = User.from_id(liked_by).username
+    def _save_liked(self, download_dir: Path) -> Iterator[dict]:
         bulk = []
-        for weibo_dict in weibos:
+        for weibo_dict in self.page.liked(until=self.liked_last_id):
             weibo = Weibo(**weibo_dict)
             if UserConfig.get_or_none(user_id=weibo.user_id):
                 continue
-            if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
+            if LikedWeibo.get_or_none(
+                    weibo_id=weibo.id, liked_by=self.user_id):
                 console.log(
-                    f'{weibo.id}: Stopped by LikedWeibo, not last_liked_id',
+                    f'{weibo.id}: Stopped by LikedWeibo, '
+                    f'not liked_last_id:{self.liked_last_id}',
                     style='warning')
                 break
             if len(weibo.photos) < weibo.pic_num:
@@ -451,13 +448,13 @@ class UserConfig(BaseModel):
             console.log(weibo)
             console.log(
                 f"Downloading {len(weibo.photos)} files to {download_dir}..\n")
-            prefix = f"{liked_by_str}_{weibo.username}_{weibo.id}"
+            prefix = f"{self.username}_{weibo.username}_{weibo.id}"
             for sn, (url, _) in weibo.photos.items():
                 assert (ext := parse_url_extension(url))
 
                 xmp_info = weibo.gen_meta(sn, url=url)
                 xmp_info.update({
-                    'XMP:Title': f'{weibo.username}⭐️{liked_by_str}',
+                    'XMP:Title': f'{weibo.username}⭐️{self.username}',
                     'XMP:Description': weibo.url,
                     'XMP:Artist': weibo.username,
                     'XMP:ImageSupplierName': 'WeiboLiked',
@@ -467,12 +464,12 @@ class UserConfig(BaseModel):
                     "url": url,
                     "filename": f"{prefix}_{sn}{ext}",
                     "xmp_info": xmp_info,
-                    "filepath": download_dir / liked_by_str
+                    "filepath": download_dir / self.username
                 }
             bulk.append(weibo)
         bulk.reverse()
         liked_latest = (LikedWeibo.select()
-                        .where(LikedWeibo.liked_by == liked_by)
+                        .where(LikedWeibo.liked_by == self.user_id)
                         .order_by(LikedWeibo.order_num.desc())
                         .get_or_none())
         base_order = liked_latest.order_num if liked_latest else 0
@@ -482,10 +479,11 @@ class UserConfig(BaseModel):
                 'weibo_id': weibo.id,
                 'user_id': weibo.user_id,
                 'pic_num': weibo.pic_num,
-                'liked_by': liked_by,
+                'liked_by': self.user_id,
                 'order_num': base_order + i
             })
-        LikedWeibo.insert_many(bulk_insert).execute()
+        assert getattr(self, '_liked_insert', None) is None
+        self._liked_insert: list = bulk_insert
 
 
 class Artist(BaseModel):

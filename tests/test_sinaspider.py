@@ -1,7 +1,11 @@
-from sinaspider.model import *
+from sinaspider.model import (
+    User, UserConfig, Artist, Weibo,
+    PostgresqlExtDatabase, pendulum, Path)
 from sinaspider import console
 from python_on_whales import DockerClient
 import pytest
+
+# TODO write test
 
 
 @pytest.fixture(scope='session')
@@ -28,9 +32,8 @@ def test_start_docker(start_docker):
 def test_user(start_docker):
     user_id = 1120967445
     user = User.from_id(user_id)
-    for weibo in user.timeline(since=12):
+    for weibo in user.weibo_page(since=pendulum.now().subtract(days=12)):
         console.print(weibo)
-    return user
 
 
 def test_weibo():
