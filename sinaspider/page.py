@@ -160,27 +160,6 @@ class Page:
                 pause(mode='page')
 
 
-# def _check_liked(weibo_id):
-#     from peewee import BigIntegerField, Model, SqliteDatabase
-#     database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
-
-#     class BaseModel(Model):
-#         class Meta:
-#             database = SqliteDatabase(Path.home() / ".cache/liked_weibo.db")
-
-#     class LikedWeibo(BaseModel):
-#         weibo_id = BigIntegerField()
-
-#     database.create_tables([LikedWeibo])
-
-#     if LikedWeibo.get_or_none(weibo_id=weibo_id):
-#         console.log(f'{weibo_id} already in {database.database}',
-#                     style='error')
-#         return False
-#     else:
-#         return True
-
-
 def _yield_from_cards(cards):
     for card in cards:
         if card['card_type'] == 9:

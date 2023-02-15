@@ -449,14 +449,25 @@ class Artist(BaseModel):
 
 
 class LikedWeibo(BaseModel):
-    weibo_id = BigIntegerField(primary_key=True, unique=True)
+    weibo_id = BigIntegerField()
     user_id = BigIntegerField()
     pic_num = IntegerField()
     liked_by = BigIntegerField()
     added_at = DateTimeTZField(default=pendulum.now())
+    order_num = IntegerField()
 
     class Meta:
         table_name = "liked"
+        indexes = (
+            (('liked_by', 'order_num'), True),
+            (('weibo_id', 'liked_by'), True),
+        )
+
+    def __repr__(self):
+        return super().__repr__()
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])
@@ -497,27 +508,22 @@ def save_liked_weibo(weibos: Iterator[dict],
                      liked_by: int,
                      download_dir: Path) -> Iterator[dict]:
     liked_by_str = User.from_id(liked_by).username
+    bulk = []
     for weibo_dict in weibos:
         weibo = Weibo(**weibo_dict)
-        pic_num = weibo_dict['pic_num']
         if UserConfig.get_or_none(user_id=weibo.user_id):
             continue
-        # if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
-        #     console.log(f'{weibo.id}: 到达上次爬取的页面位置， 获取完毕。')
-        #     break
-        if LikedWeibo.get_or_none(weibo_id=weibo.id):
-            console.log(f'{weibo.id} already saved, continue...')
-            continue
-        LikedWeibo.create(weibo_id=weibo.id, user_id=weibo.user_id,
-                          liked_by=liked_by, pic_num=pic_num)
-        if len(weibo.photos) < pic_num:
+        if LikedWeibo.get_or_none(weibo_id=weibo.id, liked_by=liked_by):
+            console.log(
+                f'{weibo.id}: Stopped by LikedWeibo, not last_liked_id',
+                style='warning')
+            break
+        if len(weibo.photos) < weibo.pic_num:
             weibo_full = WeiboParser.from_id(weibo.id).parse()
             weibo = Weibo(**weibo_full)
-            assert pic_num == len(weibo.photos)
-        filepath = download_dir / str(pic_num)
         console.log(weibo)
         console.log(
-            f"Downloading {pic_num} files to {filepath}..\n")
+            f"Downloading {len(weibo.photos)} files to {download_dir}..\n")
         prefix = f"{liked_by_str}_{weibo.username}_{weibo.id}"
         for sn, (url, _) in weibo.photos.items():
             assert (ext := parse_url_extension(url))
@@ -534,5 +540,22 @@ def save_liked_weibo(weibos: Iterator[dict],
                 "url": url,
                 "filename": f"{prefix}_{sn}{ext}",
                 "xmp_info": xmp_info,
-                "filepath": filepath
+                "filepath": download_dir / liked_by_str
             }
+        bulk.append(weibo)
+    bulk.reverse()
+    liked_latest = (LikedWeibo.select()
+                    .where(LikedWeibo.liked_by == liked_by)
+                    .order_by(LikedWeibo.order_num.desc())
+                    .get_or_none())
+    base_order = liked_latest.order_num if liked_latest else 0
+    bulk_insert = []
+    for i, weibo in enumerate(bulk, start=1):
+        bulk_insert.append({
+            'weibo_id': weibo.id,
+            'user_id': weibo.user_id,
+            'pic_num': weibo.pic_num,
+            'liked_by': liked_by,
+            'order_num': base_order + i
+        })
+    LikedWeibo.insert_many(bulk_insert).execute()

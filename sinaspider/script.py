@@ -66,6 +66,19 @@ def liked(download_dir: Path = default_path):
     for uc in UserConfig:
         if uc.liked_fetch and not uc.liked_last_id:
             uc.fetch_liked(download_dir)
+            return
+    while user_id := Prompt.ask('请输入用户名:smile:'):
+        user_id = normalize_user_id(user_id)
+        if not UserConfig.get_or_none(user_id=user_id):
+            console.log(f'用户{user_id}不在列表中')
+            continue
+        uc = UserConfig.from_id(user_id)
+        uc.liked_fetch = Confirm.ask('是否获取该用户的点赞？', default=True)
+        uc.save()
+        console.log(uc, '\n')
+        console.log(f'用户{uc.username}更新完成')
+        if uc.liked_fetch and Confirm.ask('是否现在抓取', default=False):
+            uc.fetch_liked(download_dir)
 
 
 def get_timeline(download_dir: Path,
