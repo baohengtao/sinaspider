@@ -1,15 +1,16 @@
 import json
 import re
 import time
-from typing import Self
 import warnings
+from typing import Self
 
-import pendulum
 import bs4
+import pendulum
 from bs4 import BeautifulSoup
+
 from sinaspider import console
-from sinaspider.helper import get_url, pause, weibo_api_url, normalize_str
-from sinaspider.exceptions import WeiboNotFoundError, UserNotFoundError
+from sinaspider.exceptions import UserNotFoundError, WeiboNotFoundError
+from sinaspider.helper import get_url, normalize_str, pause, weibo_api_url
 
 
 class WeiboParser:

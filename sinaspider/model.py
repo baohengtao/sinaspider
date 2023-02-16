@@ -3,28 +3,29 @@ from pathlib import Path
 from typing import Iterator, Self
 
 import pendulum
-from peewee import JOIN
-from peewee import Model
-from playhouse.shortcuts import model_to_dict
+from peewee import JOIN, Model
 from playhouse.postgres_ext import (
-    PostgresqlExtDatabase,
-    IntegerField,
-    BooleanField,
-    TextField,
-    BigIntegerField,
-    DateTimeTZField,
     ArrayField,
-    CharField,
-    ForeignKeyField,
+    BigIntegerField,
+    BooleanField, CharField,
+    DateTimeTZField,
     DeferredForeignKey,
-    JSONField,
+    ForeignKeyField,
+    IntegerField, JSONField,
+    PostgresqlExtDatabase,
+    TextField
 )
+from playhouse.shortcuts import model_to_dict
 
 from sinaspider import console
-from sinaspider.helper import download_files, parse_url_extension
-from sinaspider.helper import normalize_wb_id, pause, normalize_user_id
+from sinaspider.helper import (
+    download_files,
+    normalize_user_id,
+    normalize_wb_id,
+    parse_url_extension, pause
+)
 from sinaspider.page import Page
-from sinaspider.parser import WeiboParser, UserParser
+from sinaspider.parser import UserParser, WeiboParser
 
 database = PostgresqlExtDatabase("sinaspider", host="localhost")
 
@@ -212,7 +213,6 @@ class UserConfig(BaseModel):
         if not self.liked_fetch:
             return
         console.rule(f"开始获取 {self.username} 的赞")
-        now = pendulum.now()
         console.log(f"Media Saving: {download_dir}")
         imgs = self._save_liked(download_dir=Path(download_dir) / "Liked")
         download_files(imgs)
@@ -226,7 +226,7 @@ class UserConfig(BaseModel):
 
         self._liked_insert = None
         console.log(f"{self.user.username}的赞获取完毕\n")
-        self.liked_update_at = now
+        self.liked_update_at = pendulum.now()
         self.save()
         pause(mode="user")
 
@@ -254,7 +254,6 @@ class UserConfig(BaseModel):
             prefix = f"{self.username}_{weibo.username}_{weibo.id}"
             for sn, (url, _) in weibo.photos.items():
                 assert (ext := parse_url_extension(url))
-
                 xmp_info = weibo.gen_meta(sn, url=url)
                 xmp_info.update({
                     'XMP:Title': f'{weibo.username}⭐️{self.username}',

@@ -1,17 +1,21 @@
+import sys
 from functools import wraps
 from inspect import getcallargs
 from pathlib import Path
+from time import sleep
+
 import pendulum
-from rich.prompt import Prompt, Confirm, IntPrompt
+from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.terminal_theme import MONOKAI
+from typer import Typer
+
 from sinaspider import console
 from sinaspider.helper import (
-    normalize_user_id,
     download_files,
-    normalize_wb_id)
+    normalize_user_id,
+    normalize_wb_id
+)
 from sinaspider.model import UserConfig, Weibo
-from typer import Typer
-from time import sleep
 
 app = Typer()
 default_path = Path.home() / 'Pictures/Sinaspider'
