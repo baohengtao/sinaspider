@@ -213,15 +213,21 @@ class UserConfig(BaseModel):
         if not self.liked_fetch:
             return
         console.rule(f"开始获取 {self.username} 的赞")
-        current_id = self.page.liked_last_id()
         now = pendulum.now()
         console.log(f"Media Saving: {download_dir}")
         imgs = self._save_liked(download_dir=Path(download_dir) / "Liked")
         download_files(imgs)
-        LikedWeibo.insert_many(self._liked_insert).execute()
+        if count := len(self._liked_insert):
+            (LikedWeibo
+             .update(order_num=LikedWeibo.order_num + count)
+             .where(LikedWeibo.user == self.user)
+             .execute())
+            LikedWeibo.insert_many(self._liked_insert).execute()
+            LikedWeibo.delete().where(LikedWeibo.order_num > 200).execute()
+            self.liked_last_id = self._liked_insert[0]["weibo_id"]
+
         self._liked_insert = None
         console.log(f"{self.user.username}的赞获取完毕\n")
-        self.liked_last_id = current_id
         self.liked_update_at = now
         self.save()
         pause(mode="user")
@@ -234,11 +240,10 @@ class UserConfig(BaseModel):
                 continue
             if LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
-                if self.liked_last_id is not None:
-                    console.log(
-                        f'{weibo.id}: Stopped by LikedWeibo, '
-                        f'not liked_last_id: {self.liked_last_id}',
-                        style='error')
+                console.log(
+                    f'{weibo.id}: early stopped by LikedWeibo, '
+                    f'not liked_last_id: {self.liked_last_id}',
+                    style='error')
                 break
             if len(weibo.photos) < weibo.pic_num:
                 weibo_full = WeiboParser.from_id(weibo.id).parse()
@@ -265,11 +270,6 @@ class UserConfig(BaseModel):
                     "filepath": download_dir / self.username
                 }
             bulk.append(weibo)
-        bulk.reverse()
-        liked_latest = (self.user.liked_weibos
-                        .order_by(LikedWeibo.order_num.desc())
-                        .get_or_none())
-        base_order = liked_latest.order_num if liked_latest else 0
         bulk_insert = []
         for i, weibo in enumerate(bulk, start=1):
             bulk_insert.append({
@@ -277,7 +277,7 @@ class UserConfig(BaseModel):
                 'weibo_by': weibo.user_id,
                 'pic_num': weibo.pic_num,
                 'user_id': self.user_id,
-                'order_num': base_order + i
+                'order_num': i
             })
         assert getattr(self, '_liked_insert', None) is None
         self._liked_insert: list = bulk_insert

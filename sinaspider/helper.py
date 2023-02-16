@@ -120,7 +120,8 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
     if expires := furl(url).args.get("Expires"):
         expires = pendulum.from_timestamp(int(expires), tz='local')
         if expires < pendulum.now():
-            console.log(f"{url} expires at {expires}, skip...", style="error")
+            console.log(
+                f"{url} expires at {expires}, skip...", style="warning")
             return
     for tried_time in itertools.count(start=1):
         while (r := get_url(url)).status_code != 200:

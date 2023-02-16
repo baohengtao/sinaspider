@@ -47,11 +47,6 @@ class Page:
             console.log(f'created_at:{created_at}')
             pause(mode='page')
 
-    def liked_last_id(self) -> int:
-        """get last liked weibo id"""
-        info = next(self._liked_card())
-        return info['id']
-
     def _liked_card(self) -> Iterator[dict]:
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
@@ -59,14 +54,14 @@ class Page:
             while (r := get_url(url % page)).status_code != 200:
                 console.log(
                     f'{r.url} get status code {r.status_code}...',
-                    style='error')
+                    style='warning')
                 console.log('sleeping 60 seconds')
                 sleep(60)
             js = r.json()
             if (cards := js['cards']) is None:
                 console.log(
                     f"js[cards] is None for [link={r.url}]r.url[/link]",
-                    style='error')
+                    style='warning')
                 break
             mblogs = _yield_from_cards(cards)
             yield from mblogs
@@ -95,7 +90,7 @@ class Page:
                 continue
             followers_count = int(
                 normalize_str(user_info['followers_count']))
-            if followers_count > 20000 or followers_count < 500:
+            if followers_count > 50000 or followers_count < 500:
                 continue
             if parse:
                 yield WeiboParser(weibo_info).parse(online=False)

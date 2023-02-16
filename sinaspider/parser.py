@@ -293,7 +293,7 @@ class UserParser:
         url.args = {'containerid': f"100505{self.id}"}
         while not (js := get_url(url).json())['ok']:
             console.log(
-                f'not js[ok] for {url}, sleeping 60 secs...', style='error')
+                f'not js[ok] for {url}, sleeping 60 secs...', style='warning')
             time.sleep(60)
         user_info = js['data']['userInfo']
         keys = ['cover_image_phone', 'profile_image_url',
