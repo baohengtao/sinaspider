@@ -17,8 +17,31 @@ app = Typer()
 default_path = Path.home() / 'Pictures/Sinaspider'
 
 
+def logsaver(func):
+    """Decorator to save console log to html file"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        callargs = getcallargs(func, *args, **kwargs)
+        try:
+            return func(*args, **kwargs)
+        except BaseException:
+            with console.capture():
+                console.print_exception(show_locals=True)
+            raise
+        finally:
+            download_dir = callargs['download_dir']
+            time_format = pendulum.now().format('YY-MM-DD_HHmmss')
+            log_file = f"{func.__name__}_{time_format}.html"
+            console.log(f'Saving log to {download_dir / log_file}')
+            console.save_html(download_dir / log_file, theme=MONOKAI)
+
+    return wrapper
+
+
 @app.command(help='Add user to database of users whom we want to fetch from')
+@logsaver
 def user(download_dir: str = default_path):
+    """Add user to database of users whom we want to fetch from"""
     while user_id := Prompt.ask('请输入用户名:smile:'):
         user_id = normalize_user_id(user_id)
         if uc := UserConfig.get_or_none(user_id=user_id):
@@ -39,7 +62,6 @@ def user(download_dir: str = default_path):
 
 
 def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
-
     users = UserConfig.select().order_by(UserConfig.weibo_update_at)
     if new_user_only:
         uids = [uc.user_id for uc in users if uc.weibo_update_at <
@@ -52,11 +74,13 @@ def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
 
 
 @app.command(help="Loop through users in database and fetch weibos")
+@logsaver
 def loop(download_dir: Path = default_path):
     get_loop(download_dir)
 
 
 @app.command(help='Update users from timeline')
+@logsaver
 def timeline(download_dir: Path = default_path,
              days: float = None,
              dry_run: bool = False):
@@ -65,6 +89,7 @@ def timeline(download_dir: Path = default_path,
 
 
 @app.command(help="Fetch users' liked weibo")
+@logsaver
 def liked(download_dir: Path = default_path):
     for uc in UserConfig:
         if uc.liked_fetch and not uc.liked_update_at:
@@ -106,6 +131,7 @@ def get_timeline(download_dir: Path,
 
 
 @app.command(help='Schedule timeline command')
+@logsaver
 def schedule(download_dir: Path = default_path,
              days: float = None, frequency: float = 1):
     since = pendulum.now().subtract(days=days)
@@ -113,28 +139,18 @@ def schedule(download_dir: Path = default_path,
     while True:
         while pendulum.now() < next_fetching_time:
             sleep(600)
-        try:
-            next_since = pendulum.now()
-            update_user_config()
-            console.rule('[bold red]Timeline...', style="magenta")
-            get_timeline(download_dir, since)
-            console.rule('[bold red]New users...', style="magenta")
-            get_loop(download_dir, new_user_only=True)
-            tidy_img(download_dir)
-            # updat since
-            since = next_since
-            # wait for next fetching
-            next_fetching_time = max(since.add(days=frequency), pendulum.now())
-            console.log(f'next fetching time: {next_fetching_time}')
-        except BaseException:
-            with console.capture():
-                console.print_exception(show_locals=True)
-            raise
-        finally:
-            time_format = pendulum.now().format('YY-MM-DD_HHmmss')
-            log_file = f"schedule_{time_format}.html"
-            console.log(f'Saving log to {download_dir / log_file}')
-            console.save_html(download_dir / log_file, theme=MONOKAI)
+        next_since = pendulum.now()
+        update_user_config()
+        console.rule('[bold red]Timeline...', style="magenta")
+        get_timeline(download_dir, since)
+        console.rule('[bold red]New users...', style="magenta")
+        get_loop(download_dir, new_user_only=True)
+        tidy_img(download_dir)
+        # updat since
+        since = next_since
+        # wait for next fetching
+        next_fetching_time = max(since.add(days=frequency), pendulum.now())
+        console.log(f'next fetching time: {next_fetching_time}')
 
 
 def tidy_img(download_dir):
