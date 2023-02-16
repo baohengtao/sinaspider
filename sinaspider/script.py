@@ -25,6 +25,9 @@ def logsaver(func):
     """Decorator to save console log to html file"""
     @wraps(func)
     def wrapper(*args, **kwargs):
+        argv = sys.argv
+        argv[0] = Path(argv[0]).name
+        console.log(' '.join(argv))
         callargs = getcallargs(func, *args, **kwargs)
         try:
             return func(*args, **kwargs)
@@ -158,7 +161,7 @@ def schedule(download_dir: Path = default_path,
 
 
 def tidy_img(download_dir):
-    from imgmeta.script import write_meta, rename
+    from imgmeta.script import rename, write_meta
     folders = ['Users', 'New']
     for folder in folders:
         ori = download_dir / folder

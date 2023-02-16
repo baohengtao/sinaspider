@@ -398,6 +398,7 @@ class Weibo(BaseModel):
     photos = JSONField(null=True)
     video_duration = BigIntegerField(null=True)
     video_url = TextField(null=True)
+    region_name = TextField(null=True)
 
     class Meta:
         table_name = "weibo"
@@ -455,7 +456,7 @@ class Weibo(BaseModel):
             "ImageSupplierID": self.user_id,
             "ImageSupplierName": "Weibo",
             "ImageCreatorName": self.username,
-            "BlogTitle": self.text,
+            "BlogTitle": f'{self.text} {self.region_name or ""}'.strip(),
             "BlogURL": self.url,
             "Location": self.location,
             "DateCreated": (self.created_at +

@@ -72,6 +72,7 @@ class WeiboParser:
             created_at=created_at,
             source=self.info['source'],
             retweeted=self.info.get('retweeted_status', {}).get('bid'),
+            region_name=self.info.get('region_name'),
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
             if (v := self.info[key]) == '100万+':
