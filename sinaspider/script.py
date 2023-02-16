@@ -1,6 +1,9 @@
+from functools import wraps
+from inspect import getcallargs
 from pathlib import Path
 import pendulum
 from rich.prompt import Prompt, Confirm, IntPrompt
+from rich.terminal_theme import MONOKAI
 from sinaspider import console
 from sinaspider.helper import (
     normalize_user_id,
@@ -64,7 +67,7 @@ def timeline(download_dir: Path = default_path,
 @app.command(help="Fetch users' liked weibo")
 def liked(download_dir: Path = default_path):
     for uc in UserConfig:
-        if uc.liked_fetch and not uc.liked_last_id:
+        if uc.liked_fetch and not uc.liked_update_at:
             uc.fetch_liked(download_dir)
             return
     while user_id := Prompt.ask('请输入用户名:smile:'):
@@ -105,7 +108,6 @@ def get_timeline(download_dir: Path,
 @app.command(help='Schedule timeline command')
 def schedule(download_dir: Path = default_path,
              days: float = None, frequency: float = 1):
-    from rich.terminal_theme import MONOKAI
     since = pendulum.now().subtract(days=days)
     next_fetching_time = pendulum.now()
     while True:

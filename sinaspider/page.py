@@ -67,20 +67,15 @@ class Page:
             yield from mblogs
             pause(mode='page')
 
-    def liked(self, until: int = None,
-              parse=True) -> Iterator[dict]:
+    def liked(self, parse=True) -> Iterator[dict]:
         """
         fetch user's liked weibo.
 
         Args:
             parse: whether to parse weibo, default True
-            until: fetch until this weibo id reached, default None
         """
         from sinaspider.helper import normalize_str
         for weibo_info in self._liked_card():
-            if weibo_info["id"] == until:
-                console.log(f'reached {until}, stopping...')
-                return
             if weibo_info.get('deleted') == '1':
                 continue
             if weibo_info['pic_num'] == 0:
@@ -96,11 +91,6 @@ class Page:
                 yield WeiboParser(weibo_info).parse(online=False)
             else:
                 yield weibo_info
-
-        if until is not None:
-            console.log(
-                f'weibo id {until} is not reached, all liked weibo '
-                'has been fetched.', style='warning')
 
     def homepage(self,
                  since: datetime = pendulum.from_timestamp(0),

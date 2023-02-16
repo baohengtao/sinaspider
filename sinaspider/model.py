@@ -45,7 +45,6 @@ class UserConfig(BaseModel):
     weibo_fetch = BooleanField(default=True)
     weibo_update_at = DateTimeTZField(default=pendulum.datetime(1970, 1, 1))
     liked_fetch = BooleanField(default=False)
-    liked_last_id = BigIntegerField(null=True)
     liked_update_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
@@ -224,7 +223,6 @@ class UserConfig(BaseModel):
              .execute())
             LikedWeibo.insert_many(self._liked_insert).execute()
             LikedWeibo.delete().where(LikedWeibo.order_num > 200).execute()
-            self.liked_last_id = self._liked_insert[0]["weibo_id"]
 
         self._liked_insert = None
         console.log(f"{self.user.username}的赞获取完毕\n")
@@ -234,16 +232,18 @@ class UserConfig(BaseModel):
 
     def _save_liked(self, download_dir: Path) -> Iterator[dict]:
         bulk = []
-        for weibo_dict in self.page.liked(until=self.liked_last_id):
+        early_stopping = False
+        for weibo_dict in self.page.liked():
             weibo = Weibo(**weibo_dict)
             if UserConfig.get_or_none(user_id=weibo.user_id):
                 continue
-            if LikedWeibo.get_or_none(
+            if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
                 console.log(
-                    f'{weibo.id}: early stopped by LikedWeibo, '
-                    f'not liked_last_id: {self.liked_last_id}',
-                    style='error')
+                    f'{weibo.id}: early stopped by LikedWeibo'
+                    f'with order_num {liked.order_num}',
+                    style='warning')
+                early_stopping = True
                 break
             if len(weibo.photos) < weibo.pic_num:
                 weibo_full = WeiboParser.from_id(weibo.id).parse()
@@ -270,6 +270,13 @@ class UserConfig(BaseModel):
                     "filepath": download_dir / self.username
                 }
             bulk.append(weibo)
+        if early_stopping and not self.liked_update_at:
+            console.log(
+                'early stopping but liked_update_at is not set', style='error')
+        elif not early_stopping and self.liked_update_at:
+            console.log(
+                'liked_update_at is set but not early stopping', style='error')
+
         bulk_insert = []
         for i, weibo in enumerate(bulk, start=1):
             bulk_insert.append({
