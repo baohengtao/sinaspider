@@ -5,11 +5,12 @@ from pathlib import Path
 from time import sleep
 
 import pendulum
-from rich.prompt import Confirm, IntPrompt, Prompt
+from rich.prompt import Confirm, Prompt
 from rich.terminal_theme import MONOKAI
 from typer import Typer
 
 from sinaspider import console
+from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import (
     download_files,
     normalize_user_id,
@@ -47,10 +48,16 @@ def logsaver(func):
 
 @app.command(help='Add user to database of users whom we want to fetch from')
 @logsaver
-def user(download_dir: str = default_path):
+def user(download_dir: Path = default_path):
     """Add user to database of users whom we want to fetch from"""
     while user_id := Prompt.ask('请输入用户名:smile:'):
-        user_id = normalize_user_id(user_id)
+        if uc := UserConfig.get_or_none(username=user_id):
+            user_id = uc.user_id
+        try:
+            user_id = normalize_user_id(user_id)
+        except UserNotFoundError as e:
+            console.log(e, style='error')
+            continue
         if uc := UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{uc.username}已在列表中')
         uc = UserConfig.from_id(user_id)
@@ -58,14 +65,18 @@ def user(download_dir: str = default_path):
         uc.save()
         console.log(uc, '\n')
         console.log(f'用户{uc.username}更新完成')
+        if uc.weibo_fetch and not uc.following:
+            console.log(f'用户{uc.username}未关注，记得关注🌸', style='notice')
+        elif not uc.weibo_fetch and uc.following:
+            console.log(f'用户{uc.username}已关注，记得取关🔥', style='notice')
         if not uc.weibo_fetch and Confirm.ask('是否删除该用户？', default=False):
             uc.delete_instance()
             console.log('用户已删除')
             if uc.following:
                 console.log('记得取消关注', style='warning')
         elif uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
-            start_page = IntPrompt.ask('start_page', default=1)
-            uc.fetch_weibo(download_dir, start_page=start_page)
+            uc.fetch_weibo(download_dir)
+            tidy_img(download_dir)
 
 
 def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
@@ -84,6 +95,7 @@ def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
 @logsaver
 def loop(download_dir: Path = default_path):
     get_loop(download_dir)
+    tidy_img(download_dir)
 
 
 @app.command(help='Update users from timeline')
@@ -93,6 +105,8 @@ def timeline(download_dir: Path = default_path,
              dry_run: bool = False):
     since = pendulum.now().subtract(days=days)
     get_timeline(download_dir, since, dry_run)
+    if not dry_run:
+        tidy_img(download_dir)
 
 
 @app.command(help="Fetch users' liked weibo")

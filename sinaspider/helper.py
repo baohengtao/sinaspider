@@ -16,6 +16,7 @@ from furl import furl
 from requests.exceptions import ConnectionError, ProxyError, SSLError
 
 from sinaspider import console
+from sinaspider.exceptions import UserNotFoundError
 
 weibo_api_url = furl(url='https://m.weibo.cn', path='api/container/getIndex')
 user_agent = ('Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
@@ -68,19 +69,26 @@ def write_xmp(img: Path, tags: dict):
         et.set_tags(img, tags, params=params)
 
 
-def normalize_user_id(user_id) -> int:
+def normalize_user_id(user_id: str | int) -> int:
+    """
+    normalize user_id to int
+    raise UserNotFoundError if user_id not exist
+    """
     try:
-        return int(user_id)
+        user_id = int(user_id)
     except ValueError:
-        pass
-    assert isinstance(user_id, str)
-    url = f'https://m.weibo.cn/n/{user_id}'
-    r = get_url(url)
-    if url != unquote(r.url):
-        user_id = r.url.split('/')[-1]
-        return int(user_id)
+        assert isinstance(user_id, str)
+        url = f'https://m.weibo.cn/n/{user_id}'
+        r = get_url(url)
+        if url != unquote(r.url):
+            user_id = int(r.url.split('/')[-1])
+        else:
+            raise UserNotFoundError(f'{user_id} not exist')
     else:
-        raise ValueError(f'{url} not exist')
+        r = get_url(f'https://weibo.cn/u/{user_id}')
+        if 'User does not exists!' in r.text:
+            raise UserNotFoundError(f'{user_id} not exist')
+    return user_id
 
 
 def normalize_wb_id(wb_id: int | str) -> int:

@@ -11,7 +11,7 @@ from sinaspider.parser import WeiboParser
 
 
 class Page:
-    def __init__(self, user_id) -> None:
+    def __init__(self, user_id: int) -> None:
         self.id = user_id
 
     def friends(self):
@@ -127,8 +127,8 @@ class Page:
                 title = weibo_info.get('title', {}).get('text', '')
                 created_at = pendulum.from_format(
                     weibo_info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-                if '评论过的微博' in title:
-                    console.log('发现评论过的微博， 略过...', style='warning')
+                if weibo_info['user']['id'] != self.id:
+                    assert '评论过的微博' in title
                     continue
                 if created_at < since:
                     if title == '置顶':
