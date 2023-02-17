@@ -122,7 +122,7 @@ class WeiboParser:
         self.weibo['video_duration'] = page_info['media_info']['duration']
 
     @staticmethod
-    def text_info(text):
+    def text_info(text: str):
         if not text.strip():
             return {}
         at_list, topics_list = [], []
@@ -203,7 +203,7 @@ class UserParser:
         return self._user.copy()
 
     @staticmethod
-    def _normalize(user_info):
+    def _normalize(user_info: dict) -> dict:
         user = {k: normalize_str(v) for k, v in user_info.items()}
         assert 'homepage' not in user
         assert 'username' not in user

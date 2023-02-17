@@ -117,6 +117,8 @@ def liked(download_dir: Path = default_path):
             uc.fetch_liked(download_dir)
             return
     while user_id := Prompt.ask('请输入用户名:smile:'):
+        if uc := UserConfig.get_or_none(username=user_id):
+            user_id = uc.user_id
         user_id = normalize_user_id(user_id)
         if not UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{user_id}不在列表中')
@@ -174,7 +176,7 @@ def schedule(download_dir: Path = default_path,
         console.log(f'next fetching time: {next_fetching_time}')
 
 
-def tidy_img(download_dir):
+def tidy_img(download_dir: Path):
     from imgmeta.script import rename, write_meta
     folders = ['Users', 'New']
     for folder in folders:

@@ -67,7 +67,7 @@ class Page:
             yield from mblogs
             pause(mode='page')
 
-    def liked(self, parse=True) -> Iterator[dict]:
+    def liked(self, parse: bool = True) -> Iterator[dict]:
         """
         fetch user's liked weibo.
 
@@ -94,7 +94,7 @@ class Page:
 
     def homepage(self,
                  since: datetime = pendulum.from_timestamp(0),
-                 start_page=1, parse=True) -> Iterator[dict]:
+                 start_page: int = 1, parse: bool = True) -> Iterator[dict]:
         """
         fetch user's homepage weibo
 

@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
+from typing import Iterator
 from urllib.parse import unquote, urlparse
 
 import keyring
@@ -29,7 +30,7 @@ headers = {
 }
 
 
-def get_url(url):
+def get_url(url: str) -> requests.Response:
 
     while True:
         try:
@@ -47,7 +48,7 @@ def get_url(url):
             sleep(period)
 
 
-def parse_url_extension(url):
+def parse_url_extension(url: str) -> str:
     parse = urlparse(url)
     return Path(parse.path).suffix or Path(url).suffix
 
@@ -118,7 +119,8 @@ def normalize_str(amount):
     return amount
 
 
-def download_single_file(url, filepath: Path, filename, xmp_info=None):
+def download_single_file(
+        url: str, filepath: Path, filename: str, xmp_info: dict = None):
     filepath.mkdir(parents=True, exist_ok=True)
     img = filepath / filename
     if img.exists():
@@ -162,7 +164,7 @@ def download_single_file(url, filepath: Path, filename, xmp_info=None):
         break
 
 
-def download_files(imgs):
+def download_files(imgs: Iterator[dict]):
     # TODO: gracefully handle exception and keyboardinterrupt
     with ThreadPoolExecutor(max_workers=7) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
@@ -198,7 +200,7 @@ class Pause:
 
         self.__since = time.time()
 
-    def __call__(self, mode):
+    def __call__(self, mode: str):
         if mode == 'page':
             self._pause(self.page_config)
         elif mode == 'user':

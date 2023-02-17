@@ -38,6 +38,14 @@ class BaseModel(Model):
         model = model_to_dict(self, recurse=False)
         return "\n".join(f'{k}: {v}' for k, v in model.items())
 
+    @classmethod
+    def get_or_none(cls, *query, **filters) -> Self | None:
+        return super().get_or_none(*query, **filters)
+
+    @classmethod
+    def get(cls, *query, **filters) -> Self:
+        return super().get(*query, **filters)
+
 
 class UserConfig(BaseModel):
     user: "User" = DeferredForeignKey("User", unique=True, backref='config')
@@ -86,7 +94,7 @@ class UserConfig(BaseModel):
         return text.strip()
 
     @classmethod
-    def from_id(cls, user_id) -> Self:
+    def from_id(cls, user_id: int) -> Self:
         user = User.from_id(user_id, update=True)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
@@ -209,12 +217,12 @@ class UserConfig(BaseModel):
             console.print()
             yield from medias
 
-    def fetch_liked(self, download_dir):
+    def fetch_liked(self, download_dir: Path):
         if not self.liked_fetch:
             return
         console.rule(f"开始获取 {self.username} 的赞")
         console.log(f"Media Saving: {download_dir}")
-        imgs = self._save_liked(download_dir=Path(download_dir) / "Liked")
+        imgs = self._save_liked(download_dir / "Liked")
         download_files(imgs)
         if count := len(self._liked_insert):
             (LikedWeibo
@@ -404,7 +412,7 @@ class Weibo(BaseModel):
         table_name = "weibo"
 
     @classmethod
-    def from_id(cls, wb_id, update=False) -> Self:
+    def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
         wb_id = normalize_wb_id(wb_id)
         if not (weibo := cls.get_or_none(id=wb_id)):
             force_insert = True
@@ -421,7 +429,7 @@ class Weibo(BaseModel):
         weibo.save(force_insert=force_insert)
         return cls.get_by_id(wb_id)
 
-    def medias(self, filepath=None):
+    def medias(self, filepath: Path = None) -> Iterator[dict]:
         photos = self.photos or {}
         prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
         for sn, [photo_url, video_url] in photos.items():
@@ -515,10 +523,10 @@ class Artist(BaseModel):
         return super().__repr__()
 
     @classmethod
-    def from_id(cls, user_id, update=False):
+    def from_id(cls, user_id: int, update: bool = False) -> Self:
         user = User.from_id(user_id, update=update)
-        if (artist := Artist.get_or_none(user_id=user.id)) is None:
-            artist = Artist(user=user)
+        if not (artist := cls.get_or_none(user_id=user.id)):
+            artist = cls(user=user)
             artist.folder = "new"
             artist.added_at = pendulum.now()
         fields = set(cls._meta.fields) - {"id"}
