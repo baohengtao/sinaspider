@@ -52,9 +52,9 @@ class UserConfig(BaseModel):
     username = CharField()
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=True)
-    weibo_update_at = DateTimeTZField(default=pendulum.datetime(1970, 1, 1))
+    weibo_fetch_at = DateTimeTZField(default=pendulum.datetime(1970, 1, 1))
     liked_fetch = BooleanField(default=False)
-    liked_update_at = DateTimeTZField(null=True)
+    liked_fetch_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
@@ -83,7 +83,7 @@ class UserConfig(BaseModel):
             "description",
             "homepage",
             "weibo_fetch",
-            "weibo_update_at",
+            "weibo_fetch_at",
             "IP"
         ]
         for k in fields:
@@ -151,12 +151,12 @@ class UserConfig(BaseModel):
             .where(User.id == self.user_id)
             .count()
         )
-        update_interval = math.ceil(days / (recent_num + 2))
-        update_interval = max(update_interval, 7)
-        update_at = pendulum.instance(self.weibo_update_at)
-        if update_at.diff().days < update_interval:
+        fetch_interval = math.ceil(days / (recent_num + 2))
+        fetch_interval = max(fetch_interval, 7)
+        fetch_at = pendulum.instance(self.weibo_fetch_at)
+        if fetch_at.diff().days < fetch_interval:
             console.log(f"skipping {self.username}"
-                        f"for fetched at recent {update_interval} days")
+                        f"for fetched at recent {fetch_interval} days")
             return False
         else:
             return True
@@ -164,8 +164,8 @@ class UserConfig(BaseModel):
     def fetch_weibo(self, download_dir: Path):
         if not self.weibo_fetch:
             return
-        since = pendulum.instance(self.weibo_update_at)
-        console.rule(f"开始获取 {self.username} 的主页(update_at:{since:%y-%m-%d})")
+        since = pendulum.instance(self.weibo_fetch_at)
+        console.rule(f"开始获取 {self.username} 的主页(fetch_at:{since:%y-%m-%d})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         self.set_visibility()
@@ -174,7 +174,7 @@ class UserConfig(BaseModel):
         download_files(imgs)
         console.log(f"{self.user.username}微博获取完毕\n")
 
-        self.weibo_update_at = now
+        self.weibo_fetch_at = now
         self.save()
 
     def _save_weibo(
@@ -234,7 +234,7 @@ class UserConfig(BaseModel):
 
         self._liked_insert = None
         console.log(f"{self.user.username}的赞获取完毕\n")
-        self.liked_update_at = pendulum.now()
+        self.liked_fetch_at = pendulum.now()
         self.save()
         pause(mode="user")
 
@@ -277,12 +277,12 @@ class UserConfig(BaseModel):
                     "filepath": download_dir / self.username
                 }
             bulk.append(weibo)
-        if early_stopping and not self.liked_update_at:
+        if early_stopping and not self.liked_fetch_at:
             console.log(
-                'early stopping but liked_update_at is not set', style='error')
-        elif not early_stopping and self.liked_update_at:
+                'early stopping but liked_fetch_at is not set', style='error')
+        elif not early_stopping and self.liked_fetch_at:
             console.log(
-                'liked_update_at is set but not early stopping', style='error')
+                'liked_fetch_at is set but not early stopping', style='error')
 
         bulk_insert = []
         for i, weibo in enumerate(bulk, start=1):

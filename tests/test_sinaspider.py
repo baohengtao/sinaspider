@@ -48,7 +48,7 @@ def test_weibo():
 def test_user_config():
     user_id = 1802628902
     uc = UserConfig.from_id(user_id)
-    uc.weibo_update_at = pendulum.now().subtract(months=1)
+    uc.weibo_fetch_at = pendulum.now().subtract(months=1)
     uc.fetch_weibo(Path.home() / 'Downloads/pytest_sina')
 
 

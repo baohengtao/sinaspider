@@ -80,9 +80,9 @@ def user(download_dir: Path = default_path):
 
 
 def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
-    users = UserConfig.select().order_by(UserConfig.weibo_update_at)
+    users = UserConfig.select().order_by(UserConfig.weibo_fetch_at)
     if new_user_only:
-        uids = [uc.user_id for uc in users if uc.weibo_update_at <
+        uids = [uc.user_id for uc in users if uc.weibo_fetch_at <
                 pendulum.now().subtract(years=1)]
     else:
         uids = [uc.user_id for uc in users if uc.need_fetch]
@@ -113,7 +113,7 @@ def timeline(download_dir: Path = default_path,
 @logsaver
 def liked(download_dir: Path = default_path):
     for uc in UserConfig:
-        if uc.liked_fetch and not uc.liked_update_at:
+        if uc.liked_fetch and not uc.liked_fetch_at:
             uc.fetch_liked(download_dir)
             return
     while user_id := Prompt.ask('请输入用户名:smile:'):
@@ -142,12 +142,12 @@ def get_timeline(download_dir: Path,
             continue
         created_at = pendulum.from_format(
             status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-        update_at = uc.weibo_update_at
-        if uc.weibo_fetch and update_at < created_at:
+        fetch_at = uc.weibo_fetch_at
+        if uc.weibo_fetch and fetch_at < created_at:
             uc = UserConfig.from_id(uid)
             uc.fetch_weibo(download_dir)
             if dry_run:
-                uc.weibo_update_at = update_at
+                uc.weibo_fetch_at = fetch_at
                 uc.save()
         # if uc.liked_fetch and uc.liked_last_id:
         #     uc.fetch_liked(download_dir)
