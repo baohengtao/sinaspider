@@ -1,5 +1,6 @@
 import itertools
 from datetime import datetime
+import math
 from time import sleep
 from typing import Iterator
 
@@ -92,6 +93,34 @@ class Page:
                 yield WeiboParser(weibo_info).parse(online=False)
             else:
                 yield weibo_info
+
+    def get_visibility(self) -> bool:
+        """判断用户是否设置微博半年内可见"""
+        url = ('https://m.weibo.cn/api/container/getIndex'
+               f'?containerid=107603{self.id}&page=%s')
+        js = get_url(url % 1).json()
+        if not js['ok']:
+            return False
+        mblogs = [card['mblog'] for card in js['data']['cards']
+                  if card['card_type'] == 9]
+        post_on = WeiboParser(mblogs[-1]).parse(online=False)['created_at']
+        if post_on < pendulum.now().subtract(months=6):
+            return True
+        statuses_count = mblogs[-1]['user']['statuses_count']
+        start, end = 2, math.ceil(statuses_count // 10)
+        while start <= end:
+            mid = (start + end) // 2
+            js = get_url(url % mid).json()
+            if not js['ok']:
+                end = mid - 1
+                continue
+            mblogs = [card['mblog']
+                      for card in js['data']['cards'] if card['card_type'] == 9]
+            post_on = WeiboParser(mblogs[-1]).parse(online=False)['created_at']
+            if post_on < pendulum.now().subtract(months=6):
+                return True
+            start = mid + 1
+        return False
 
     def homepage(self, start_page: int = 1, parse: bool = True) -> Iterator[dict]:
         """

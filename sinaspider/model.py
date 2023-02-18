@@ -114,26 +114,10 @@ class UserConfig(BaseModel):
     def set_visibility(self) -> bool:
         if self.visible is True:
             return self.visible
-        last_page = self.user.statuses_count // 20
-        while True:
-            weibos = self.page.homepage(start_page=last_page)
-            try:
-                weibo = next(weibos)
-            except StopIteration:
-                visibility = False
-                break
-            else:
-                if weibo['created_at'] < pendulum.now().subtract(months=6):
-                    visibility = True
-                    break
-                else:
-                    last_page += 1
-
-        if self.visible is None:
-            self.visible = visibility
-            self.save()
-        else:
-            assert visibility is False
+        elif visible := self.page.get_visibility():
+            assert self.visible is None
+        self.visible = visible
+        self.save()
         return self.visible
 
     @property
@@ -169,7 +153,9 @@ class UserConfig(BaseModel):
         console.rule(f"开始获取 {self.username} 的主页(fetch_at:{since:%y-%m-%d})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        self.set_visibility()
+        if not self.set_visibility():
+            console.log(f"{self.username} 只显示半年内的微博")
+
         now = pendulum.now()
         imgs = self._save_weibo(since, download_dir)
         download_files(imgs)
