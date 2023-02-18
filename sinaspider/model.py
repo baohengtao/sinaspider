@@ -55,6 +55,7 @@ class UserConfig(BaseModel):
     weibo_fetch_at = DateTimeTZField(default=pendulum.datetime(1970, 1, 1))
     liked_fetch = BooleanField(default=False)
     liked_fetch_at = DateTimeTZField(null=True)
+    post_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
     education = CharField(index=True, null=True)
@@ -175,6 +176,13 @@ class UserConfig(BaseModel):
         console.log(f"{self.user.username}微博获取完毕\n")
 
         self.weibo_fetch_at = now
+        for weibo_dict in self.page.homepage():
+            if weibo_dict['is_pinned']:
+                continue
+            self.post_at = weibo_dict['created_at']
+            break
+        else:
+            self.post_at = pendulum.from_timestamp(0)
         self.save()
 
     def _save_weibo(

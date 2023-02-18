@@ -122,6 +122,8 @@ class Page:
                 if weibo_info['user']['id'] != self.id:
                     assert '评论过的微博' in weibo_info['title']['text']
                     continue
+                if weibo_info['source'] == '生日动态':
+                    continue
                 if 'retweeted_status' in weibo_info:
                     continue
                 yield WeiboParser(weibo_info).parse() if parse else weibo_info
