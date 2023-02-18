@@ -119,7 +119,8 @@ def liked(download_dir: Path = default_path):
     while user_id := Prompt.ask('请输入用户名:smile:'):
         if uc := UserConfig.get_or_none(username=user_id):
             user_id = uc.user_id
-        user_id = normalize_user_id(user_id)
+        else:
+            user_id = normalize_user_id(user_id)
         if not UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{user_id}不在列表中')
             continue

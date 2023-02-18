@@ -110,6 +110,7 @@ class Page:
         start, end = 2, math.ceil(statuses_count // 10)
         while start <= end:
             mid = (start + end) // 2
+            console.log(f'checking page {mid}...to get visibility')
             js = get_url(url % mid).json()
             if not js['ok']:
                 end = mid - 1
@@ -133,12 +134,12 @@ class Page:
         url = furl('https://m.weibo.cn/api/container/getIndex'
                    f'?containerid=107603{self.id}')
         for url.args['page'] in itertools.count(start=max(start_page, 1)):
-            response = get_url(url)
-            js = response.json()
-            if not js['ok']:
+            for try_time in itertools.count(start=1):
+                if (js := get_url(url).json())['ok']:
+                    break
                 if js['msg'] == '请求过于频繁，歇歇吧':
                     raise ConnectionError(js['msg'])
-                else:
+                if try_time > 3:
                     console.log(
                         "not js['ok'], seems reached end, no wb return for "
                         f"page {url.args['page']}", style='warning')

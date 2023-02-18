@@ -20,7 +20,6 @@ from playhouse.shortcuts import model_to_dict
 from sinaspider import console
 from sinaspider.helper import (
     download_files,
-    normalize_user_id,
     normalize_wb_id,
     parse_url_extension, pause
 )
@@ -114,11 +113,14 @@ class UserConfig(BaseModel):
     def set_visibility(self) -> bool:
         if self.visible is True:
             return self.visible
-        elif visible := self.page.get_visibility():
-            assert self.visible is None
-        self.visible = visible
-        self.save()
-        return self.visible
+        visible = self.page.get_visibility()
+        if self.visible is None or visible is False:
+            self.visible = visible
+            self.save()
+        else:
+            console.log(
+                f"conflict: {self.username}当前微博全部可见，请检查", style="error")
+        return visible
 
     @property
     def need_fetch(self) -> bool:
@@ -350,7 +352,6 @@ class User(BaseModel):
 
     @classmethod
     def from_id(cls, user_id: int, update=False) -> Self:
-        user_id = normalize_user_id(user_id)
         if (user := User.get_or_none(id=user_id)) is None:
             force_insert = True
             update = True
