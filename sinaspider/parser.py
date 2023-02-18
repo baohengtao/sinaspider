@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError, WeiboNotFoundError
-from sinaspider.helper import get_url, normalize_str, pause, weibo_api_url
+from sinaspider.helper import get_url, normalize_str, pause
 
 
 class WeiboParser:
@@ -278,8 +278,7 @@ class UserParser:
 
     def _fetch_user_card(self) -> dict:
         """获取来自m.weibo.com的信息"""
-        url = weibo_api_url.copy()
-        url.args = {'containerid': f"230283{self.id}_-_INFO"}
+        url = f'https://m.weibo.cn/api/container/getIndex?containerid=230283{self.id}_-_INFO'
         js = get_url(url).json()
         user_card = js['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
@@ -293,8 +292,7 @@ class UserParser:
 
     def get_user_info(self) -> dict:
         """获取主信息"""
-        url = weibo_api_url.copy()
-        url.args = {'containerid': f"100505{self.id}"}
+        url = f'https://m.weibo.cn/api/container/getIndex?containerid=100505{self.id}'
         while not (js := get_url(url).json())['ok']:
             console.log(
                 f'not js[ok] for {url}, sleeping 60 secs...', style='warning')

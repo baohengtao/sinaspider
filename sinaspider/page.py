@@ -6,8 +6,9 @@ from typing import Iterator
 import pendulum
 
 from sinaspider import console
-from sinaspider.helper import get_url, pause, weibo_api_url
+from sinaspider.helper import get_url, pause
 from sinaspider.parser import WeiboParser
+from furl import furl
 
 
 class Page:
@@ -100,9 +101,8 @@ class Page:
             start_page: the start page to fetch
             parse: whether to parse weibo, default True
         """
-        containerid = f"107603{self.id}",
-        url = weibo_api_url.copy()
-        url.args = {'containerid': containerid}
+        url = furl('https://m.weibo.cn/api/container/getIndex'
+                   f'?containerid=107603{self.id}')
         for url.args['page'] in itertools.count(start=max(start_page, 1)):
             response = get_url(url)
             js = response.json()
