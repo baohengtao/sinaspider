@@ -192,9 +192,20 @@ class UserConfig(BaseModel):
             user_root = 'New'
         download_dir = Path(download_dir) / user_root / self.username
 
-        for weibo_dict in self.page.homepage(since=since):
+        console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
+        for weibo_dict in self.page.homepage():
             assert weibo_dict['user_id'] == self.user_id
-            current_fields = set(Weibo._meta.fields) | {"user_id", "pic_num"}
+            if (created_at := weibo_dict['created_at']) < since:
+                if weibo_dict['is_pinned']:
+                    console.log("略过置顶微博...")
+                    continue
+                else:
+                    console.log(
+                        f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
+                        "获取完毕")
+                    return
+            current_fields = set(Weibo._meta.fields) | {
+                "user_id", "pic_num", "is_pinned"}
             if extra_fields := set(weibo_dict) - current_fields:
                 console.log(
                     f"find extra fields: {extra_fields}", style='error')

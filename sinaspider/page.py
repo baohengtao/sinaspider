@@ -92,20 +92,15 @@ class Page:
             else:
                 yield weibo_info
 
-    def homepage(self,
-                 since: datetime = pendulum.from_timestamp(0),
-                 start_page: int = 1, parse: bool = True) -> Iterator[dict]:
+    def homepage(self, start_page: int = 1, parse: bool = True) -> Iterator[dict]:
         """
         fetch user's homepage weibo
 
         Args:
-            since: the day from which to fetch weibo
             start_page: the start page to fetch
             parse: whether to parse weibo, default True
         """
         containerid = f"107603{self.id}",
-        since = pendulum.instance(since)
-        console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         url = weibo_api_url.copy()
         url.args = {'containerid': containerid}
         for url.args['page'] in itertools.count(start=max(start_page, 1)):
@@ -124,21 +119,9 @@ class Page:
                       if card['card_type'] == 9]
 
             for weibo_info in mblogs:
-                title = weibo_info.get('title', {}).get('text', '')
-                created_at = pendulum.from_format(
-                    weibo_info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 if weibo_info['user']['id'] != self.id:
-                    assert '评论过的微博' in title
+                    assert '评论过的微博' in weibo_info['title']['text']
                     continue
-                if created_at < since:
-                    if title == '置顶':
-                        console.log("略过置顶微博...")
-                        continue
-                    else:
-                        console.log(
-                            f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
-                            "获取完毕")
-                        return
                 if 'retweeted_status' in weibo_info:
                     continue
                 yield WeiboParser(weibo_info).parse() if parse else weibo_info

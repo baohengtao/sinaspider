@@ -18,6 +18,7 @@ class WeiboParser:
 
     def __init__(self, weibo_info: dict):
         self.info = weibo_info
+        self.is_pinned = self.info.get('title', {}).get('text') == '置顶'
         assert self.info['pic_num'] >= len(self.info['pic_ids'])
         self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
         self.weibo = {}
@@ -55,6 +56,7 @@ class WeiboParser:
         self.video_info_v2()
         self.weibo |= self.text_info(self.info['text'])
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
+        self.weibo['is_pinned'] = self.is_pinned
         return self.weibo
 
     def basic_info(self):
