@@ -35,7 +35,10 @@ class BaseModel(Model):
 
     def __repr__(self):
         model = model_to_dict(self, recurse=False)
-        return "\n".join(f'{k}: {v}' for k, v in model.items())
+        return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
+
+    def __str__(self):
+        return self.__repr__()
 
     @classmethod
     def get_or_none(cls, *query, **filters) -> Self | None:
@@ -98,7 +101,7 @@ class UserConfig(BaseModel):
         user = User.from_id(user_id, update=True)
         if not (user_config := UserConfig.get_or_none(user=user)):
             user_config = UserConfig(user=user)
-        fields = set(cls._meta.fields) - {"id"}
+        fields = set(cls._meta.columns) - {"id"}
         for k in fields:
             try:
                 v = getattr(user, k)
@@ -152,11 +155,11 @@ class UserConfig(BaseModel):
         if not self.weibo_fetch:
             return
         since = pendulum.instance(self.weibo_fetch_at)
-        console.rule(f"开始获取 {self.username} 的主页(fetch_at:{since:%y-%m-%d})")
+        console.rule(f"开始获取 {self.username} 的主页 (fetch_at:{since:%y-%m-%d})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         if not self.set_visibility():
-            console.log(f"{self.username} 只显示半年内的微博")
+            console.log(f"{self.username} 只显示半年内的微博", style="notice")
 
         now = pendulum.now()
         imgs = self._save_weibo(since, download_dir)
@@ -200,8 +203,8 @@ class UserConfig(BaseModel):
                         f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
                         "获取完毕")
                     return
-            current_fields = set(Weibo._meta.fields) | {
-                "user_id", "pic_num", "is_pinned"}
+            current_fields = set(Weibo._meta.columns) | {
+                "pic_num", "is_pinned"}
             if extra_fields := set(weibo_dict) - current_fields:
                 console.log(
                     f"find extra fields: {extra_fields}", style='error')
@@ -364,7 +367,7 @@ class User(BaseModel):
         for k, v in user_dict.items():
             setattr(user, k, v)
         user.username = user.username or user.screen_name
-        if extra_fields := set(user_dict) - set(cls._meta.fields):
+        if extra_fields := set(user_dict) - set(cls._meta.columns):
             extra_info = {k: user_dict[k] for k in extra_fields}
             raise ValueError(f'some fields not saved to model: {extra_info}')
         user.save(force_insert=force_insert)
@@ -419,6 +422,7 @@ class Weibo(BaseModel):
 
     @classmethod
     def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
+        # TODO: rewrite with upsert
         wb_id = normalize_wb_id(wb_id)
         if not (weibo := cls.get_or_none(id=wb_id)):
             force_insert = True
@@ -535,8 +539,8 @@ class Artist(BaseModel):
             artist = cls(user=user)
             artist.folder = "new"
             artist.added_at = pendulum.now()
-        fields = set(cls._meta.fields) - {"id"}
-        fields &= set(User._meta.fields)
+        fields = set(cls._meta.columns) - {"id"}
+        fields &= set(User._meta.columns)
         for k in fields:
             if v := getattr(user, k):
                 setattr(artist, k, v)

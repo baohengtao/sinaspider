@@ -5,6 +5,7 @@ from pathlib import Path
 from time import sleep
 
 import pendulum
+import questionary
 from rich.prompt import Confirm, Prompt
 from rich.terminal_theme import MONOKAI
 from typer import Typer
@@ -209,3 +210,35 @@ def weibo(download_dir: Path = default_path):
             console.log(
                 f'Downloading {len(medias)} files to dir {download_dir}')
             download_files(medias)
+
+
+@app.command()
+def artist():
+    # TODO: better print
+    from sinaspider.model import Artist
+    while username := Prompt.ask('请输入用户名:smile:'):
+        if username.isdigit():
+            artist = Artist.get_or_none(user_id=int(username))
+        else:
+            artist = (Artist.select().where(
+                (Artist.username == username) |
+                (Artist.realname == username)).get_or_none())
+        if not artist:
+            console.log(f'用户 {username} 不在列表中')
+            continue
+        console.log(artist)
+        if artist.folder == 'new':
+            console.log('folder is new, skip')
+            continue
+        console.print(
+            f"which folder ? current is [bold red]{artist.folder}[/bold red]")
+        folder = questionary.select("choose folder:", choices=[
+            'recent', 'super', 'no-folder']).unsafe_ask()
+        if folder == 'no-folder':
+            folder = None
+        if (artist.folder != folder and
+                questionary.confirm(f'change folder from {artist.folder} to {folder} ?').unsafe_ask()):
+            artist.folder = folder
+            artist.save()
+            console.print(
+                f'{artist.realname or artist.username}:folder changed to [bold red]{folder}[/bold red]')

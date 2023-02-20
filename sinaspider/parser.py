@@ -52,8 +52,8 @@ class WeiboParser:
             self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
             assert self.pic_match
         self.basic_info()
-        self.photos_info_v2()
-        self.video_info_v2()
+        self.photos_info()
+        self.video_info()
         self.weibo |= self.text_info(self.info['text'])
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         self.weibo['is_pinned'] = self.is_pinned
@@ -81,7 +81,7 @@ class WeiboParser:
                 v = 1000000
             self.weibo[key] = v
 
-    def photos_info_v2(self):
+    def photos_info(self):
         self.weibo['pic_num'] = self.info['pic_num']
         if self.weibo['pic_num'] == 0:
             return
@@ -92,8 +92,8 @@ class WeiboParser:
                 photos[i] = [
                     pic_info['largest']['url'], pic_info.get('video')]
         elif pics := self.info.get('pics'):
-            if isinstance(pics, dict):
-                pics = [p for p in pics.values() if 'pid' in p]
+            pics = pics.values() if isinstance(pics, dict) else pics
+            pics = [p for p in pics if 'pid' in p]
             for i, pic in enumerate(pics, start=1):
                 photos[i] = [pic['large']['url'], pic.get('videoSrc')]
         else:
@@ -107,7 +107,7 @@ class WeiboParser:
         assert len(photos) == len(self.info['pic_ids'])
         self.weibo['photos'] = photos
 
-    def video_info_v2(self):
+    def video_info(self):
         page_info = self.info.get('page_info', {})
         if not page_info.get('type') == "video":
             return
