@@ -56,7 +56,8 @@ class WeiboParser:
         self.video_info()
         self.weibo |= self.text_info(self.info['text'])
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
-        self.weibo['is_pinned'] = self.is_pinned
+        if self.is_pinned:
+            self.weibo['is_pinned'] = self.is_pinned
         return self.weibo
 
     def basic_info(self):

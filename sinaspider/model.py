@@ -99,19 +99,14 @@ class UserConfig(BaseModel):
     @classmethod
     def from_id(cls, user_id: int) -> Self:
         user = User.from_id(user_id, update=True)
-        if not (user_config := UserConfig.get_or_none(user=user)):
-            user_config = UserConfig(user=user)
-        fields = set(cls._meta.columns) - {"id"}
-        for k in fields:
-            try:
-                v = getattr(user, k)
-            except AttributeError:
-                continue
-            else:
-                setattr(user_config, k, v)
-
-        user_config.save()
-        return user_config
+        user_dict = model_to_dict(user)
+        user_dict['user_id'] = user_dict.pop('id')
+        to_insert = {k: v for k, v in user_dict.items()
+                     if k in cls._meta.columns}
+        cls.insert(to_insert).on_conflict(
+            conflict_target=[cls.user_id],
+            update=to_insert).execute()
+        return cls.get(user_id=user_id)
 
     def set_visibility(self) -> bool:
         if self.visible is True:
@@ -168,10 +163,9 @@ class UserConfig(BaseModel):
 
         self.weibo_fetch_at = now
         for weibo_dict in self.page.homepage():
-            if weibo_dict['is_pinned']:
-                continue
-            self.post_at = weibo_dict['created_at']
-            break
+            if not weibo_dict.get('is_pinned'):
+                self.post_at = weibo_dict['created_at']
+                break
         else:
             self.post_at = pendulum.from_timestamp(0)
         self.save()
@@ -193,9 +187,9 @@ class UserConfig(BaseModel):
 
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         for weibo_dict in self.page.homepage():
-            assert weibo_dict['user_id'] == self.user_id
+            is_pinned = weibo_dict.pop('is_pinned', False)
             if (created_at := weibo_dict['created_at']) < since:
-                if weibo_dict['is_pinned']:
+                if is_pinned:
                     console.log("略过置顶微博...")
                     continue
                 else:
@@ -203,21 +197,11 @@ class UserConfig(BaseModel):
                         f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
                         "获取完毕")
                     return
-            current_fields = set(Weibo._meta.columns) | {
-                "pic_num", "is_pinned"}
-            if extra_fields := set(weibo_dict) - current_fields:
-                console.log(
-                    f"find extra fields: {extra_fields}", style='error')
-            wb_id = weibo_dict["id"]
-            if weibo := Weibo.get_or_none(id=wb_id):
-                force_insert = False
-            else:
-                weibo = Weibo()
-                force_insert = True
-            for k, v in weibo_dict.items():
-                setattr(weibo, k, v)
-            weibo.username = self.username
-            weibo.save(force_insert=force_insert)
+            weibo_dict['username'] = self.username
+            weibo_id = Weibo.insert(weibo_dict).on_conflict(
+                conflict_target=[Weibo.id],
+                update=weibo_dict).execute()
+            weibo = Weibo.get_by_id(weibo_id)
 
             medias = list(weibo.medias(download_dir))
             console.log(weibo)
@@ -355,22 +339,17 @@ class User(BaseModel):
 
     @classmethod
     def from_id(cls, user_id: int, update=False) -> Self:
-        if (user := User.get_or_none(id=user_id)) is None:
-            force_insert = True
-            update = True
-            user = User()
-        else:
-            force_insert = False
         if not update:
-            return user
+            try:
+                return cls.get_by_id(user_id)
+            except cls.DoesNotExist:
+                pass
         user_dict = UserParser(user_id).user
-        for k, v in user_dict.items():
-            setattr(user, k, v)
-        user.username = user.username or user.screen_name
-        if extra_fields := set(user_dict) - set(cls._meta.columns):
-            extra_info = {k: user_dict[k] for k in extra_fields}
-            raise ValueError(f'some fields not saved to model: {extra_info}')
-        user.save(force_insert=force_insert)
+        to_insert = user_dict.copy()
+        if 'username' not in user_dict:
+            to_insert['username'] = to_insert['screen_name']
+        cls.insert(to_insert).on_conflict(
+            conflict_target=[cls.id], update=user_dict).execute()
 
         return cls.get_by_id(user_id)
 
@@ -416,6 +395,7 @@ class Weibo(BaseModel):
     video_duration = BigIntegerField(null=True)
     video_url = TextField(null=True)
     region_name = TextField(null=True)
+    pic_num = IntegerField()
 
     class Meta:
         table_name = "weibo"
@@ -424,19 +404,15 @@ class Weibo(BaseModel):
     def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
         # TODO: rewrite with upsert
         wb_id = normalize_wb_id(wb_id)
-        if not (weibo := cls.get_or_none(id=wb_id)):
-            force_insert = True
-            update = True,
-            weibo = cls()
-        else:
-            force_insert = False
         if not update:
-            return weibo
-
+            try:
+                return Weibo.get_by_id(wb_id)
+            except Weibo.DoesNotExist:
+                pass
         weibo_dict = WeiboParser.from_id(wb_id).parse()
-        for k, v in weibo_dict.items():
-            setattr(weibo, k, v)
-        weibo.save(force_insert=force_insert)
+        Weibo.insert(weibo_dict).on_conflict(
+            conflict_target=[Weibo.id],
+            update=weibo_dict).execute()
         return cls.get_by_id(wb_id)
 
     def medias(self, filepath: Path = None) -> Iterator[dict]:
@@ -514,7 +490,7 @@ class Artist(BaseModel):
     realname = CharField(null=True)
     user = ForeignKeyField(User, unique=True, backref='artist')
     age = IntegerField(index=True, null=True)
-    folder = CharField(index=True, null=True)
+    folder = CharField(null=True, default="new")
     photos_num = IntegerField(default=0)
     favor_num = IntegerField(default=0)
     recent_num = IntegerField(default=0)
@@ -524,7 +500,7 @@ class Artist(BaseModel):
     follow_count = IntegerField(index=True)
     followers_count = IntegerField(index=True)
     homepage = CharField(index=True, null=True)
-    added_at = DateTimeTZField(null=True)
+    added_at = DateTimeTZField(null=True, default=pendulum.now)
 
     class Meta:
         table_name = "artist"
@@ -535,19 +511,16 @@ class Artist(BaseModel):
     @classmethod
     def from_id(cls, user_id: int, update: bool = False) -> Self:
         user = User.from_id(user_id, update=update)
-        if not (artist := cls.get_or_none(user_id=user.id)):
-            artist = cls(user=user)
-            artist.folder = "new"
-            artist.added_at = pendulum.now()
-        fields = set(cls._meta.columns) - {"id"}
-        fields &= set(User._meta.columns)
-        for k in fields:
-            if v := getattr(user, k):
-                setattr(artist, k, v)
-        artist.save()
-        return artist
+        user_dict = model_to_dict(user)
+        user_dict['user_id'] = user_dict.pop('id')
+        to_insert = {k: v for k, v in user_dict.items()
+                     if k in cls._meta.columns}
+        cls.insert(to_insert).on_conflict(
+            conflict_target=[cls.user_id],
+            update=to_insert).execute()
+        return cls.get(user_id=user_id)
 
-    @property
+    @ property
     def xmp_info(self):
         xmp = {
             "Artist": self.realname or self.username,
