@@ -344,7 +344,7 @@ class User(BaseModel):
                 return cls.get_by_id(user_id)
             except cls.DoesNotExist:
                 pass
-        user_dict = UserParser(user_id).user
+        user_dict = UserParser(user_id).parse()
         to_insert = user_dict.copy()
         if 'username' not in user_dict:
             to_insert['username'] = to_insert['screen_name']

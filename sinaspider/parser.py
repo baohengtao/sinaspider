@@ -166,8 +166,7 @@ class UserParser:
         self.id = user_id
         self._user = None
 
-    @property
-    def user(self) -> dict:
+    def parse(self) -> dict:
         if self._user is not None:
             return self._user.copy()
         user_cn = self.get_user_cn()
