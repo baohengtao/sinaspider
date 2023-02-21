@@ -377,13 +377,13 @@ class User(BaseModel):
 
 class Weibo(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
-    bid = TextField(null=True)
+    bid = TextField()
     user = ForeignKeyField(User, backref="weibos")
-    username = TextField(null=True)
-    created_at = DateTimeTZField(null=True)
+    username = TextField()
+    created_at = DateTimeTZField()
     text = TextField(null=True)
-    url = TextField(null=True)
-    url_m = TextField(null=True)
+    url = TextField()
+    url_m = TextField()
     at_users = ArrayField(field_class=TextField, null=True)
     location = TextField(null=True)
     attitudes_count = IntegerField(null=True)
@@ -395,7 +395,7 @@ class Weibo(BaseModel):
     video_duration = BigIntegerField(null=True)
     video_url = TextField(null=True)
     region_name = TextField(null=True)
-    pic_num = IntegerField()
+    pic_num = IntegerField(null=True)
 
     class Meta:
         table_name = "weibo"

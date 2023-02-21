@@ -68,9 +68,9 @@ class WeiboParser:
         self.weibo.update(
             user_id=(user_id := user['id']),
             id=(id := int(self.info['id'])),
-            bid=(bid := self.info.get('bid')),
+            bid=(bid := self.info['bid']),
             username=user['screen_name'],
-            url=f'https://weibo.com/{user_id}/{bid or id}',
+            url=f'https://weibo.com/{user_id}/{bid}',
             url_m=f'https://m.weibo.cn/detail/{id}',
             created_at=created_at,
             source=self.info['source'],
