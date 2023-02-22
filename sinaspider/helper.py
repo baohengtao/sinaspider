@@ -19,6 +19,39 @@ from requests.exceptions import ConnectionError, ProxyError, SSLError
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 
+
+def get_pause():
+    count = 0
+    sleep_until = time.time()
+
+    def _sleep(sleep_time):
+        nonlocal sleep_until
+        sleep_time = random.uniform(0.5 * sleep_time, 1.5 * sleep_time)
+        console.log(
+            f'sleep {sleep_time:.1f} seconds...(count: {count})', style='info')
+        sleep_until = time.time() + sleep_time
+        while time.time() < sleep_until:
+            sleep(1)
+
+    def pause():
+        nonlocal count
+        if time.time() - sleep_until > 3600:
+            count = 0
+        count += 1
+        if count % 100 == 0:
+            sleep_time = 120
+        elif count % 25 == 0:
+            sleep_time = 50
+        elif count % 10 == 0:
+            sleep_time = 20
+        else:
+            sleep_time = 2
+        _sleep(sleep_time)
+    return pause
+
+
+pause = get_pause()
+
 user_agent = ('Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
               'AppleWebKit/537.36 (KHTML, like Gecko) '
               'Chrome/100.0.4896.75 Mobile Safari/537.36')
@@ -30,7 +63,7 @@ headers = {
 
 
 def fetch_url(url: str) -> requests.Response:
-
+    # write with session and pause
     while True:
         try:
             return requests.get(url, headers=headers)
@@ -169,36 +202,3 @@ def download_files(imgs: Iterable[dict]):
         futures = [pool.submit(download_single_file, **img) for img in imgs]
     for future in futures:
         future.result()
-
-
-def get_pause():
-    count = 0
-    sleep_until = time.time()
-
-    def _sleep(sleep_time):
-        nonlocal sleep_until
-        sleep_time = random.uniform(0.5 * sleep_time, 1.5 * sleep_time)
-        console.log(
-            f'sleep {sleep_time:.1f} seconds...(count: {count})', style='info')
-        sleep_until = time.time() + sleep_time
-        while time.time() < sleep_until:
-            sleep(1)
-
-    def pause():
-        nonlocal count
-        if time.time() - sleep_until > 3600:
-            count = 0
-        count += 1
-        if count % 100 == 0:
-            sleep_time = 120
-        elif count % 25 == 0:
-            sleep_time = 50
-        elif count % 10 == 0:
-            sleep_time = 20
-        else:
-            sleep_time = 2
-        _sleep(sleep_time)
-    return pause
-
-
-pause = get_pause()
