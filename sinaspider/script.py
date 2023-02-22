@@ -260,7 +260,7 @@ def weibo_update():
                  .order_by(Weibo.created_at.asc()))
     for weibo in to_update:
         try:
-            weibo_dict = WeiboParser.from_id(weibo.id).parse()
+            weibo_dict = WeiboParser(weibo.id).parse()
         except WeiboNotFoundError as e:
             weibo.update_status = str(e)
             console.log(

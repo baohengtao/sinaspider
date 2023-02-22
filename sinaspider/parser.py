@@ -16,19 +16,19 @@ from sinaspider.helper import fetch_url, normalize_str, pause
 class WeiboParser:
     """用于解析原始微博内容"""
 
-    def __init__(self, weibo_info: dict):
-        self.info = weibo_info
+    def __init__(self, weibo_info: dict | int | str):
+        if isinstance(weibo_info, (int, str)):
+            self.info = self._fetch_info(weibo_info)
+            assert self.pic_match
+        else:
+            self.info = weibo_info
         self.is_pinned = self.info.get('title', {}).get('text') == '置顶'
         assert self.info['pic_num'] >= len(self.info['pic_ids'])
-        self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
         self.weibo = {}
 
-    @classmethod
-    def from_id(cls, id: str | int) -> Self:
-        weibo_info = cls._fetch_info(id)
-        parser = cls(weibo_info)
-        assert parser.pic_match
-        return parser
+    @property
+    def pic_match(self) -> bool:
+        return self.info['pic_num'] == len(self.info['pic_ids'])
 
     @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
@@ -49,7 +49,6 @@ class WeiboParser:
         if online and not self.pic_match:
             assert self.info['pic_num'] > 9
             self.info = self._fetch_info(self.info['id'])
-            self.pic_match = self.info['pic_num'] == len(self.info['pic_ids'])
             assert self.pic_match
         self.basic_info()
         self.photos_info()

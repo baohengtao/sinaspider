@@ -247,7 +247,7 @@ class UserConfig(BaseModel):
                 early_stopping = True
                 break
             if len(weibo.photos) < weibo.pic_num:
-                weibo_full = WeiboParser.from_id(weibo.id).parse()
+                weibo_full = WeiboParser(weibo.id).parse()
                 weibo = Weibo(**weibo_full)
             console.log(weibo)
             console.log(
@@ -402,14 +402,13 @@ class Weibo(BaseModel):
 
     @classmethod
     def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
-        # TODO: rewrite with upsert
         wb_id = normalize_wb_id(wb_id)
         if not update:
             try:
                 return Weibo.get_by_id(wb_id)
             except Weibo.DoesNotExist:
                 pass
-        weibo_dict = WeiboParser.from_id(wb_id).parse()
+        weibo_dict = WeiboParser(wb_id).parse()
         Weibo.insert(weibo_dict).on_conflict(
             conflict_target=[Weibo.id],
             update=weibo_dict).execute()
