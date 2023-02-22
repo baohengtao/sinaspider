@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
-from typing import Iterator
+from typing import Iterable
 from urllib.parse import unquote, urlparse
 
 import keyring
@@ -163,7 +163,7 @@ def download_single_file(
         break
 
 
-def download_files(imgs: Iterator[dict]):
+def download_files(imgs: Iterable[dict]):
     # TODO: gracefully handle exception and keyboardinterrupt
     with ThreadPoolExecutor(max_workers=7) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
@@ -178,7 +178,8 @@ def get_pause():
     def _sleep(sleep_time):
         nonlocal sleep_until
         sleep_time = random.uniform(0.5 * sleep_time, 1.5 * sleep_time)
-        console.log(f'pause {count}: sleep {sleep_time:.1f} seconds...')
+        console.log(
+            f'sleep {sleep_time:.1f} seconds...(count: {count})', style='info')
         sleep_until = time.time() + sleep_time
         while time.time() < sleep_until:
             sleep(1)

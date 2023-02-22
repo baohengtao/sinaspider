@@ -21,7 +21,7 @@ from sinaspider import console
 from sinaspider.helper import (
     download_files,
     normalize_wb_id,
-    parse_url_extension, pause
+    parse_url_extension
 )
 from sinaspider.page import Page
 from sinaspider.parser import UserParser, WeiboParser
@@ -126,7 +126,7 @@ class UserConfig(BaseModel):
 
         if not self.weibo_fetch:
             console.log(f"skip {self.username}...")
-            return
+            return False
         days = 90
         recent_num = (
             User.select(User)

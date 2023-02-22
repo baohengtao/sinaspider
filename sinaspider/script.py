@@ -236,12 +236,15 @@ def artist():
             'recent', 'super', 'no-folder']).unsafe_ask()
         if folder == 'no-folder':
             folder = None
-        if (artist.folder != folder and
-                questionary.confirm(f'change folder from {artist.folder} to {folder} ?').unsafe_ask()):
+        if artist.folder == folder:
+            continue
+        ques = f'change folder from {artist.folder} to {folder} ?'
+        if questionary.confirm(ques).unsafe_ask():
             artist.folder = folder
             artist.save()
             console.print(
-                f'{artist.realname or artist.username}:folder changed to [bold red]{folder}[/bold red]')
+                f'{artist.realname or artist.username}:'
+                f'folder changed to [bold red]{folder}[/bold red]')
 
 
 @app.command()
@@ -265,6 +268,7 @@ def weibo_update():
         else:
             update_model_from_dict(weibo, weibo_dict)
             console.log(
-                f"{weibo.username}({weibo.url}): :tada:  updated successfully!")
+                f"{weibo.username}({weibo.url}): :tada:  updated successfully!"
+            )
 
         weibo.save()
