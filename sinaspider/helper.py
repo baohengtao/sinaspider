@@ -43,7 +43,7 @@ def get_url(url: str) -> requests.Response:
                 period = 60
             console.log(
                 f"{e}: Timeout sleep {period} seconds and "
-                f"retry[link={url}]{url}[/link]...", style='error')
+                f"retry [link={url}]{url}[/link]...", style='error')
             sleep(period)
 
 
@@ -171,65 +171,33 @@ def download_files(imgs: Iterator[dict]):
         future.result()
 
 
-class Pause:
-    def __init__(self):
+def get_pause():
+    count = 0
+    sleep_until = time.time()
 
-        self.page_config = dict(
-            awake=0,
-            stop=random.randint(5, 9),
-            visited=0,
-            level={
-                'short': 5,
-                'break': 10,
-                'long': 120,
-            },
-            break_freq=25
-        )
-        self.user_config = dict(
-            awake=0,
-            stop=random.randint(2, 4),
-            visited=0,
-            level={
-                'short': 5,
-                'break': 15,
-                'long': 20,
-            },
-            break_freq=10
-        )
+    def _sleep(sleep_time):
+        nonlocal sleep_until
+        sleep_time = random.uniform(0.5 * sleep_time, 1.5 * sleep_time)
+        console.log(f'pause {count}: sleep {sleep_time:.1f} seconds...')
+        sleep_until = time.time() + sleep_time
+        while time.time() < sleep_until:
+            sleep(1)
 
-        self.__since = time.time()
-
-    def __call__(self, mode: str):
-        if mode == 'page':
-            self._pause(self.page_config)
-        elif mode == 'user':
-            self._pause(self.user_config)
+    def pause():
+        nonlocal count
+        if time.time() - sleep_until > 3600:
+            count = 0
+        count += 1
+        if count % 100 == 0:
+            sleep_time = 120
+        elif count % 25 == 0:
+            sleep_time = 50
+        elif count % 10 == 0:
+            sleep_time = 20
         else:
-            raise ValueError(f'unsupported pause mode {mode}')
-
-    def _pause(self, record):
-        awake, stop = record['awake'], record['stop']
-        level, break_freq = record['level'], record['break_freq']
-        record['visited'] += 1
-        if awake < stop:
-            record['awake'] += 1
-            self._sleep(level['short'])
-        elif awake == stop:
-            record['awake'] = 0
-            self._sleep(level['break'])
-            record['stop'] = random.randint(2, 4)
-        if record['visited'] % break_freq == 0:
-            self._sleep(level['long'])
-
-    def _sleep(self, sleep_time):
-        sleep_time = random.randint(
-            int(0.5 * sleep_time), int(1.5 * sleep_time))
-        to_sleep = self.__since + sleep_time - time.time()
-        if to_sleep := max(int(to_sleep), 0):
-            console.log(f'sleep {to_sleep} seconds...')
-            sleep(to_sleep)
-
-        self.__since = time.time()
+            sleep_time = 2
+        _sleep(sleep_time)
+    return pause
 
 
-pause = Pause()
+pause = get_pause()

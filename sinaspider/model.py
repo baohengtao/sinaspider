@@ -230,7 +230,6 @@ class UserConfig(BaseModel):
         console.log(f"{self.user.username}的赞获取完毕\n")
         self.liked_fetch_at = pendulum.now()
         self.save()
-        pause(mode="user")
 
     def _save_liked(self, download_dir: Path) -> Iterator[dict]:
         bulk = []

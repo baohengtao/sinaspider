@@ -1,15 +1,14 @@
 import itertools
 from datetime import datetime
-import math
 from time import sleep
 from typing import Iterator
 
 import pendulum
+from furl import furl
 
 from sinaspider import console
 from sinaspider.helper import get_url, pause
 from sinaspider.parser import WeiboParser
-from furl import furl
 
 
 class Page:
@@ -25,7 +24,7 @@ class Page:
             if not (users := js['users']):
                 break
             yield from users
-            pause(mode='page')
+            pause()
 
     @staticmethod
     def timeline(since: pendulum.DateTime):
@@ -47,7 +46,7 @@ class Page:
                 if status.get('pic_ids'):
                     yield status
             console.log(f'created_at:{created_at}')
-            pause(mode='page')
+            pause()
 
     def _liked_card(self) -> Iterator[dict]:
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
@@ -67,7 +66,7 @@ class Page:
                 break
             mblogs = _yield_from_cards(cards)
             yield from mblogs
-            pause(mode='page')
+            pause()
 
     def liked(self, parse: bool = True) -> Iterator[dict]:
         """
@@ -165,7 +164,7 @@ class Page:
             else:
                 console.log(
                     f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")
-                pause(mode='page')
+                pause()
 
 
 def _yield_from_cards(cards):

@@ -42,7 +42,7 @@ class WeiboParser:
         html = rec.match(text).groups(1)[0]
         weibo_info = json.loads(html, strict=False)['status']
         console.log(f"{weibo_id} fetched in online.")
-        pause(mode='page')
+        pause()
         return weibo_info
 
     def parse(self, online=True):
@@ -220,7 +220,7 @@ class UserParser:
         console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
         for v in user.values():
             assert v or v == 0
-        pause(mode='page')
+        pause()
         return user
 
     def get_user_cn(self) -> dict:
