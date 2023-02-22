@@ -22,12 +22,14 @@ class WeiboParser:
         else:
             self.info = weibo_info
         self.is_pinned = self.info.get('title', {}).get('text') == '置顶'
-        assert self.info['pic_num'] >= len(self.info['pic_ids'])
+        if self.info['pic_num'] < len(self.info['pic_ids']):
+            console.log(
+                f"pic_num < len(pic_ids) for {self.info['id']}", style="warning")
         self.weibo = {}
 
     @property
     def pic_match(self) -> bool:
-        return self.info['pic_num'] == len(self.info['pic_ids'])
+        return self.info['pic_num'] <= len(self.info['pic_ids'])
 
     @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
