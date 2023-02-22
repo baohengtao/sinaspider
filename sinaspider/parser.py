@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError, WeiboNotFoundError
-from sinaspider.helper import fetch_url, normalize_str, pause
+from sinaspider.helper import fetch_url, normalize_str
 
 
 class WeiboParser:
@@ -43,7 +43,6 @@ class WeiboParser:
         html = rec.match(text).groups(1)[0]
         weibo_info = json.loads(html, strict=False)['status']
         console.log(f"{weibo_id} fetched in online.")
-        pause()
         return weibo_info
 
     def parse(self, online=True):
@@ -220,7 +219,6 @@ class UserParser:
         console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
         for v in user.values():
             assert v or v == 0
-        pause()
         return user
 
     def get_user_cn(self) -> dict:

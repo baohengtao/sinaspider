@@ -50,7 +50,7 @@ def get_pause():
     return pause
 
 
-pause = get_pause()
+_pause = get_pause()
 
 user_agent = ('Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
               'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -62,8 +62,10 @@ headers = {
 }
 
 
-def fetch_url(url: str) -> requests.Response:
+def fetch_url(url: str, with_pause=True) -> requests.Response:
     # write with session and pause
+    if with_pause:
+        _pause()
     while True:
         try:
             return requests.get(url, headers=headers)
