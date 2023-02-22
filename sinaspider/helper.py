@@ -104,8 +104,9 @@ def write_xmp(img: Path, tags: dict):
 
 def normalize_user_id(user_id: str | int) -> int:
     """
-    normalize user_id to int
-    raise UserNotFoundError if user_id not exist
+    Normalize user_id to int.
+
+    Raise UserNotFoundError if user_id not exist.
     """
     try:
         user_id = int(user_id)

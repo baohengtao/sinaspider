@@ -2,7 +2,6 @@ import json
 import re
 import time
 import warnings
-from typing import Self
 
 import bs4
 import pendulum
@@ -14,7 +13,7 @@ from sinaspider.helper import fetch_url, normalize_str, pause
 
 
 class WeiboParser:
-    """用于解析原始微博内容"""
+    """用于解析原始微博内容."""
 
     def __init__(self, weibo_info: dict | int | str):
         if isinstance(weibo_info, (int, str)):
@@ -243,7 +242,7 @@ class UserParser:
         return user_cn
 
     def _fetch_user_cn(self) -> dict:
-        """获取来自cn的信息"""
+        """获取来自cn的信息."""
         r = fetch_url(f'https://weibo.cn/{self.id}/info')
 
         with warnings.catch_warnings(
@@ -278,7 +277,7 @@ class UserParser:
         return info
 
     def _fetch_user_card(self) -> dict:
-        """获取来自m.weibo.com的信息"""
+        """获取来自m.weibo.com的信息."""
         url = f'https://m.weibo.cn/api/container/getIndex?containerid=230283{self.id}_-_INFO'
         js = fetch_url(url).json()
         user_card = js['data']['cards']
@@ -292,7 +291,7 @@ class UserParser:
         return user_card
 
     def get_user_info(self) -> dict:
-        """获取主信息"""
+        """获取主信息."""
         url = f'https://m.weibo.cn/api/container/getIndex?containerid=100505{self.id}'
         while not (js := fetch_url(url).json())['ok']:
             console.log(

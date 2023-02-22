@@ -15,7 +15,7 @@ class Page:
         self.id = user_id
 
     def friends(self):
-        """get user's friends"""
+        """Get user's friends."""
         for page in itertools.count():
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
                    f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
@@ -27,7 +27,7 @@ class Page:
 
     @staticmethod
     def timeline(since: pendulum.DateTime):
-        """get status on my timeline"""
+        """Get status on my timeline."""
         next_cursor = None
         seed = 'https://m.weibo.cn/feed/friends'
         while True:
@@ -69,10 +69,10 @@ class Page:
 
     def liked(self, parse: bool = True) -> Iterator[dict]:
         """
-        fetch user's liked weibo.
+        Fetch user's liked weibo.
 
         Args:
-            parse: whether to parse weibo, default True
+                parse: whether to parse weibo, default True
         """
         from sinaspider.helper import normalize_str
         for weibo_info in self._liked_card():
@@ -93,7 +93,7 @@ class Page:
                 yield weibo_info
 
     def get_visibility(self) -> bool:
-        """判断用户是否设置微博半年内可见"""
+        """判断用户是否设置微博半年内可见."""
         url = ('https://m.weibo.cn/api/container/getIndex'
                f'?containerid=107603{self.id}&page=%s')
         start, end = 1, 4
@@ -105,7 +105,7 @@ class Page:
             if (days := post_on.diff().days) > 186:
                 return True
             start = end + 1
-            end = min(max(end+3, end*180//days), end*2)
+            end = min(max(end + 3, end * 180 // days), end * 2)
             console.log(
                 f'checking page {(start, end)}...to get visibility (days:{days})')
         else:
@@ -128,11 +128,11 @@ class Page:
 
     def homepage(self, start_page: int = 1, parse: bool = True) -> Iterator[dict]:
         """
-        fetch user's homepage weibo
+        Fetch user's homepage weibo.
 
         Args:
-            start_page: the start page to fetch
-            parse: whether to parse weibo, default True
+                start_page: the start page to fetch
+                parse: whether to parse weibo, default True
         """
         url = furl('https://m.weibo.cn/api/container/getIndex'
                    f'?containerid=107603{self.id}')
