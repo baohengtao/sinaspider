@@ -58,6 +58,8 @@ class WeiboParser:
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             self.weibo['is_pinned'] = self.is_pinned
+        if self.pic_match:
+            self.weibo['update_status'] = 'updated'
         return self.weibo
 
     def basic_info(self):

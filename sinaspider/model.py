@@ -396,6 +396,7 @@ class Weibo(BaseModel):
     video_url = TextField(null=True)
     region_name = TextField(null=True)
     pic_num = IntegerField(null=True)
+    update_status = TextField(null=True)
 
     class Meta:
         table_name = "weibo"

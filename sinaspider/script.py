@@ -38,7 +38,7 @@ def logsaver(func):
                 console.print_exception(show_locals=True)
             raise
         finally:
-            download_dir = callargs['download_dir']
+            download_dir = callargs.get('download_dir', default_path)
             time_format = pendulum.now().format('YY-MM-DD_HHmmss')
             log_file = f"{func.__name__}_{time_format}.html"
             console.log(f'Saving log to {download_dir / log_file}')
@@ -242,3 +242,29 @@ def artist():
             artist.save()
             console.print(
                 f'{artist.realname or artist.username}:folder changed to [bold red]{folder}[/bold red]')
+
+
+@app.command()
+@logsaver
+def weibo_update():
+    from playhouse.shortcuts import update_model_from_dict
+
+    from sinaspider.exceptions import WeiboNotFoundError
+    from sinaspider.parser import WeiboParser
+    to_update = (Weibo.select()
+                 .where(Weibo.created_at > pendulum.now().subtract(months=6))
+                 .where(Weibo.update_status.is_null())
+                 .order_by(Weibo.created_at.asc()))
+    for weibo in to_update:
+        try:
+            weibo_dict = WeiboParser.from_id(weibo.id).parse()
+        except WeiboNotFoundError as e:
+            weibo.update_status = str(e)
+            console.log(
+                f"{weibo.username}({weibo.url}): :disappointed_relieved: {e}")
+        else:
+            update_model_from_dict(weibo, weibo_dict)
+            console.log(
+                f"{weibo.username}({weibo.url}): :tada:  updated successfully!")
+
+        weibo.save()
