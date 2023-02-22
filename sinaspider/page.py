@@ -7,7 +7,7 @@ import pendulum
 from furl import furl
 
 from sinaspider import console
-from sinaspider.helper import get_url, pause
+from sinaspider.helper import fetch_url, pause
 from sinaspider.parser import WeiboParser
 
 
@@ -20,7 +20,7 @@ class Page:
         for page in itertools.count():
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
                    f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
-            js = get_url(url).json()
+            js = fetch_url(url).json()
             if not (users := js['users']):
                 break
             yield from users
@@ -33,7 +33,7 @@ class Page:
         seed = 'https://m.weibo.cn/feed/friends'
         while True:
             url = f'{seed}?max_id={next_cursor}' if next_cursor else seed
-            r = get_url(url)
+            r = fetch_url(url)
             data = r.json()['data']
             next_cursor = data['next_cursor']
             created_at = None
@@ -52,7 +52,7 @@ class Page:
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
         for page in itertools.count(start=1):
-            while (r := get_url(url % page)).status_code != 200:
+            while (r := fetch_url(url % page)).status_code != 200:
                 console.log(
                     f'{r.url} get status code {r.status_code}...',
                     style='warning')
@@ -98,7 +98,7 @@ class Page:
         url = ('https://m.weibo.cn/api/container/getIndex'
                f'?containerid=107603{self.id}&page=%s')
         start, end = 1, 4
-        while (js := get_url(url % end).json())['ok']:
+        while (js := fetch_url(url % end).json())['ok']:
             mblogs = [card['mblog'] for card in js['data']['cards']
                       if card['card_type'] == 9]
             post_on = WeiboParser(
@@ -115,7 +115,7 @@ class Page:
         while start <= end:
             mid = (start + end) // 2
             console.log(f'checking page {mid}...to get visibility')
-            js = get_url(url % mid).json()
+            js = fetch_url(url % mid).json()
             if not js['ok']:
                 end = mid - 1
                 continue
@@ -139,7 +139,7 @@ class Page:
                    f'?containerid=107603{self.id}')
         for url.args['page'] in itertools.count(start=max(start_page, 1)):
             for try_time in itertools.count(start=1):
-                if (js := get_url(url).json())['ok']:
+                if (js := fetch_url(url).json())['ok']:
                     break
                 if js['msg'] == '请求过于频繁，歇歇吧':
                     raise ConnectionError(js['msg'])

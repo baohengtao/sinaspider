@@ -29,7 +29,7 @@ headers = {
 }
 
 
-def get_url(url: str) -> requests.Response:
+def fetch_url(url: str) -> requests.Response:
 
     while True:
         try:
@@ -79,13 +79,13 @@ def normalize_user_id(user_id: str | int) -> int:
     except ValueError:
         assert isinstance(user_id, str)
         url = f'https://m.weibo.cn/n/{user_id}'
-        r = get_url(url)
+        r = fetch_url(url)
         if url != unquote(r.url):
             user_id = int(r.url.split('/')[-1])
         else:
             raise UserNotFoundError(f'{user_id} not exist')
     else:
-        r = get_url(f'https://weibo.cn/u/{user_id}')
+        r = fetch_url(f'https://weibo.cn/u/{user_id}')
         if 'User does not exists!' in r.text:
             raise UserNotFoundError(f'{user_id} not exist')
     return user_id
@@ -133,7 +133,7 @@ def download_single_file(
                 f"{url} expires at {expires}, skip...", style="warning")
             return
     for tried_time in itertools.count(start=1):
-        while (r := get_url(url)).status_code != 200:
+        while (r := fetch_url(url)).status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
             if r.status_code == 404:
                 return
