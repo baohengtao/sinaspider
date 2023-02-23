@@ -14,7 +14,7 @@ from baseconv import base62
 from exiftool import ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteException
 from furl import furl
-from requests.exceptions import ConnectionError, ProxyError, SSLError
+from requests.exceptions import ConnectionError
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
@@ -40,15 +40,10 @@ class Fetcher:
         while True:
             try:
                 return get(url)
-            except (TimeoutError, ConnectionError, SSLError, ProxyError) as e:
-                if type(e) is ConnectionError:
-                    period = 600
-                elif type(e) is SSLError:
-                    period = 5
-                else:
-                    period = 60
+            except ConnectionError as e:
+                period = 60
                 console.log(
-                    f"{e}: Timeout sleep {period} seconds and "
+                    f"{e}: Sleepping {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
                 sleep(period)
 
