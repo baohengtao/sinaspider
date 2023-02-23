@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError, WeiboNotFoundError
-from sinaspider.helper import fetch_url, normalize_str
+from sinaspider.helper import fetcher, normalize_str
 
 
 class WeiboParser:
@@ -34,7 +34,7 @@ class WeiboParser:
     @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
         url = f'https://m.weibo.cn/detail/{weibo_id}'
-        text = fetch_url(url).text
+        text = fetcher.get(url).text
         soup = BeautifulSoup(text, 'html.parser')
         if soup.title.text == '微博-出错了':
             raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
@@ -243,7 +243,7 @@ class UserParser:
 
     def _fetch_user_cn(self) -> dict:
         """获取来自cn的信息."""
-        r = fetch_url(f'https://weibo.cn/{self.id}/info')
+        r = fetcher.get(f'https://weibo.cn/{self.id}/info')
 
         with warnings.catch_warnings(
             action='ignore',
@@ -279,7 +279,7 @@ class UserParser:
     def _fetch_user_card(self) -> dict:
         """获取来自m.weibo.com的信息."""
         url = f'https://m.weibo.cn/api/container/getIndex?containerid=230283{self.id}_-_INFO'
-        js = fetch_url(url).json()
+        js = fetcher.get(url).json()
         user_card = js['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
         user_card = {card['item_name']: card['item_content']
@@ -293,7 +293,7 @@ class UserParser:
     def get_user_info(self) -> dict:
         """获取主信息."""
         url = f'https://m.weibo.cn/api/container/getIndex?containerid=100505{self.id}'
-        while not (js := fetch_url(url).json())['ok']:
+        while not (js := fetcher.get(url).json())['ok']:
             console.log(
                 f'not js[ok] for {url}, sleeping 60 secs...', style='warning')
             time.sleep(60)

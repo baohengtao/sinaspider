@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
-from typing import Iterable
+from typing import Callable, Iterable
 from urllib.parse import unquote, urlparse
 
 import keyring
@@ -20,66 +20,60 @@ from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 
 
-def get_pause():
-    count = 0
-    sleep_until = time.time()
+class Fetcher:
+    def __init__(self) -> None:
+        self.sess = requests.Session()
+        self.sess.headers['User-Agent'] = (
+            'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/100.0.4896.75 Mobile Safari/537.36')
+        self.sess.headers['Cookie'] = keyring.get_password(
+            'sinaspider', 'cookie')
+        self._visit_count = 0
+        self._sleep_until = time.time()
 
-    def _sleep(sleep_time):
-        nonlocal sleep_until
-        sleep_time = random.uniform(0.5 * sleep_time, 1.5 * sleep_time)
-        console.log(
-            f'sleep {sleep_time:.1f} seconds...(count: {count})', style='info')
-        sleep_until = time.time() + sleep_time
-        while time.time() < sleep_until:
-            sleep(1)
+    def get(self, url: str, mainthread=True) -> requests.Response:
+        # write with session and pause
+        if mainthread:
+            self._pause()
+        get = self.sess.get if mainthread else requests.get
+        while True:
+            try:
+                return get(url)
+            except (TimeoutError, ConnectionError, SSLError, ProxyError) as e:
+                if type(e) is ConnectionError:
+                    period = 600
+                elif type(e) is SSLError:
+                    period = 5
+                else:
+                    period = 60
+                console.log(
+                    f"{e}: Timeout sleep {period} seconds and "
+                    f"retry [link={url}]{url}[/link]...", style='error')
+                sleep(period)
 
-    def pause():
-        nonlocal count
-        if time.time() - sleep_until > 3600:
-            count = 0
-        count += 1
-        if count % 128 == 0:
+    def _pause(self):
+        if time.time() - self._sleep_until > 3600:
+            self._visit_count = 0
+        self._visit_count += 1
+        if self._visit_count % 128 == 0:
             sleep_time = 256
-        elif count % 64 == 0:
+        elif self._visit_count % 64 == 0:
             sleep_time = 64
-        elif count % 16 == 0:
+        elif self._visit_count % 16 == 0:
             sleep_time = 16
         else:
             sleep_time = 0.1
-        _sleep(sleep_time)
-    return pause
+        sleep_time *= random.uniform(0.5, 1.5)
+        console.log(
+            f'sleep {sleep_time:.1f} seconds...(count: {self._visit_count})',
+            style='info')
+        self._sleep_until = time.time() + sleep_time
+        while time.time() < self._sleep_until:
+            sleep(1)
 
 
-_pause = get_pause()
-
-user_agent = ('Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
-              'AppleWebKit/537.36 (KHTML, like Gecko) '
-              'Chrome/100.0.4896.75 Mobile Safari/537.36')
-headers = {
-    "User-Agent": user_agent,
-    "Cookie": keyring.get_password('sinaspider', 'cookie'),
-    "referer": "https://m.weibo.cn",
-}
-
-
-def fetch_url(url: str, mainthread=True) -> requests.Response:
-    # write with session and pause
-    if mainthread:
-        _pause()
-    while True:
-        try:
-            return requests.get(url, headers=headers)
-        except (TimeoutError, ConnectionError, SSLError, ProxyError) as e:
-            if type(e) is ConnectionError:
-                period = 600
-            elif type(e) is SSLError:
-                period = 5
-            else:
-                period = 60
-            console.log(
-                f"{e}: Timeout sleep {period} seconds and "
-                f"retry [link={url}]{url}[/link]...", style='error')
-            sleep(period)
+fetcher = Fetcher()
 
 
 def parse_url_extension(url: str) -> str:
@@ -115,13 +109,13 @@ def normalize_user_id(user_id: str | int) -> int:
     except ValueError:
         assert isinstance(user_id, str)
         url = f'https://m.weibo.cn/n/{user_id}'
-        r = fetch_url(url)
+        r = fetcher.get(url)
         if url != unquote(r.url):
             user_id = int(r.url.split('/')[-1])
         else:
             raise UserNotFoundError(f'{user_id} not exist')
     else:
-        r = fetch_url(f'https://weibo.cn/u/{user_id}')
+        r = fetcher.get(f'https://weibo.cn/u/{user_id}')
         if 'User does not exists!' in r.text:
             raise UserNotFoundError(f'{user_id} not exist')
     return user_id
@@ -169,7 +163,7 @@ def download_single_file(
                 f"{url} expires at {expires}, skip...", style="warning")
             return
     for tried_time in itertools.count(start=1):
-        while (r := fetch_url(url, mainthread=False)).status_code != 200:
+        while (r := fetcher.get(url, mainthread=False)).status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
             if r.status_code == 404:
                 return
