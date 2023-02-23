@@ -38,14 +38,14 @@ def get_pause():
         if time.time() - sleep_until > 3600:
             count = 0
         count += 1
-        if count % 100 == 0:
-            sleep_time = 120
-        elif count % 25 == 0:
-            sleep_time = 50
-        elif count % 10 == 0:
-            sleep_time = 20
+        if count % 128 == 0:
+            sleep_time = 256
+        elif count % 64 == 0:
+            sleep_time = 64
+        elif count % 16 == 0:
+            sleep_time = 16
         else:
-            sleep_time = 2
+            sleep_time = 0.1
         _sleep(sleep_time)
     return pause
 
@@ -62,9 +62,9 @@ headers = {
 }
 
 
-def fetch_url(url: str, with_pause=True) -> requests.Response:
+def fetch_url(url: str, mainthread=True) -> requests.Response:
     # write with session and pause
-    if with_pause:
+    if mainthread:
         _pause()
     while True:
         try:
@@ -169,7 +169,7 @@ def download_single_file(
                 f"{url} expires at {expires}, skip...", style="warning")
             return
     for tried_time in itertools.count(start=1):
-        while (r := fetch_url(url)).status_code != 200:
+        while (r := fetch_url(url, mainthread=False)).status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
             if r.status_code == 404:
                 return
