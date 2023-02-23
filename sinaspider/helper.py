@@ -71,11 +71,6 @@ class Fetcher:
 fetcher = Fetcher()
 
 
-def parse_url_extension(url: str) -> str:
-    parse = urlparse(url)
-    return Path(parse.path).suffix or Path(url).suffix
-
-
 def write_xmp(img: Path, tags: dict):
     for k, v in tags.items():
         if isinstance(v, str):
@@ -91,6 +86,72 @@ def write_xmp(img: Path, tags: dict):
                 style='error')
             img = img.rename(new_img)
         et.set_tags(img, tags, params=params)
+
+
+def download_single_file(
+        url: str,
+        filepath: Path,
+        filename: str,
+        xmp_info: dict = None
+):
+    filepath.mkdir(parents=True, exist_ok=True)
+    img = filepath / filename
+    if img.exists():
+        console.log(f'{img} already exists..skipping...', style='info')
+        return
+
+    if expires := furl(url).args.get("Expires"):
+        expires = pendulum.from_timestamp(int(expires), tz='local')
+        if expires < pendulum.now():
+            console.log(
+                f"{url} expires at {expires}, skip...", style="warning")
+            return
+
+    for tried_time in itertools.count(start=1):
+        while (r := fetcher.get(url, mainthread=False)).status_code != 200:
+            if r.status_code == 404:
+                console.log(
+                    f"{url}, {xmp_info}, {r.status_code}", style="error")
+                return
+            else:
+                console.log(f"{url}, {r.status_code}", style="error")
+            time.sleep(15)
+            console.log(f'retrying download for {url}...')
+
+        if urlparse(r.url).path == '/images/default_d_w_large.gif':
+            img = img.with_suffix('.gif')
+
+        img.write_bytes(r.content)
+
+        if xmp_info:
+            try:
+                write_xmp(img, xmp_info)
+            except ExifToolExecuteException as e:
+                console.log(e.stderr, style='error')
+                if tried_time < 3:
+                    console.log(
+                        f'{img}:write xmp failed, retrying {url}',
+                        style='error')
+                    continue
+                img_failed = img.parent / 'problem' / img.name
+                img_failed.parent.mkdir(parents=True, exist_ok=True)
+                img.rename(img_failed)
+                console.log(f'move {img} to {img_failed}', style='error')
+                raise e
+        break
+
+
+def download_files(imgs: Iterable[dict]):
+    # TODO: gracefully handle exception and keyboardinterrupt
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        futures = [pool.submit(download_single_file, **img) for img in imgs]
+    for future in futures:
+        future.result()
+
+
+def parse_url_extension(url: str) -> str:
+    parse = urlparse(url)
+    return Path(parse.path).suffix or Path(url).suffix
 
 
 def normalize_user_id(user_id: str | int) -> int:
@@ -141,56 +202,3 @@ def normalize_str(amount):
             case '万':
                 amount = float(num) * (10 ** 4)
     return amount
-
-
-def download_single_file(
-        url: str, filepath: Path, filename: str, xmp_info: dict = None):
-    filepath.mkdir(parents=True, exist_ok=True)
-    img = filepath / filename
-    if img.exists():
-        console.log(f'{img} already exists..skipping...', style='info')
-        return
-
-    if expires := furl(url).args.get("Expires"):
-        expires = pendulum.from_timestamp(int(expires), tz='local')
-        if expires < pendulum.now():
-            console.log(
-                f"{url} expires at {expires}, skip...", style="warning")
-            return
-    for tried_time in itertools.count(start=1):
-        while (r := fetcher.get(url, mainthread=False)).status_code != 200:
-            console.log(f"{url}, {r.status_code}", style="error")
-            if r.status_code == 404:
-                return
-            time.sleep(15)
-            console.log(f'retrying download for {url}...')
-
-        if urlparse(r.url).path == '/images/default_d_w_large.gif':
-            img = img.with_suffix('.gif')
-
-        img.write_bytes(r.content)
-
-        if xmp_info:
-            try:
-                write_xmp(img, xmp_info)
-            except ExifToolExecuteException as e:
-                console.log(e.stderr, style='error')
-                if tried_time < 3:
-                    console.log(
-                        f'{img}:write xmp failed, retrying {url}',
-                        style='error')
-                    continue
-                img_failed = img.parent / 'problem' / img.name
-                img_failed.parent.mkdir(parents=True, exist_ok=True)
-                img.rename(img_failed)
-                console.log(f'move {img} to {img_failed}', style='error')
-                raise e
-        break
-
-
-def download_files(imgs: Iterable[dict]):
-    # TODO: gracefully handle exception and keyboardinterrupt
-    with ThreadPoolExecutor(max_workers=7) as pool:
-        futures = [pool.submit(download_single_file, **img) for img in imgs]
-    for future in futures:
-        future.result()
