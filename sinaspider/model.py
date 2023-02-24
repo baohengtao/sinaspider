@@ -37,8 +37,8 @@ class BaseModel(Model):
         model = model_to_dict(self, recurse=False)
         return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
 
-    def __rper__(self):
-        return self.__str__()
+    # def __rper__(self):
+    #     return self.__str__()
 
     @classmethod
     def get_or_none(cls, *query, **filters) -> Self | None:
@@ -480,8 +480,8 @@ class Weibo(BaseModel):
                 text += f"{k}: {v}\n"
         return text.strip()
 
-    def __repr__(self):
-        return super().__repr__()
+    # def __repr__(self):
+    #     return super().__repr__()
 
 
 class Artist(BaseModel):
@@ -504,8 +504,8 @@ class Artist(BaseModel):
     class Meta:
         table_name = "artist"
 
-    def __repr__(self):
-        return super().__repr__()
+    # def __repr__(self):
+    #     return super().__repr__()
 
     @classmethod
     def from_id(cls, user_id: int, update: bool = False) -> Self:
@@ -546,11 +546,11 @@ class LikedWeibo(BaseModel):
             (('weibo_id', 'user_id'), True),
         )
 
-    def __repr__(self):
-        return super().__repr__()
+    # def __repr__(self):
+    #     return super().__repr__()
 
-    def __str__(self) -> str:
-        return self.__repr__()
+    # def __str__(self) -> str:
+    #     return self.__repr__()
 
 
 database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])

@@ -48,10 +48,10 @@ class Fetcher:
                 sleep(period)
 
     def _pause(self):
-        if time.time() - self._sleep_until > 3600:
+        if time.time() - self._sleep_until > 1024:
             self._visit_count = 0
         self._visit_count += 1
-        if self._visit_count % 128 == 0:
+        if self._visit_count % 256 == 0:
             sleep_time = 256
         elif self._visit_count % 64 == 0:
             sleep_time = 64

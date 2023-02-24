@@ -70,7 +70,7 @@ class WeiboParser:
             user_id=(user_id := user['id']),
             id=(id := int(self.info['id'])),
             bid=(bid := self.info['bid']),
-            username=user['screen_name'],
+            username=user.get('remark') or user['screen_name'],
             url=f'https://weibo.com/{user_id}/{bid}',
             url_m=f'https://m.weibo.cn/detail/{id}',
             created_at=created_at,

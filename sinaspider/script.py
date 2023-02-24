@@ -254,21 +254,41 @@ def weibo_update():
 
     from sinaspider.exceptions import WeiboNotFoundError
     from sinaspider.parser import WeiboParser
-    to_update = (Weibo.select()
-                 .where(Weibo.created_at > pendulum.now().subtract(months=6))
-                 .where(Weibo.update_status.is_null())
-                 .order_by(Weibo.created_at.asc()))
-    for weibo in to_update:
+    for weibo in get_update():
         try:
             weibo_dict = WeiboParser(weibo.id).parse()
         except WeiboNotFoundError as e:
+            weibo.username = weibo.user.username
             weibo.update_status = str(e)
             console.log(
                 f"{weibo.username}({weibo.url}): :disappointed_relieved: {e}")
         else:
             update_model_from_dict(weibo, weibo_dict)
+            weibo.username = weibo.user.username
             console.log(
                 f"{weibo.username}({weibo.url}): :tada:  updated successfully!"
             )
 
         weibo.save()
+
+
+def get_update():
+    from sinaspider.page import Page
+    uid2visible: dict[int, bool] = {}
+    for weibo in Weibo.select().where(Weibo.update_status.is_null()).order_by(Weibo.user_id.asc()):
+        assert weibo.update_status is None
+        assert weibo.created_at < pendulum.now().subtract(months=6)
+        if (uid := weibo.user_id) not in uid2visible:
+            uid2visible[uid] = (visible := Page(uid).get_visibility())
+            if visible:
+                if config := UserConfig.get_or_none(user_id=uid):
+                    if not config.visible:
+                        console.log(
+                            f' {config.username}({uid}) is visible!', style='error')
+        if not uid2visible[uid]:
+            console.log(
+                f"{weibo.username}({weibo.url}): :disappointed_relieved: invisible")
+            weibo.update_status = 'invisible'
+            weibo.save()
+        else:
+            yield weibo
