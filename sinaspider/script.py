@@ -88,8 +88,14 @@ def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
     else:
         uids = [uc.user_id for uc in users if uc.need_fetch]
     for uid in uids:
-        uc = UserConfig.from_id(user_id=uid)
-        uc.fetch_weibo(download_dir)
+        try:
+            config = UserConfig.from_id(user_id=uid)
+        except UserNotFoundError:
+            config: UserConfig = UserConfig.get(user_id=uid)
+            console.log(
+                f'用户 {config.username} 不存在 ({config.homepage})', style='error')
+        else:
+            config.fetch_weibo(download_dir)
 
 
 @app.command(help="Loop through users in database and fetch weibos")
