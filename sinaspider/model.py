@@ -122,29 +122,13 @@ class UserConfig(BaseModel):
 
     @property
     def need_fetch(self) -> bool:
-        import math
-
-        if not self.weibo_fetch:
-            console.log(f"skip {self.username}...")
-            return False
-        days = 90
-        recent_num = (
-            User.select(User)
-            .join(Weibo, JOIN.LEFT_OUTER)
-            .where(Weibo.created_at > pendulum.now().subtract(days=days))
-            .where(Weibo.photos.is_null(False))
-            .where(User.id == self.user_id)
-            .count()
-        )
-        fetch_interval = math.ceil(days / (recent_num + 2))
-        fetch_interval = max(fetch_interval, 7)
-        fetch_at = pendulum.instance(self.weibo_fetch_at)
-        if fetch_at.diff().days < fetch_interval:
-            console.log(f"skipping {self.username}"
-                        f"for fetched at recent {fetch_interval} days")
+        if self.weibo_fetch_at < pendulum.now().subtract(months=3):
+            return True
+        elif self.weibo_fetch_at > pendulum.now().subtract(days=15):
             return False
         else:
-            return True
+            next_fetch = self.weibo_fetch_at - self.post_at + self.weibo_fetch_at
+            return pendulum.now() > next_fetch
 
     def fetch_weibo(self, download_dir: Path):
         if not self.weibo_fetch:
