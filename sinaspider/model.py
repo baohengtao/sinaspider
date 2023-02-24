@@ -33,12 +33,12 @@ class BaseModel(Model):
     class Meta:
         database = database
 
-    def __repr__(self):
+    def __str__(self):
         model = model_to_dict(self, recurse=False)
         return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
 
-    def __str__(self):
-        return self.__repr__()
+    def __rper__(self):
+        return self.__str__()
 
     @classmethod
     def get_or_none(cls, *query, **filters) -> Self | None:

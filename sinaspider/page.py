@@ -117,6 +117,9 @@ class Page:
                 continue
             mblogs = [card['mblog']
                       for card in js['data']['cards'] if card['card_type'] == 9]
+            if not mblogs:
+                assert mid == 1
+                return False
             post_on = WeiboParser(mblogs[-1]).parse(online=False)['created_at']
             if post_on < pendulum.now().subtract(months=6):
                 return True
