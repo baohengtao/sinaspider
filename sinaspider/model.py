@@ -426,8 +426,9 @@ class Weibo(BaseModel):
                     "filepath": filepath,
                 }
 
-    def gen_meta(self, sn: str | int = 0, url: str = "") -> dict:
-        sn = int(sn) if sn else 0
+    def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
+        if sn and self.pic_num > 9:
+            sn = f"{int(sn):02d}"
         xmp_info = {
             "ImageUniqueID": self.bid,
             "ImageSupplierID": self.user_id,
@@ -437,8 +438,8 @@ class Weibo(BaseModel):
             "BlogURL": self.url,
             "Location": self.location,
             "DateCreated": (self.created_at +
-                            pendulum.Duration(microseconds=int(sn))),
-            "SeriesNumber": sn if sn else '',
+                            pendulum.Duration(microseconds=int(sn or 0))),
+            "SeriesNumber": sn,
             "URLUrl": url
         }
 
@@ -448,24 +449,9 @@ class Weibo(BaseModel):
         return {"XMP:" + k: v for k, v in xmp_info.items() if v}
 
     def __str__(self):
-        text = ""
-        keys = [
-            "user_id",
-            "username",
-            "id",
-            "text",
-            "location",
-            "created_at",
-            "at_users",
-            "url",
-        ]
-        for k in keys:
-            if (v := getattr(self, k, None)) is not None:
-                text += f"{k}: {v}\n"
-        return text.strip()
-
-    # def __repr__(self):
-    #     return super().__repr__()
+        model = model_to_dict(self, recurse=False)
+        model.pop('photos')
+        return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
 
 
 class Artist(BaseModel):

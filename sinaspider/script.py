@@ -249,7 +249,7 @@ def artist():
             artist.folder = folder
             artist.save()
             console.print(
-                f'{artist.realname or artist.username}:'
+                f'{artist.realname or artist.username}: '
                 f'folder changed to [bold red]{folder}[/bold red]')
 
 
@@ -280,8 +280,22 @@ def weibo_update():
 
 def get_update():
     from sinaspider.page import Page
+    recent_weibo = (Weibo.select()
+                    .where(Weibo.update_status.is_null())
+                    .where(Weibo.created_at > pendulum.now().subtract(months=6))
+                    .order_by(Weibo.user_id.asc()))
+    for i, weibo in enumerate(recent_weibo, start=1):
+        if i % 20 == 0:
+            console.log(f'✨ processing {i} / {len(recent_weibo)}')
+        yield weibo
+    console.log(':star2: Weibo in half year have been updated!')
+    if not questionary.confirm('Continue?').unsafe_ask():
+        return
     uid2visible: dict[int, bool] = {}
-    for weibo in Weibo.select().where(Weibo.update_status.is_null()).order_by(Weibo.user_id.asc()):
+    for i, weibo in enumerate(process := Weibo.select()
+                              .where(Weibo.update_status.is_null())
+                              .order_by(Weibo.user_id.asc()), start=1):
+        console.log(f'✨ processing {i} / {len(process)}')
         assert weibo.update_status is None
         assert weibo.created_at < pendulum.now().subtract(months=6)
         if (uid := weibo.user_id) not in uid2visible:
@@ -292,9 +306,10 @@ def get_update():
                         console.log(
                             f' {config.username}({uid}) is visible!', style='error')
         if not uid2visible[uid]:
+            weibo.update_status = 'invisible'
+            weibo.username = weibo.user.username
             console.log(
                 f"{weibo.username}({weibo.url}): :disappointed_relieved: invisible")
-            weibo.update_status = 'invisible'
             weibo.save()
         else:
             yield weibo
