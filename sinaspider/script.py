@@ -295,7 +295,8 @@ def get_update():
     for i, weibo in enumerate(process := Weibo.select()
                               .where(Weibo.update_status.is_null())
                               .order_by(Weibo.user_id.asc()), start=1):
-        console.log(f'✨ processing {i} / {len(process)}')
+        if i % 10 == 0:
+            console.log(f'✨ processing {i} / {len(process)}')
         assert weibo.update_status is None
         assert weibo.created_at < pendulum.now().subtract(months=6)
         if (uid := weibo.user_id) not in uid2visible:

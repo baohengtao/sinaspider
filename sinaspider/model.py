@@ -429,12 +429,15 @@ class Weibo(BaseModel):
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
         if sn and self.pic_num > 9:
             sn = f"{int(sn):02d}"
+        title = (self.text or "").strip()
+        if self.region_name:
+            title += f" 发布于{self.region_name}"
         xmp_info = {
             "ImageUniqueID": self.bid,
             "ImageSupplierID": self.user_id,
             "ImageSupplierName": "Weibo",
             "ImageCreatorName": self.username,
-            "BlogTitle": f'{self.text} {self.region_name or ""}'.strip(),
+            "BlogTitle": title,
             "BlogURL": self.url,
             "Location": self.location,
             "DateCreated": (self.created_at +

@@ -66,6 +66,8 @@ class WeiboParser:
         created_at = pendulum.from_format(
             self.info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
         assert created_at.is_local()
+        if region_name := self.info.get('region_name'):
+            region_name = region_name.removeprefix('发布于').strip()
         self.weibo.update(
             user_id=(user_id := user['id']),
             id=(id := int(self.info['id'])),
@@ -76,7 +78,7 @@ class WeiboParser:
             created_at=created_at,
             source=self.info['source'],
             retweeted=self.info.get('retweeted_status', {}).get('bid'),
-            region_name=self.info.get('region_name'),
+            region_name=region_name,
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
             if (v := self.info[key]) == '100万+':
