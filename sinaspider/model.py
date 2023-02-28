@@ -35,6 +35,10 @@ class BaseModel(Model):
 
     def __str__(self):
         model = model_to_dict(self, recurse=False)
+        for k, v in model.items():
+            if isinstance(v, datetime):
+                model[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+
         return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
 
     # def __rper__(self):
@@ -73,28 +77,28 @@ class UserConfig(BaseModel):
         super().__init__(*args, **kwargs)
         self.page = Page(self.user_id)
 
-    def __repr__(self):
-        return super().__repr__()
+    # def __repr__(self):
+    #     return super().__repr__()
 
-    def __str__(self):
-        text = ""
-        fields = [
-            "username",
-            "age",
-            "education",
-            "following",
-            "description",
-            "homepage",
-            "weibo_fetch",
-            "weibo_fetch_at",
-            "IP"
-        ]
-        for k in fields:
-            if (v := getattr(self, k, None)) is not None:
-                if isinstance(v, datetime):
-                    v = v.strftime("%Y-%m-%d %H:%M:%S")
-                text += f"{k}: {v}\n"
-        return text.strip()
+    # def __str__(self):
+    #     text = ""
+    #     fields = [
+    #         "username",
+    #         "age",
+    #         "education",
+    #         "following",
+    #         "description",
+    #         "homepage",
+    #         "weibo_fetch",
+    #         "weibo_fetch_at",
+    #         "IP"
+    #     ]
+    #     for k in fields:
+    #         if (v := getattr(self, k, None)) is not None:
+    #             if isinstance(v, datetime):
+    #                 v = v.strftime("%Y-%m-%d %H:%M:%S")
+    #             text += f"{k}: {v}\n"
+    #     return text.strip()
 
     @classmethod
     def from_id(cls, user_id: int) -> Self:
@@ -337,7 +341,6 @@ class User(BaseModel):
         return cls.get_by_id(user_id)
 
     def __str__(self):
-        text = ""
         keys = [
             "id",
             "username",
@@ -352,10 +355,9 @@ class User(BaseModel):
             "follow_count",
             "IP"
         ]
-        for k in keys:
-            if (v := getattr(self, k, None)) is not None:
-                text += f"{k}: {v}\n"
-        return text.strip()
+        model = model_to_dict(self)
+        return "\n".join(f"{k}: {v}" for k, v in model.items()
+                         if k in keys and v is not None)
 
 
 class Weibo(BaseModel):
@@ -378,7 +380,7 @@ class Weibo(BaseModel):
     video_duration = BigIntegerField(null=True)
     video_url = TextField(null=True)
     region_name = TextField(null=True)
-    pic_num = IntegerField(null=True)
+    pic_num = IntegerField()
     update_status = TextField(null=True)
 
     class Meta:
@@ -453,8 +455,14 @@ class Weibo(BaseModel):
 
     def __str__(self):
         model = model_to_dict(self, recurse=False)
-        model.pop('photos')
-        return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
+        res = {}
+        for k, v in model.items():
+            if 'count' in k or v is None:
+                continue
+            if k in ['photos', 'url_m', 'pic_num', 'update_status']:
+                continue
+            res[k] = v
+        return "\n".join(f'{k}: {v}' for k, v in res.items())
 
 
 class Artist(BaseModel):

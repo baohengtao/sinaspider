@@ -1,3 +1,4 @@
+import html
 import json
 import re
 import time
@@ -200,8 +201,10 @@ class UserParser:
         for k, v in user_cn.items():
             assert user_info.setdefault(k, v) == v
 
-        if user_info['description'] == '':
+        if not (descrip := user_info['description']):
             user_info.pop('description')
+        else:
+            user_info['description'] = html.unescape(descrip)
 
         self._user = self._normalize(user_info)
 
@@ -267,7 +270,12 @@ class UserParser:
                 assert c['class'] == ['c']
 
             if tip.text == '基本信息':
-                for line in c.get_text(separator='\n').split('\n'):
+                # for line in c.get_text(separator='\n').split('\n'):
+                #     key, value = re.split('[:：]', line, maxsplit=1)
+                #     info[key] = value
+                lines = "".join('\n' if child.name == 'br' else child.text
+                                for child in c.children).strip()
+                for line in lines.split('\n'):
                     key, value = re.split('[:：]', line, maxsplit=1)
                     info[key] = value
             elif tip.text in ['学习经历', '工作经历']:
@@ -303,7 +311,7 @@ class UserParser:
         keys = ['cover_image_phone', 'profile_image_url',
                 'profile_url', 'toolbar_menus']
         for key in keys:
-            user_info.pop(key)
+            user_info.pop(key, None)
         assert user_info['followers_count'] == user_info.pop(
             'followers_count_str')
         return user_info
