@@ -71,11 +71,11 @@ class WeiboParser:
             region_name = region_name.removeprefix('发布于').strip()
         self.weibo.update(
             user_id=(user_id := user['id']),
-            id=(id := int(self.info['id'])),
-            bid=(bid := self.info['bid']),
+            id=(id_ := int(self.info['id'])),
+            bid=(bid := self.info.get('bid')),
             username=user.get('remark') or user['screen_name'],
-            url=f'https://weibo.com/{user_id}/{bid}',
-            url_m=f'https://m.weibo.cn/detail/{id}',
+            url=f'https://weibo.com/{user_id}/{bid or id_}',
+            url_m=f'https://m.weibo.cn/detail/{id_}',
             created_at=created_at,
             source=self.info['source'],
             retweeted=self.info.get('retweeted_status', {}).get('bid'),

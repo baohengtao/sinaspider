@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
-from typing import Callable, Iterable
+from typing import Iterable
 from urllib.parse import unquote, urlparse
 
 import keyring
