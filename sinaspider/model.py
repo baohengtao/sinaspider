@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Iterator, Self
 
 import pendulum
-from peewee import JOIN, Model
+from peewee import JOIN, Model, fn
 from playhouse.postgres_ext import (
     ArrayField,
     BigIntegerField,
@@ -107,9 +107,12 @@ class UserConfig(BaseModel):
         user_dict['user_id'] = user_dict.pop('id')
         to_insert = {k: v for k, v in user_dict.items()
                      if k in cls._meta.columns}
-        cls.insert(to_insert).on_conflict(
+        max_id = cls.select(fn.Max(cls.id)).scalar()
+        id_ = cls.insert(to_insert).on_conflict(
             conflict_target=[cls.user_id],
             update=to_insert).execute()
+        if (diff := id_ - max_id) > 1:
+            raise ValueError(f'{cls.__name__} insert with id increment {diff}')
         return cls.get(user_id=user_id)
 
     def set_visibility(self) -> bool:
@@ -495,9 +498,12 @@ class Artist(BaseModel):
         user_dict['user_id'] = user_dict.pop('id')
         to_insert = {k: v for k, v in user_dict.items()
                      if k in cls._meta.columns}
-        cls.insert(to_insert).on_conflict(
+        max_id = cls.select(fn.Max(cls.id)).scalar()
+        id_ = cls.insert(to_insert).on_conflict(
             conflict_target=[cls.user_id],
             update=to_insert).execute()
+        if (diff := id_ - max_id) > 1:
+            raise ValueError(f"{cls.__name__} insert with id increment {diff}")
         return cls.get(user_id=user_id)
 
     @ property
