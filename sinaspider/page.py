@@ -85,7 +85,12 @@ class Page:
             if followers_count > 50000 or followers_count < 500:
                 continue
             if parse:
-                yield WeiboParser(weibo_info).parse(online=False)
+                try:
+                    yield WeiboParser(weibo_info).parse(online=False)
+                except (KeyError, AttributeError):
+                    console.log(
+                        f"parse weibo_info failed for https://m.weibo.cn/status/{weibo_info['id']}",
+                        style='error')
             else:
                 yield weibo_info
 

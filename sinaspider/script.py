@@ -118,26 +118,28 @@ def timeline(download_dir: Path = default_path,
 
 @app.command(help="Fetch users' liked weibo")
 @logsaver
-def liked(download_dir: Path = default_path):
-    for uc in UserConfig:
-        if uc.liked_fetch and not uc.liked_fetch_at:
-            uc.fetch_liked(download_dir)
-            return
+def liked(download_dir: Path = default_path, max_user: int = 1):
+    configs = (UserConfig.select()
+               .where(UserConfig.liked_fetch)
+               .where(UserConfig.liked_fetch_at.is_null(True))
+               .limit(max_user))
+    for config in configs:
+        config.fetch_liked(download_dir)
     while user_id := Prompt.ask('请输入用户名:smile:'):
-        if uc := UserConfig.get_or_none(username=user_id):
-            user_id = uc.user_id
+        if config := UserConfig.get_or_none(username=user_id):
+            user_id = config.user_id
         else:
             user_id = normalize_user_id(user_id)
         if not UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{user_id}不在列表中')
             continue
-        uc = UserConfig.from_id(user_id)
-        uc.liked_fetch = Confirm.ask('是否获取该用户的点赞？', default=True)
-        uc.save()
-        console.log(uc, '\n')
-        console.log(f'用户{uc.username}更新完成')
-        if uc.liked_fetch and Confirm.ask('是否现在抓取', default=False):
-            uc.fetch_liked(download_dir)
+        config = UserConfig.from_id(user_id)
+        config.liked_fetch = Confirm.ask('是否获取该用户的点赞？', default=True)
+        config.save()
+        console.log(config, '\n')
+        console.log(f'用户{config.username}更新完成')
+        if config.liked_fetch and Confirm.ask('是否现在抓取', default=False):
+            config.fetch_liked(download_dir)
 
 
 def get_timeline(download_dir: Path,
