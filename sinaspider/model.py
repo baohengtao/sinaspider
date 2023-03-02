@@ -470,7 +470,6 @@ class Weibo(BaseModel):
 
 class Artist(BaseModel):
     username = CharField(index=True)
-    realname = CharField(null=True)
     user = ForeignKeyField(User, unique=True, backref='artist')
     age = IntegerField(index=True, null=True)
     folder = CharField(null=True, default="new")
@@ -506,10 +505,10 @@ class Artist(BaseModel):
             raise ValueError(f"{cls.__name__} insert with id increment {diff}")
         return cls.get(user_id=user_id)
 
-    @ property
+    @property
     def xmp_info(self):
         xmp = {
-            "Artist": self.realname or self.username,
+            "Artist": self.username,
             "ImageCreatorID": self.homepage,
             "ImageSupplierID": self.user_id,
             "ImageSupplierName": "Weibo",

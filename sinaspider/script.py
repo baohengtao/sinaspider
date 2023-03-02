@@ -229,8 +229,7 @@ def artist():
             artist = Artist.get_or_none(user_id=int(username))
         else:
             artist = (Artist.select().where(
-                (Artist.username == username) |
-                (Artist.realname == username)).get_or_none())
+                Artist.username == username).get_or_none())
         if not artist:
             console.log(f'用户 {username} 不在列表中')
             continue
@@ -251,8 +250,7 @@ def artist():
             artist.folder = folder
             artist.save()
             console.print(
-                f'{artist.realname or artist.username}: '
-                f'folder changed to [bold red]{folder}[/bold red]')
+                f'{artist.username}: folder changed to [bold red]{folder}[/bold red]')
 
 
 @app.command()
