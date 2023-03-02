@@ -222,7 +222,6 @@ def weibo(download_dir: Path = default_path):
 
 @app.command()
 def artist():
-    # TODO: better print
     from sinaspider.model import Artist
     while username := Prompt.ask('请输入用户名:smile:'):
         if username.isdigit():

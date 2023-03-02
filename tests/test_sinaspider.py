@@ -1,11 +1,13 @@
-from sinaspider.model import (
-    User, UserConfig, Artist, Weibo,
-    PostgresqlExtDatabase, pendulum, Path)
-from sinaspider import console
-from python_on_whales import DockerClient
 import pytest
+from python_on_whales import DockerClient
 
-# TODO write test
+from sinaspider import console
+from sinaspider.model import (
+    Artist, Path,
+    PostgresqlExtDatabase,
+    User, UserConfig, Weibo,
+    pendulum
+)
 
 
 @pytest.fixture(scope='session')

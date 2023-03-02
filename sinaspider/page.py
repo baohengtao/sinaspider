@@ -139,6 +139,7 @@ class Page:
                 start_page: the start page to fetch
                 parse: whether to parse weibo, default True
         """
+        # TODO: remove furl dependency
         url = furl('https://m.weibo.cn/api/container/getIndex'
                    f'?containerid=107603{self.id}')
         for url.args['page'] in itertools.count(start=max(start_page, 1)):
