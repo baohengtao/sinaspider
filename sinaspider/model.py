@@ -76,6 +76,7 @@ class UserConfig(BaseModel):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.page = Page(self.user_id)
+        self._liked_list: list[dict] = []
 
     # def __repr__(self):
     #     return super().__repr__()
@@ -207,15 +208,16 @@ class UserConfig(BaseModel):
         console.log(f"Media Saving: {download_dir}")
         imgs = self._save_liked(download_dir / "Liked")
         download_files(imgs)
-        if count := len(self._liked_insert):
+        if count := len(self._liked_list):
             (LikedWeibo
              .update(order_num=LikedWeibo.order_num + count)
              .where(LikedWeibo.user == self.user)
              .execute())
-            LikedWeibo.insert_many(self._liked_insert).execute()
+            LikedWeibo.insert_many(self._liked_list).execute()
+            console.log(f"插入 {count} 条新赞")
             LikedWeibo.delete().where(LikedWeibo.order_num > 200).execute()
+            self._liked_list.clear()
 
-        self._liked_insert = None
         console.log(f"{self.user.username}的赞获取完毕\n")
         self.liked_fetch_at = pendulum.now()
         self.save()
@@ -266,17 +268,15 @@ class UserConfig(BaseModel):
             console.log(
                 'liked_fetch_at is set but not early stopping', style='error')
 
-        bulk_insert = []
+        assert self._liked_list == []
         for i, weibo in enumerate(bulk, start=1):
-            bulk_insert.append({
+            self._liked_list.append({
                 'weibo_id': weibo.id,
                 'weibo_by': weibo.user_id,
                 'pic_num': weibo.pic_num,
                 'user_id': self.user_id,
                 'order_num': i
             })
-        assert getattr(self, '_liked_insert', None) is None
-        self._liked_insert: list = bulk_insert
 
 
 class User(BaseModel):
