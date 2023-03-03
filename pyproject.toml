@@ -21,7 +21,6 @@ dependencies = [
     'PyExifTool',
     "lxml",
     'keyring',
-    'furl',
     'typer',
     'bs4',
     'psycopg2',

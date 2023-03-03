@@ -1,5 +1,6 @@
 import itertools
 import random
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -13,7 +14,6 @@ import requests
 from baseconv import base62
 from exiftool import ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteException
-from furl import furl
 from requests.exceptions import ConnectionError
 
 from sinaspider import console
@@ -99,14 +99,12 @@ def download_single_file(
     if img.exists():
         console.log(f'{img} already exists..skipping...', style='info')
         return
-
-    if expires := furl(url).args.get("Expires"):
-        expires = pendulum.from_timestamp(int(expires), tz='local')
+    if match := re.search(r'[\?&]Expires=(\d+)(&|$)', url):
+        expires = pendulum.from_timestamp(int(match.group(1)), tz='local')
         if expires < pendulum.now():
             console.log(
                 f"{url} expires at {expires}, skip...", style="warning")
             return
-
     for tried_time in itertools.count(start=1):
         while (r := fetcher.get(url, mainthread=False)).status_code != 200:
             if r.status_code == 404:

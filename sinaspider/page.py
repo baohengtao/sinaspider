@@ -3,7 +3,6 @@ from time import sleep
 from typing import Iterator
 
 import pendulum
-from furl import furl
 
 from sinaspider import console
 from sinaspider.helper import fetcher
@@ -139,19 +138,18 @@ class Page:
                 start_page: the start page to fetch
                 parse: whether to parse weibo, default True
         """
-        # TODO: remove furl dependency
-        url = furl('https://m.weibo.cn/api/container/getIndex'
-                   f'?containerid=107603{self.id}')
-        for url.args['page'] in itertools.count(start=max(start_page, 1)):
+        url = ('https://m.weibo.cn/api/container/getIndex'
+               f'?containerid=107603{self.id}&page=%s')
+        for page in itertools.count(start=max(start_page, 1)):
             for try_time in itertools.count(start=1):
-                if (js := fetcher.get(url).json())['ok']:
+                if (js := fetcher.get(url % page).json())['ok']:
                     break
                 if js['msg'] == '请求过于频繁，歇歇吧':
                     raise ConnectionError(js['msg'])
                 if try_time > 3:
                     console.log(
                         "not js['ok'], seems reached end, no wb return for "
-                        f"page {url.args['page']}", style='warning')
+                        f"page {page}", style='warning')
                     return
 
             mblogs = [card['mblog'] for card in js['data']['cards']
@@ -168,7 +166,7 @@ class Page:
                 yield WeiboParser(weibo_info).parse() if parse else weibo_info
             else:
                 console.log(
-                    f"++++++++ 页面 {url.args['page']} 获取完毕 ++++++++++\n")
+                    f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
 
 def _yield_from_cards(cards):
