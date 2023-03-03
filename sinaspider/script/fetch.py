@@ -33,8 +33,8 @@ def timeline(download_dir: Path = default_path,
 
 @app.command(help='Schedule timeline command')
 @logsaver
-def schedule(download_dir: Path = default_path,
-             days: float = None, frequency: float = 1):
+def schedule(days: float, frequency: float = 1,
+             download_dir: Path = default_path):
     since = pendulum.now().subtract(days=days)
     next_fetching_time = pendulum.now()
     while True:
@@ -45,7 +45,7 @@ def schedule(download_dir: Path = default_path,
         console.rule('[bold red]Timeline...', style="magenta")
         get_timeline(download_dir, since)
         console.rule('[bold red]New users...', style="magenta")
-        get_loop(download_dir, new_user_only=True)
+        get_loop(download_dir, new_user=True)
         tidy_img(download_dir)
         # updat since
         since = next_since
@@ -54,12 +54,17 @@ def schedule(download_dir: Path = default_path,
         console.log(f'next fetching time: {next_fetching_time}')
 
 
-def get_loop(download_dir: Path = default_path, new_user_only: bool = False):
-    users = UserConfig.select().order_by(UserConfig.weibo_fetch_at)
-    if new_user_only:
-        uids = [uc.user_id for uc in users if uc.weibo_fetch_at <
-                pendulum.now().subtract(years=1)]
+def get_loop(download_dir: Path = default_path, new_user: bool = False):
+    if new_user:
+        users = (UserConfig.select()
+                 .where(UserConfig.weibo_fetch)
+                 .where(UserConfig.weibo_fetch_at < pendulum.now().subtract(years=1)))
+        uids = [uc.user_id for uc in users]
     else:
+        users = (UserConfig.select()
+                 .where(UserConfig.weibo_fetch)
+                 .where(UserConfig.weibo_fetch_at > pendulum.now().subtract(days=1))
+                 .order_by(UserConfig.weibo_fetch_at))
         uids = [uc.user_id for uc in users if uc.need_fetch]
     for uid in uids:
         try:
