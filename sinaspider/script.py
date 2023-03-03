@@ -159,8 +159,6 @@ def get_timeline(download_dir: Path,
             if dry_run:
                 uc.weibo_fetch_at = fetch_at
                 uc.save()
-        # if uc.liked_fetch and uc.liked_last_id:
-        #     uc.fetch_liked(download_dir)
 
 
 @app.command(help='Schedule timeline command')

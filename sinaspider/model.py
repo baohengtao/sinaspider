@@ -78,29 +78,6 @@ class UserConfig(BaseModel):
         self.page = Page(self.user_id)
         self._liked_list: list[dict] = []
 
-    # def __repr__(self):
-    #     return super().__repr__()
-
-    # def __str__(self):
-    #     text = ""
-    #     fields = [
-    #         "username",
-    #         "age",
-    #         "education",
-    #         "following",
-    #         "description",
-    #         "homepage",
-    #         "weibo_fetch",
-    #         "weibo_fetch_at",
-    #         "IP"
-    #     ]
-    #     for k in fields:
-    #         if (v := getattr(self, k, None)) is not None:
-    #             if isinstance(v, datetime):
-    #                 v = v.strftime("%Y-%m-%d %H:%M:%S")
-    #             text += f"{k}: {v}\n"
-    #     return text.strip()
-
     @classmethod
     def from_id(cls, user_id: int) -> Self:
         user = User.from_id(user_id, update=True)
@@ -132,6 +109,8 @@ class UserConfig(BaseModel):
             return True
         elif self.weibo_fetch_at > pendulum.now().subtract(days=15):
             return False
+        elif self.post_at is None:
+            return False
         else:
             next_fetch = self.weibo_fetch_at - self.post_at + self.weibo_fetch_at
             return pendulum.now() > next_fetch
@@ -156,8 +135,6 @@ class UserConfig(BaseModel):
             if not weibo_dict.get('is_pinned'):
                 self.post_at = weibo_dict['created_at']
                 break
-        else:
-            self.post_at = pendulum.from_timestamp(0)
         self.save()
 
     def _save_weibo(
