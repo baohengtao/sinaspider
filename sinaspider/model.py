@@ -107,12 +107,10 @@ class UserConfig(BaseModel):
         user_dict['user_id'] = user_dict.pop('id')
         to_insert = {k: v for k, v in user_dict.items()
                      if k in cls._meta.columns}
-        max_id = cls.select(fn.Max(cls.id)).scalar()
-        id_ = cls.insert(to_insert).on_conflict(
-            conflict_target=[cls.user_id],
-            update=to_insert).execute()
-        if (diff := id_ - max_id) > 1:
-            raise ValueError(f'{cls.__name__} insert with id increment {diff}')
+        if cls.get_or_none(user_id=user_id):
+            cls.update(to_insert).where(cls.user_id == user_id).execute()
+        else:
+            cls.insert(to_insert).execute()
         return cls.get(user_id=user_id)
 
     def set_visibility(self) -> bool:
@@ -335,12 +333,12 @@ class User(BaseModel):
             except cls.DoesNotExist:
                 pass
         user_dict = UserParser(user_id).parse()
-        to_insert = user_dict.copy()
-        if 'username' not in user_dict:
-            to_insert['username'] = to_insert['screen_name']
-        cls.insert(to_insert).on_conflict(
-            conflict_target=[cls.id], update=user_dict).execute()
-
+        if cls.get_or_none(id=user_id):
+            cls.update(user_dict).where(cls.id == user_id).execute()
+        else:
+            if 'username' not in user_dict:
+                user_dict['username'] = user_dict['screen_name']
+            cls.insert(user_dict).execute()
         return cls.get_by_id(user_id)
 
     def __str__(self):
@@ -495,14 +493,12 @@ class Artist(BaseModel):
         user = User.from_id(user_id, update=update)
         user_dict = model_to_dict(user)
         user_dict['user_id'] = user_dict.pop('id')
-        to_insert = {k: v for k, v in user_dict.items()
+        user_dict = {k: v for k, v in user_dict.items()
                      if k in cls._meta.columns}
-        max_id = cls.select(fn.Max(cls.id)).scalar()
-        id_ = cls.insert(to_insert).on_conflict(
-            conflict_target=[cls.user_id],
-            update=to_insert).execute()
-        if (diff := id_ - max_id) > 1:
-            raise ValueError(f"{cls.__name__} insert with id increment {diff}")
+        if cls.get_or_none(user_id=user_id):
+            cls.update(user_dict).where(cls.user_id == user_id).execute()
+        else:
+            cls.insert(user_dict).execute()
         return cls.get(user_id=user_id)
 
     @property
