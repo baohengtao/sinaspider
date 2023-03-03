@@ -1,6 +1,6 @@
 import sys
 from functools import wraps
-from inspect import getcallargs
+from inspect import signature
 from pathlib import Path
 from time import sleep
 
@@ -30,7 +30,7 @@ def logsaver(func):
         argv = sys.argv
         argv[0] = Path(argv[0]).name
         console.log(' '.join(argv))
-        callargs = getcallargs(func, *args, **kwargs)
+        callargs = signature(func).bind(*args, **kwargs).arguments
         try:
             return func(*args, **kwargs)
         except BaseException:

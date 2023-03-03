@@ -270,9 +270,6 @@ class UserParser:
                 assert c['class'] == ['c']
 
             if tip.text == '基本信息':
-                # for line in c.get_text(separator='\n').split('\n'):
-                #     key, value = re.split('[:：]', line, maxsplit=1)
-                #     info[key] = value
                 lines = "".join('\n' if child.name == 'br' else child.text
                                 for child in c.children).strip()
                 for line in lines.split('\n'):
