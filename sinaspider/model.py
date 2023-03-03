@@ -482,14 +482,15 @@ class Artist(BaseModel):
     homepage = CharField(index=True, null=True)
     added_at = DateTimeTZField(null=True, default=pendulum.now)
 
+    _cache: dict[int, Self] = {}
+
     class Meta:
         table_name = "artist"
 
-    # def __repr__(self):
-    #     return super().__repr__()
-
     @classmethod
     def from_id(cls, user_id: int, update: bool = False) -> Self:
+        if not update and user_id in cls._cache:
+            return cls._cache[user_id]
         user = User.from_id(user_id, update=update)
         user_dict = model_to_dict(user)
         user_dict['user_id'] = user_dict.pop('id')
@@ -499,7 +500,9 @@ class Artist(BaseModel):
             cls.update(user_dict).where(cls.user_id == user_id).execute()
         else:
             cls.insert(user_dict).execute()
-        return cls.get(user_id=user_id)
+        artist = cls.get(user_id=user_id)
+        cls._cache[user_id] = artist
+        return artist
 
     @property
     def xmp_info(self):
