@@ -55,7 +55,7 @@ class UserConfig(BaseModel):
     username = CharField()
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=True)
-    weibo_fetch_at = DateTimeTZField(default=pendulum.datetime(1970, 1, 1))
+    weibo_fetch_at = DateTimeTZField(null=True)
     liked_fetch = BooleanField(default=False)
     liked_fetch_at = DateTimeTZField(null=True)
     post_at = DateTimeTZField(null=True)
@@ -115,7 +115,10 @@ class UserConfig(BaseModel):
     def fetch_weibo(self, download_dir: Path):
         if not self.weibo_fetch:
             return
-        since = pendulum.instance(self.weibo_fetch_at)
+        if self.weibo_fetch_at:
+            since = pendulum.instance(self.weibo_fetch_at)
+        else:
+            since = pendulum.from_timestamp(0)
         console.rule(f"开始获取 {self.username} 的主页 (fetch_at:{since:%y-%m-%d})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")

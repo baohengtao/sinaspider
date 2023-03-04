@@ -15,8 +15,8 @@ app = Typer()
 
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver
-def loop(download_dir: Path = default_path):
-    get_loop(download_dir)
+def loop(new_user: bool = False, download_dir: Path = default_path):
+    get_loop(download_dir, new_user=new_user)
     tidy_img(download_dir)
 
 
@@ -58,12 +58,12 @@ def get_loop(download_dir: Path = default_path, new_user: bool = False):
     if new_user:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
-                 .where(UserConfig.weibo_fetch_at < pendulum.now().subtract(years=1)))
+                 .where(UserConfig.weibo_fetch_at.is_null()))
         uids = [uc.user_id for uc in users]
     else:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
-                 .where(UserConfig.weibo_fetch_at > pendulum.now().subtract(days=1))
+                 .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
         uids = [uc.user_id for uc in users if uc.need_fetch]
     for uid in uids:
