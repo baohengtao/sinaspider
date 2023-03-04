@@ -2,7 +2,7 @@ from pathlib import Path
 from time import sleep
 
 import pendulum
-from typer import Typer
+from typer import Option, Typer
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
@@ -20,20 +20,22 @@ def loop(new_user: bool = False, download_dir: Path = default_path):
     tidy_img(download_dir)
 
 
+# @app.command(help='Update users from timeline')
+# @logsaver
+# def timeline_(download_dir: Path = default_path,
+#               days: float = None,
+#               dry_run: bool = False):
+#     since = pendulum.now().subtract(days=days)
+#     get_timeline(download_dir, since, dry_run)
+#     if not dry_run:
+#         tidy_img(download_dir)
+
+
 @app.command(help='Update users from timeline')
 @logsaver
-def timeline(download_dir: Path = default_path,
-             days: float = None,
-             dry_run: bool = False):
-    since = pendulum.now().subtract(days=days)
-    get_timeline(download_dir, since, dry_run)
-    if not dry_run:
-        tidy_img(download_dir)
-
-
-@app.command(help='Schedule timeline command')
-@logsaver
-def schedule(days: float, frequency: float = 1,
+def timeline(days: float = Option(...),
+             frequency: float = None,
+             dry_run: bool = False,
              download_dir: Path = default_path):
     since = pendulum.now().subtract(days=days)
     next_fetching_time = pendulum.now()
@@ -42,11 +44,12 @@ def schedule(days: float, frequency: float = 1,
             sleep(600)
         next_since = pendulum.now()
         update_user_config()
-        console.rule('[bold red]Timeline...', style="magenta")
-        get_timeline(download_dir, since)
-        console.rule('[bold red]New users...', style="magenta")
-        get_loop(download_dir, new_user=True)
+        get_timeline(download_dir, since, dry_run)
+        if dry_run:
+            return
         tidy_img(download_dir)
+        if frequency is None:
+            return
         # updat since
         since = next_since
         # wait for next fetching
