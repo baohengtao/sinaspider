@@ -14,6 +14,38 @@ from .helper import default_path, logsaver
 app = Typer()
 
 
+@app.command()
+def artist():
+    from sinaspider.model import Artist
+    while username := Prompt.ask('请输入用户名:smile:'):
+        if username.isdigit():
+            artist = Artist.get_or_none(user_id=int(username))
+        else:
+            artist = (Artist.select().where(
+                Artist.username == username).get_or_none())
+        if not artist:
+            console.log(f'用户 {username} 不在列表中')
+            continue
+        console.log(artist)
+        if artist.folder == 'new':
+            console.log('folder is new, skip')
+            continue
+        console.print(
+            f"which folder ? current is [bold red]{artist.folder}[/bold red]")
+        folder = questionary.select("choose folder:", choices=[
+            'recent', 'super', 'no-folder']).unsafe_ask()
+        if folder == 'no-folder':
+            folder = None
+        if artist.folder == folder:
+            continue
+        ques = f'change folder from {artist.folder} to {folder} ?'
+        if questionary.confirm(ques).unsafe_ask():
+            artist.folder = folder
+            artist.save()
+            console.print(
+                f'{artist.username}: folder changed to [bold red]{folder}[/bold red]')
+
+
 @app.command(help="fetch weibo by weibo_id")
 def weibo(download_dir: Path = default_path):
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
@@ -34,7 +66,7 @@ def weibo_update():
 
     from sinaspider.exceptions import WeiboNotFoundError
     from sinaspider.parser import WeiboParser
-    for weibo in get_update():
+    for weibo in _get_update():
         try:
             weibo_dict = WeiboParser(weibo.id).parse()
         except WeiboNotFoundError as e:
@@ -52,7 +84,7 @@ def weibo_update():
         weibo.save()
 
 
-def get_update():
+def _get_update():
     from sinaspider.page import Page
     recent_weibo = (Weibo.select()
                     .where(Weibo.update_status.is_null())
