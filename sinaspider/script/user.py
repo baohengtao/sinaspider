@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pendulum
 from rich.prompt import Confirm, Prompt
 from typer import Typer
 
@@ -53,20 +54,31 @@ def user_loop(new_user: bool = False, download_dir: Path = default_path):
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null()))
-        uids = [uc.user_id for uc in users]
     else:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
-        uids = [uc.user_id for uc in users if uc.need_fetch]
-    for uid in uids:
+        users = [uc for uc in users if _need_fetch(uc)]
+    for user in users:
         try:
-            config = UserConfig.from_id(user_id=uid)
+            config = UserConfig.from_id(user_id=user.user_id)
         except UserNotFoundError:
-            config: UserConfig = UserConfig.get(user_id=uid)
+            config = UserConfig.get(user_id=user.user_id)
             console.log(
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
             config.fetch_weibo(download_dir)
     tidy_img(download_dir)
+
+
+def _need_fetch(config: UserConfig) -> bool:
+    if config.weibo_fetch_at < pendulum.now().subtract(months=3):
+        return True
+    elif config.weibo_fetch_at > pendulum.now().subtract(days=15):
+        return False
+    elif config.post_at is None:
+        return False
+    else:
+        next_fetch = config.weibo_fetch_at - config.post_at + config.weibo_fetch_at
+        return pendulum.now() > next_fetch

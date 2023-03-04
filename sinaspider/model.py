@@ -100,18 +100,6 @@ class UserConfig(BaseModel):
                 f"conflict: {self.username}当前微博全部可见，请检查", style="error")
         return visible
 
-    @property
-    def need_fetch(self) -> bool:
-        if self.weibo_fetch_at < pendulum.now().subtract(months=3):
-            return True
-        elif self.weibo_fetch_at > pendulum.now().subtract(days=15):
-            return False
-        elif self.post_at is None:
-            return False
-        else:
-            next_fetch = self.weibo_fetch_at - self.post_at + self.weibo_fetch_at
-            return pendulum.now() > next_fetch
-
     def fetch_weibo(self, download_dir: Path):
         if not self.weibo_fetch:
             return
