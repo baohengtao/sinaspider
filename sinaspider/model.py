@@ -200,6 +200,7 @@ class UserConfig(BaseModel):
         self.save()
 
     def _save_liked(self, download_dir: Path) -> Iterator[dict]:
+        download_dir /= self.username
         bulk = []
         early_stopping = False
         for weibo_dict in self.page.liked():
@@ -224,9 +225,12 @@ class UserConfig(BaseModel):
             for sn, (url, _) in weibo.photos.items():
                 assert (ext := parse_url_extension(url))
                 xmp_info = weibo.gen_meta(sn, url=url)
+                description = weibo.url
+                if xmp_info.get('XMP:BlogTitle'):
+                    description += f" {xmp_info['XMP:BlogTitle']}"
                 xmp_info.update({
                     'XMP:Title': f'{weibo.username}⭐️{self.username}',
-                    'XMP:Description': weibo.url,
+                    'XMP:Description': description,
                     'XMP:Artist': weibo.username,
                     'XMP:ImageSupplierName': 'WeiboLiked',
                 })
@@ -235,7 +239,7 @@ class UserConfig(BaseModel):
                     "url": url,
                     "filename": f"{prefix}_{sn}{ext}",
                     "xmp_info": xmp_info,
-                    "filepath": download_dir / self.username
+                    "filepath": download_dir
                 }
             bulk.append(weibo)
         if early_stopping and not self.liked_fetch_at:
