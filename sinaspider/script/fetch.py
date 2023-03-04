@@ -13,13 +13,6 @@ from .helper import default_path, logsaver, tidy_img, update_user_config
 app = Typer()
 
 
-@app.command(help="Loop through users in database and fetch weibos")
-@logsaver
-def loop(new_user: bool = False, download_dir: Path = default_path):
-    get_loop(download_dir, new_user=new_user)
-    tidy_img(download_dir)
-
-
 # @app.command(help='Update users from timeline')
 # @logsaver
 # def timeline_(download_dir: Path = default_path,
@@ -57,7 +50,9 @@ def timeline(days: float = Option(...),
         console.log(f'next fetching time: {next_fetching_time}')
 
 
-def get_loop(download_dir: Path = default_path, new_user: bool = False):
+@app.command(help="Loop through users in database and fetch weibos")
+@logsaver
+def loop(new_user: bool = False, download_dir: Path = default_path):
     if new_user:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
@@ -78,6 +73,7 @@ def get_loop(download_dir: Path = default_path, new_user: bool = False):
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
             config.fetch_weibo(download_dir)
+    tidy_img(download_dir)
 
 
 def get_timeline(download_dir: Path,
