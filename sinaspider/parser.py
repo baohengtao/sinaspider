@@ -317,6 +317,12 @@ class UserParser:
         return user_info
 
     def followed_by(self) -> list[int] | None:
+        """
+        fetch users' id  who follow this user and also followed by me.
+
+        Returns:
+            list[int] | None: list of users' id
+        """
         url = ("https://api.weibo.cn/2/cardlist?from=10CB193010&c=iphone&s=BF3838D9"
                f"&containerid=231051_-_myfollow_followprofile_-_{self.id}")
         r = fetcher.get(url)
