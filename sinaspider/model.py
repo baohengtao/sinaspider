@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Iterator, Self
 
 import pendulum
-from peewee import JOIN, Model, fn
+from peewee import Model
 from playhouse.postgres_ext import (
     ArrayField,
     BigIntegerField,
@@ -287,6 +287,7 @@ class User(BaseModel):
     阳光信用 = TextField(null=True)
     IP = TextField(null=True)
     svip = IntegerField(null=True)
+    followered_by = ArrayField(field_class=TextField, null=True)
 
     def __repr__(self):
         return super().__repr__()
@@ -302,6 +303,10 @@ class User(BaseModel):
             except cls.DoesNotExist:
                 pass
         user_dict = UserParser(user_id).parse()
+        followered_by = cls.select().where(
+            cls.id.in_(user_dict['followered_by']))
+        user_dict['followered_by'] = [u.username for u in followered_by]
+
         if cls.get_or_none(id=user_id):
             cls.update(user_dict).where(cls.id == user_id).execute()
         else:
