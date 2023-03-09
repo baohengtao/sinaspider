@@ -29,9 +29,9 @@ def user(download_dir: Path = default_path):
         if uc := UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{uc.username}已在列表中')
         uc = UserConfig.from_id(user_id)
+        console.log(uc, '\n')
         uc.weibo_fetch = Confirm.ask(f"是否获取{uc.username}的微博？", default=True)
         uc.save()
-        console.log(uc, '\n')
         console.log(f'用户{uc.username}更新完成')
         if uc.weibo_fetch and not uc.following:
             console.log(f'用户{uc.username}未关注，记得关注🌸', style='notice')
