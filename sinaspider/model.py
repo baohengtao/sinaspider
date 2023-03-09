@@ -65,7 +65,7 @@ class UserConfig(BaseModel):
     homepage = CharField(index=True)
     visible = BooleanField(null=True)
     photos_num = IntegerField(null=True)
-    followered_by = ArrayField(field_class=TextField, null=True)
+    followed_by = ArrayField(field_class=TextField, null=True)
     IP = TextField(null=True)
 
     class Meta:
@@ -259,7 +259,7 @@ class User(BaseModel):
     gender = TextField()
     education = ArrayField(field_class=TextField, null=True)
     location = TextField(null=True)
-    followered_by = ArrayField(field_class=TextField, null=True)
+    followed_by = ArrayField(field_class=TextField, null=True)
 
     hometown = TextField(null=True)
     description = TextField(null=True)
@@ -304,10 +304,10 @@ class User(BaseModel):
             except cls.DoesNotExist:
                 pass
         user_dict = UserParser(user_id).parse()
-        followered_by = cls.select().where(
-            cls.id.in_(user_dict.pop('followered_by', [])))
-        if followered_by:
-            user_dict['followered_by'] = [u.username for u in followered_by]
+        followed_by = cls.select().where(
+            cls.id.in_(user_dict.pop('followed_by', [])))
+        if followed_by:
+            user_dict['followed_by'] = [u.username for u in followed_by]
 
         if cls.get_or_none(id=user_id):
             cls.update(user_dict).where(cls.id == user_id).execute()
@@ -319,7 +319,7 @@ class User(BaseModel):
 
     def __str__(self):
         keys = [
-            "id", "username", "following", "followered_by", "gender", "birthday", "location",
+            "id", "username", "following", "followed_by", "gender", "birthday", "location",
             "homepage", "description", "statuses_count", "followers_count", "follow_count", "IP"
         ]
         model = model_to_dict(self)
@@ -443,7 +443,7 @@ class Artist(BaseModel):
     statuses_count = IntegerField()
     description = CharField(null=True)
     education = ArrayField(field_class=TextField, null=True)
-    followered_by = ArrayField(field_class=TextField, null=True)
+    followed_by = ArrayField(field_class=TextField, null=True)
     follow_count = IntegerField()
     followers_count = IntegerField()
     homepage = CharField(null=True)
