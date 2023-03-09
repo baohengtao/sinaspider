@@ -318,18 +318,8 @@ class User(BaseModel):
 
     def __str__(self):
         keys = [
-            "id",
-            "username",
-            "following",
-            "gender",
-            "birthday",
-            "location",
-            "homepage",
-            "description",
-            "statuses_count",
-            "followers_count",
-            "follow_count",
-            "IP"
+            "id", "username", "following", "followed_by", "gender", "birthday", "location",
+            "homepage", "description", "statuses_count", "followers_count", "follow_count", "IP"
         ]
         model = model_to_dict(self)
         return "\n".join(f"{k}: {v}" for k, v in model.items()
@@ -451,7 +441,7 @@ class Artist(BaseModel):
     recent_num = IntegerField(default=0)
     statuses_count = IntegerField()
     description = CharField(null=True)
-    education = CharField(null=True)
+    education = ArrayField(field_class=TextField, null=True)
     followered_by = ArrayField(field_class=TextField, null=True)
     follow_count = IntegerField()
     followers_count = IntegerField()
