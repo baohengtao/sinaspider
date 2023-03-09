@@ -305,8 +305,9 @@ class User(BaseModel):
                 pass
         user_dict = UserParser(user_id).parse()
         followered_by = cls.select().where(
-            cls.id.in_(user_dict['followered_by']))
-        user_dict['followered_by'] = [u.username for u in followered_by]
+            cls.id.in_(user_dict.pop('followered_by', [])))
+        if followered_by:
+            user_dict['followered_by'] = [u.username for u in followered_by]
 
         if cls.get_or_none(id=user_id):
             cls.update(user_dict).where(cls.id == user_id).execute()
@@ -318,7 +319,7 @@ class User(BaseModel):
 
     def __str__(self):
         keys = [
-            "id", "username", "following", "followed_by", "gender", "birthday", "location",
+            "id", "username", "following", "followered_by", "gender", "birthday", "location",
             "homepage", "description", "statuses_count", "followers_count", "follow_count", "IP"
         ]
         model = model_to_dict(self)

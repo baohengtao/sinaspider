@@ -206,9 +206,10 @@ class UserParser:
         else:
             user_info['description'] = html.unescape(descrip)
 
+        assert 'followered_by' not in user_info
+        if followered_by := self.followered_by():
+            user_info['followered_by'] = followered_by
         self._user = self._normalize(user_info)
-        assert 'followered_by' not in self._user
-        self._user['followered_by'] = self.followered_by()
 
         return self._user.copy()
 
@@ -315,10 +316,12 @@ class UserParser:
             'followers_count_str')
         return user_info
 
-    def followered_by(self) -> list[int]:
+    def followered_by(self) -> list[int] | None:
         url = f"https://api.weibo.cn/2/cardlist?from=10CB193010&c=iphone&s=BF3838D9&containerid=231051_-_myfollow_followprofile_-_{self.id}"
         r = fetcher.get(url)
-        cards = r.json()['cards'][0]['card_group'][1:]
+        if not (cards := r.json()['cards']):
+            return
+        cards = cards[0]['card_group'][1:]
         if len(cards) == 1 and (pics := cards[0].get('pics')):
             uids = [pic['author']['id'] for pic in pics]
         else:
