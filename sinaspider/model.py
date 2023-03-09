@@ -61,10 +61,11 @@ class UserConfig(BaseModel):
     post_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
     description = CharField(index=True, null=True)
-    education = CharField(index=True, null=True)
+    education = ArrayField(field_class=TextField, null=True)
     homepage = CharField(index=True)
     visible = BooleanField(null=True)
     photos_num = IntegerField(null=True)
+    followered_by = ArrayField(field_class=TextField, null=True)
     IP = TextField(null=True)
 
     class Meta:
@@ -258,6 +259,7 @@ class User(BaseModel):
     gender = TextField()
     education = ArrayField(field_class=TextField, null=True)
     location = TextField(null=True)
+    followered_by = ArrayField(field_class=TextField, null=True)
 
     hometown = TextField(null=True)
     description = TextField(null=True)
@@ -278,6 +280,8 @@ class User(BaseModel):
     verified_reason = TextField(null=True)
     verified_type = BigIntegerField(null=True)
     verified_type_ext = BigIntegerField(null=True)
+    IP = TextField(null=True)
+    svip = IntegerField(null=True)
     公司 = TextField(null=True)
     工作经历 = TextField(null=True)
     性取向 = TextField(null=True)
@@ -285,9 +289,6 @@ class User(BaseModel):
     标签 = TextField(null=True)
     注册时间 = TextField(null=True)
     阳光信用 = TextField(null=True)
-    IP = TextField(null=True)
-    svip = IntegerField(null=True)
-    followered_by = ArrayField(field_class=TextField, null=True)
 
     def __repr__(self):
         return super().__repr__()
