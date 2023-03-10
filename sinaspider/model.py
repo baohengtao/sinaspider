@@ -426,7 +426,7 @@ class Weibo(BaseModel):
         for k, v in model.items():
             if 'count' in k or v is None:
                 continue
-            if k in ['photos', 'url_m', 'pic_num', 'update_status']:
+            if k in ['photos', 'pic_num', 'update_status']:
                 continue
             res[k] = v
         return "\n".join(f'{k}: {v}' for k, v in res.items())

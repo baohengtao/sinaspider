@@ -154,12 +154,17 @@ class WeiboParser:
         for url_icon in soup.find_all('span', class_='url-icon'):
             location_icon = 'timeline_card_small_location_default.png'
             if location_icon in url_icon.find('img').attrs['src']:
-                href = url_icon.parent.attrs['href']
-                href_match = r'http://weibo\.com/p/100101(.*)'
-                location_id = re.search(href_match, href).group(1)
                 location_span = url_icon.findNext('span')
                 assert location_span.attrs['class'] == ['surl-text']
                 location = location_span.text
+                href = location_span.parent.attrs['href']
+                pattern1 = r'http://weibo\.com/p/100101(\w+)'
+                pattern2 = r'https://m\.weibo\.cn/p/index\?containerid=2306570042(\w+)'
+                if match := (re.search(pattern1, href) or re.search(pattern2, href)):
+                    location_id = match.group(1)
+                else:
+                    console.log(
+                        f"cannot parse {location}'s id: {href}", style='error')
         return {
             'text': soup.get_text(' ', strip=True),
             'at_users': at_list,

@@ -89,7 +89,8 @@ def _get_update():
     recent_weibo = (Weibo.select()
                     .where(Weibo.update_status.is_null())
                     .where(Weibo.created_at > pendulum.now().subtract(months=6))
-                    .order_by(Weibo.user_id.asc()))
+                    .order_by(Weibo.user_id.asc())
+                    .order_by(Weibo.id.asc()))
     for i, weibo in enumerate(recent_weibo, start=1):
         if i % 20 == 0:
             console.log(f'✨ processing {i} / {len(recent_weibo)}')
