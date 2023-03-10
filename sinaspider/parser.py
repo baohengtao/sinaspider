@@ -149,11 +149,14 @@ class WeiboParser:
             if m := re.match('^#(.*)#$', topic.text):
                 topics_list.append(m.group(1))
 
-        location = ''
+        location, location_id = '', ''
 
         for url_icon in soup.find_all('span', class_='url-icon'):
             location_icon = 'timeline_card_small_location_default.png'
             if location_icon in url_icon.find('img').attrs['src']:
+                href = url_icon.parent.attrs['href']
+                href_match = r'http://weibo\.com/p/100101(.*)'
+                location_id = re.search(href_match, href).group(1)
                 location_span = url_icon.findNext('span')
                 assert location_span.attrs['class'] == ['surl-text']
                 location = location_span.text
@@ -161,7 +164,8 @@ class WeiboParser:
             'text': soup.get_text(' ', strip=True),
             'at_users': at_list,
             'topics': topics_list,
-            'location': location
+            'location': location,
+            'location_id': location_id
         }
 
 

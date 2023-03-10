@@ -337,6 +337,7 @@ class Weibo(BaseModel):
     url_m = TextField()
     at_users = ArrayField(field_class=TextField, null=True)
     location = TextField(null=True)
+    location_id = TextField(null=True)
     attitudes_count = IntegerField(null=True)
     comments_count = IntegerField(null=True)
     reposts_count = IntegerField(null=True)
