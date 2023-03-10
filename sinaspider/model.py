@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Self
@@ -10,6 +11,7 @@ from playhouse.postgres_ext import (
     BooleanField, CharField,
     DateTimeTZField,
     DeferredForeignKey,
+    DoubleField,
     ForeignKeyField,
     IntegerField, JSONField,
     PostgresqlExtDatabase,
@@ -19,7 +21,7 @@ from playhouse.shortcuts import model_to_dict
 
 from sinaspider import console
 from sinaspider.helper import (
-    download_files,
+    download_files, fetcher,
     normalize_wb_id,
     parse_url_extension
 )
@@ -432,6 +434,40 @@ class Weibo(BaseModel):
         return "\n".join(f'{k}: {v}' for k, v in res.items())
 
 
+class Location(BaseModel):
+    id = TextField(primary_key=True)
+    short_name = TextField()
+    name = TextField(index=True, null=True)
+    latitude = DoubleField()
+    longitude = DoubleField()
+
+    @classmethod
+    def from_id(cls, location_id: str) -> Self:
+        if not cls.get_or_none(id=location_id):
+            location_info = cls.get_location_info(location_id)
+            cls.insert(location_info).execute()
+        return cls.get_by_id(location_id)
+
+    @staticmethod
+    def get_location_info(location_id: str) -> dict:
+        """
+        original url: https://m.weibo.cn/p/index?containerid=2306570042{location_id}
+        """
+        url = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
+        js = fetcher.get(url).json()
+        card = js['data']['cards'][0]['card_group']
+        pic = card[0]['pic']
+        lng, lat = re.search(
+            'longitude=(\d+\.\d+)&latitude=(\d+\.\d+)', pic).groups()
+        short_name = card[1]['group'][0]['item_title']
+        assert lng and lat
+        return dict(
+            id=location_id,
+            latitude=float(lat),
+            longitude=float(lng),
+            short_name=short_name)
+
+
 class Artist(BaseModel):
     username = CharField(index=True)
     user = ForeignKeyField(User, unique=True, backref='artist')
@@ -499,4 +535,4 @@ class LikedWeibo(BaseModel):
         )
 
 
-database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo])
+database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo, Location])
