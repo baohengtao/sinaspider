@@ -304,10 +304,9 @@ class User(BaseModel):
             except cls.DoesNotExist:
                 pass
         user_dict = UserParser(user_id).parse()
-        followed_by = cls.select().where(
-            cls.id.in_(user_dict.pop('followed_by', [])))
-        if followed_by:
-            user_dict['followed_by'] = [u.username for u in followed_by]
+        if followed_by := user_dict.pop('followed_by', None):
+            user_dict['followed_by'] = [
+                u.username for u in cls.select().where(cls.id.in_(followed_by))]
 
         if cls.get_or_none(id=user_id):
             cls.update(user_dict).where(cls.id == user_id).execute()
