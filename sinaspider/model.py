@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Iterator, Self
 
 import pendulum
+from bs4 import BeautifulSoup
+from geopy.distance import geodesic
 from peewee import Model
 from playhouse.postgres_ext import (
     ArrayField,
@@ -351,6 +353,8 @@ class Weibo(BaseModel):
     region_name = TextField(null=True)
     pic_num = IntegerField()
     update_status = TextField(null=True)
+    latitude = DoubleField()
+    longitude = DoubleField()
 
     class Meta:
         table_name = "weibo"
@@ -368,6 +372,37 @@ class Weibo(BaseModel):
             conflict_target=[Weibo.id],
             update=weibo_dict).execute()
         return cls.get_by_id(wb_id)
+
+    def update_location(self):
+        if not self.location_id or self.latitude:
+            return
+        location = Location.from_id(self.location_id)
+        if not location.name:
+            location.name = self.location
+            location.save()
+        else:
+            assert location.name == self.location
+        console.log(location)
+        if coord := self.get_coordinate():
+            if err := geodesic(coord, location.coordinate).meters:
+                console.log(
+                    f'the distance between coord and location is {err}m', style='notice')
+        else:
+            console.log(f'{self.url_m}: coord not found, use location coord',
+                        style='warning')
+        console.log()
+        self.latitude, self.longitude = coord or location.coordinate
+        self.save()
+
+    def get_coordinate(self):
+        url = ('https://api.weibo.cn/2/comments/build_comments?launchid=10000365--x'
+               f'&from=10CB193010&c=iphone&s=BF3838D9&id={self.id}&is_show_bulletin=2')
+        status = fetcher.get(url).json()['status']
+        if 'geo' not in status:
+            console.log(
+                f"seems have been deleted: {self.url} ", style='error')
+        elif geo := status['geo']:
+            return geo['coordinates']
 
     def medias(self, filepath: Path = None) -> Iterator[dict]:
         photos = self.photos or {}
@@ -441,6 +476,13 @@ class Location(BaseModel):
     latitude = DoubleField()
     longitude = DoubleField()
 
+    @property
+    def coordinate(self) -> tuple[float, float]:
+        """
+        return the (lat, lng) tuple
+        """
+        return self.latitude, self.longitude
+
     @classmethod
     def from_id(cls, location_id: str) -> Self:
         if not cls.get_or_none(id=location_id):
@@ -457,8 +499,10 @@ class Location(BaseModel):
         js = fetcher.get(url).json()
         card = js['data']['cards'][0]['card_group']
         pic = card[0]['pic']
-        lng, lat = re.search(
-            'longitude=(\d+\.\d+)&latitude=(\d+\.\d+)', pic).groups()
+        if not (match := re.search('longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)', pic)):
+            raise ValueError(
+                f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}')
+        lng, lat = match.groups()
         short_name = card[1]['group'][0]['item_title']
         assert lng and lat
         return dict(
