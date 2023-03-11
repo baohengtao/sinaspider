@@ -395,7 +395,7 @@ class Weibo(BaseModel):
         self.latitude, self.longitude = coord or location.coordinate
         self.save()
 
-    def get_coordinate(self):
+    def get_coordinate(self) -> tuple[float, float] | None:
         url = ('https://api.weibo.cn/2/comments/build_comments?launchid=10000365--x'
                f'&from=10CB193010&c=iphone&s=BF3838D9&id={self.id}&is_show_bulletin=2')
         status = fetcher.get(url).json()['status']
@@ -506,7 +506,8 @@ class Location(BaseModel):
         url = f'https://weibo.com/p/100101{location_id}'
         url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
         api = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
-        js = fetcher.get(api).json()
+        while not (js := fetcher.get(api).json())['ok']:
+            continue
         card = js['data']['cards'][0]['card_group']
         pic = card[0]['pic']
         if 'android_delete_poi.png' in pic:
