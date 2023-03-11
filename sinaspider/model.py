@@ -376,20 +376,21 @@ class Weibo(BaseModel):
     def update_location(self):
         if not self.location_id or self.latitude:
             return
-        location = Location.from_id(self.location_id)
-        if not location.name:
-            location.name = self.location
-            location.save()
+        coord = self.get_coordinate()
+        if location := Location.from_id(self.location_id):
+            if not location.name:
+                location.name = self.location
+                location.save()
+            else:
+                assert location.name == self.location
+            console.log(location)
         else:
-            assert location.name == self.location
-        console.log(location)
-        if coord := self.get_coordinate():
+            assert coord
+            console.log(self)
+        if coord and location:
             if err := geodesic(coord, location.coordinate).meters:
                 console.log(
                     f'the distance between coord and location is {err}m', style='notice')
-        else:
-            console.log(f'{self.url_m}: coord not found, use location coord',
-                        style='warning')
         console.log()
         self.latitude, self.longitude = coord or location.coordinate
         self.save()
@@ -401,8 +402,11 @@ class Weibo(BaseModel):
         if 'geo' not in status:
             console.log(
                 f"seems have been deleted: {self.url} ", style='error')
-        elif geo := status['geo']:
-            return geo['coordinates']
+        elif not (geo := status['geo']):
+            console.log(f'no coord found: {self.url}', style='warning')
+        else:
+            assert (coord := geo['coordinates'])
+            return coord
 
     def medias(self, filepath: Path = None) -> Iterator[dict]:
         photos = self.photos or {}
