@@ -63,7 +63,7 @@ def weibo(download_dir: Path = default_path):
 @logsaver
 def update_location():
     weibos = (Weibo.select().order_by(Weibo.location_id.desc())
-              .where(Weibo.location_id.is_null(False))
+              .where(Weibo.location_id.is_null(False) | Weibo.location_src.is_null(False))
               .where(Weibo.latitude.is_null()))
     for i, weibo in enumerate(weibos):
         console.log(f'✨ processing {i} / {len(weibos)}')

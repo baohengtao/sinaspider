@@ -217,3 +217,31 @@ def round_loc(lat: float, lng: float, tolerance: float = 0.01) -> tuple[float, f
             f'round loction: {lat, lng} -> {lat_, lng_} '
             f'with precision {precision} (err: {err}m)')
     return lat_, lng_
+
+
+def parse_loc_src(loc_src: str) -> dict:
+    """
+    >> loc_src = 'https://m.weibo.cn/p/index?containerid=100808fcf3af2237af9eae5bb1c3f55951b731_-_lbs'
+    >> parse_loc_src(loc_src)
+        {
+            'id': '8008646020000000000',
+            'name': '三亚',
+            'latitude': 18.247872,
+            'longitude': 109.508268
+            }
+    """
+    containerid = re.search(r'containerid=([\w-]+)', loc_src).group(1)
+    api = f'https://m.weibo.cn/api/container/getIndex?containerid={containerid}'
+    js = fetcher.get(api).json()
+    cards = js['data']['cards'][0]['card_group'][:2]
+    name = cards[1]['group'][0]['item_title']
+    lng, lat = re.search(
+        'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)', cards[0]['pic']).groups()
+    fid = cards[0]['actionlog']['fid']
+    location_id = re.match('2306570042(\w+)', fid).group(1)
+    return dict(
+        id=location_id,
+        short_name=name,
+        latitude=float(lat),
+        longitude=float(lng),
+    )

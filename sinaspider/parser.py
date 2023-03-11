@@ -149,7 +149,7 @@ class WeiboParser:
             if m := re.match('^#(.*)#$', topic.text):
                 topics_list.append(m.group(1))
 
-        location, location_id = '', ''
+        location, location_id, location_src = '', '', ''
 
         for url_icon in soup.find_all('span', class_='url-icon'):
             location_icon = 'timeline_card_small_location_default.png'
@@ -165,12 +165,14 @@ class WeiboParser:
                 else:
                     console.log(
                         f"cannot parse {location}'s id: {href}", style='error')
+                    location_src = href
         return {
             'text': soup.get_text(' ', strip=True),
             'at_users': at_list,
             'topics': topics_list,
             'location': location,
-            'location_id': location_id
+            'location_id': location_id,
+            'location_src': location_src
         }
 
 

@@ -25,6 +25,7 @@ from sinaspider import console
 from sinaspider.helper import (
     download_files, fetcher,
     normalize_wb_id,
+    parse_loc_src,
     parse_url_extension,
     round_loc
 )
@@ -356,6 +357,7 @@ class Weibo(BaseModel):
     update_status = TextField(null=True)
     latitude = DoubleField()
     longitude = DoubleField()
+    location_src = TextField(null=True)
 
     class Meta:
         table_name = "weibo"
@@ -375,6 +377,9 @@ class Weibo(BaseModel):
         return cls.get_by_id(wb_id)
 
     def update_location(self):
+        if self.location_src:
+            assert not self.location_id
+            self._update_location_from_src()
         if not self.location_id or self.latitude:
             return
         coord = self.get_coordinate()
@@ -389,11 +394,21 @@ class Weibo(BaseModel):
             assert coord
             console.log(self)
         if coord and location:
-            if err := geodesic(coord, location.coordinate).meters:
+            if (err := geodesic(coord, location.coordinate).meters) > 1:
                 console.log(
                     f'the distance between coord and location is {err}m', style='notice')
         console.log()
         self.latitude, self.longitude = coord or location.coordinate
+        self.save()
+
+    def _update_location_from_src(self):
+        info = parse_loc_src(self.location_src)
+        location = Location.from_id(info['id'])
+        loc_dict = model_to_dict(location)
+        for k, v in info.items():
+            assert loc_dict[k] == v
+        self.location_id = location.id
+        self.location_src = None
         self.save()
 
     def get_coordinate(self) -> tuple[float, float] | None:
