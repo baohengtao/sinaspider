@@ -475,6 +475,8 @@ class Location(BaseModel):
     name = TextField(index=True, null=True)
     latitude = DoubleField()
     longitude = DoubleField()
+    url = TextField()
+    url_m = TextField()
 
     @property
     def coordinate(self) -> tuple[float, float]:
@@ -484,31 +486,39 @@ class Location(BaseModel):
         return self.latitude, self.longitude
 
     @classmethod
-    def from_id(cls, location_id: str) -> Self:
+    def from_id(cls, location_id: str) -> Self | None:
+        """
+        return the Location instance from location_id
+        or None if location has been deleted
+        """
         if not cls.get_or_none(id=location_id):
-            location_info = cls.get_location_info(location_id)
+            if not (location_info := cls.get_location_info(location_id)):
+                return
             cls.insert(location_info).execute()
         return cls.get_by_id(location_id)
 
     @staticmethod
-    def get_location_info(location_id: str) -> dict:
-        """
-        original url: https://m.weibo.cn/p/index?containerid=2306570042{location_id}
-        """
-        url = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
-        js = fetcher.get(url).json()
+    def get_location_info(location_id: str) -> dict | None:
+        url = f'https://weibo.com/p/100101{location_id}'
+        url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
+        api = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
+        js = fetcher.get(api).json()
         card = js['data']['cards'][0]['card_group']
         pic = card[0]['pic']
-        if not (match := re.search('longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)', pic)):
-            raise ValueError(
-                f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}')
-        lng, lat = match.groups()
+        if 'android_delete_poi.png' in pic:
+            console.log(
+                f'location has been deleted: {url} {url_m}', style='error')
+            return
+        pattern = 'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
+        lng, lat = re.search(pattern, pic).groups()
         short_name = card[1]['group'][0]['item_title']
         assert lng and lat
         return dict(
             id=location_id,
             latitude=float(lat),
             longitude=float(lng),
+            url=url,
+            url_m=url_m,
             short_name=short_name)
 
 
