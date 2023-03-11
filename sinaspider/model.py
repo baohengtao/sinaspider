@@ -25,7 +25,8 @@ from sinaspider import console
 from sinaspider.helper import (
     download_files, fetcher,
     normalize_wb_id,
-    parse_url_extension
+    parse_url_extension,
+    round_loc
 )
 from sinaspider.page import Page
 from sinaspider.parser import UserParser, WeiboParser
@@ -405,8 +406,9 @@ class Weibo(BaseModel):
         elif not (geo := status['geo']):
             console.log(f'no coord found: {self.url}', style='warning')
         else:
-            assert (coord := geo['coordinates'])
-            return coord
+            lat, lng = geo['coordinates']
+            lat, lng = round_loc(lat, lng)
+            return lat, lng
 
     def medias(self, filepath: Path = None) -> Iterator[dict]:
         photos = self.photos or {}
@@ -515,13 +517,14 @@ class Location(BaseModel):
                 f'location has been deleted: {url} {url_m}', style='error')
             return
         pattern = 'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
-        lng, lat = re.search(pattern, pic).groups()
+        lng, lat = map(float, re.search(pattern, pic).groups())
+        lat, lng = round_loc(lat, lng)
         short_name = card[1]['group'][0]['item_title']
         assert lng and lat
         return dict(
             id=location_id,
-            latitude=float(lat),
-            longitude=float(lng),
+            latitude=lat,
+            longitude=lng,
             url=url,
             url_m=url_m,
             short_name=short_name)

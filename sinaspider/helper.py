@@ -14,6 +14,7 @@ import requests
 from baseconv import base62
 from exiftool import ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteException
+from geopy.distance import geodesic
 from requests.exceptions import ConnectionError
 
 from sinaspider import console
@@ -94,6 +95,7 @@ def download_single_file(
         filename: str,
         xmp_info: dict = None
 ):
+    # TODO: refactor this function
     filepath.mkdir(parents=True, exist_ok=True)
     img = filepath / filename
     if img.exists():
@@ -200,3 +202,18 @@ def normalize_str(amount):
             case '万':
                 amount = float(num) * (10 ** 4)
     return amount
+
+
+def round_loc(lat: float, lng: float, tolerance: float = 0.01) -> tuple[float, float]:
+    """
+    return rounded location with err small than tolerance meter
+    """
+    for precision in itertools.count(start=1):
+        lat_, lng_ = round(lat, precision), round(lng, precision)
+        if (err := geodesic((lat, lng), (lat_, lng_)).meters) < tolerance:
+            break
+    if err:
+        console.log(
+            f'round loction: {lat, lng} -> {lat_, lng_} '
+            f'with precision {precision} (err: {err}m)')
+    return lat_, lng_

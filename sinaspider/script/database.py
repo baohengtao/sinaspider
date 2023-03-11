@@ -66,8 +66,7 @@ def update_location():
               .where(Weibo.location_id.is_null(False))
               .where(Weibo.latitude.is_null()))
     for i, weibo in enumerate(weibos):
-        if i % 20 == 0:
-            console.log(f'✨ processing {i} / {len(weibos)}')
+        console.log(f'✨ processing {i} / {len(weibos)}')
         weibo.update_location()
 
 
@@ -104,8 +103,7 @@ def _get_update():
                     .order_by(Weibo.user_id.asc())
                     .order_by(Weibo.id.asc()))
     for i, weibo in enumerate(recent_weibo, start=1):
-        if i % 20 == 0:
-            console.log(f'✨ processing {i} / {len(recent_weibo)}')
+        console.log(f'✨ processing {i} / {len(recent_weibo)}')
         yield weibo
     console.log(':star2: Weibo in half year have been updated!')
     if not questionary.confirm('Continue?').unsafe_ask():
@@ -114,8 +112,7 @@ def _get_update():
     for i, weibo in enumerate(process := Weibo.select()
                               .where(Weibo.update_status.is_null())
                               .order_by(Weibo.user_id.asc()), start=1):
-        if i % 10 == 0:
-            console.log(f'✨ processing {i} / {len(process)}')
+        console.log(f'✨ processing {i} / {len(process)}')
         assert weibo.update_status is None
         assert weibo.created_at < pendulum.now().subtract(months=6)
         if (uid := weibo.user_id) not in uid2visible:
