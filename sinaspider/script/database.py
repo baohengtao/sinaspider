@@ -61,7 +61,19 @@ def weibo(download_dir: Path = default_path):
 
 @app.command()
 @logsaver
-def weibo_update():
+def update_location():
+    weibos = (Weibo.select().order_by(Weibo.location_id.desc())
+              .where(Weibo.location_id.is_null(False))
+              .where(Weibo.latitude.is_null()))
+    for i, weibo in enumerate(weibos):
+        if i % 20 == 0:
+            console.log(f'✨ processing {i} / {len(weibos)}')
+        weibo.update_location()
+
+
+@app.command()
+@logsaver
+def update_weibo():
     from playhouse.shortcuts import update_model_from_dict
 
     from sinaspider.exceptions import WeiboNotFoundError
