@@ -494,10 +494,13 @@ class Location(BaseModel):
     id = TextField(primary_key=True)
     short_name = TextField()
     name = TextField(index=True, null=True)
+    address = TextField(null=True)
     latitude = DoubleField()
     longitude = DoubleField()
+    country = TextField(null=True)
     url = TextField()
     url_m = TextField()
+    version = TextField()
 
     @property
     def coordinate(self) -> tuple[float, float]:
@@ -513,10 +516,34 @@ class Location(BaseModel):
         or None if location has been deleted
         """
         if not cls.get_or_none(id=location_id):
-            if not (location_info := cls.get_location_info(location_id)):
-                return
+            if not (location_info := cls.get_location_info_v2(location_id)):
+                if not (location_info := cls.get_location_info(location_id)):
+                    return
             cls.insert(location_info).execute()
         return cls.get_by_id(location_id)
+
+    @staticmethod
+    def get_location_info_v2(location_id):
+        api = f'http://place.weibo.com/wandermap/pois?poiid={location_id}'
+        info = fetcher.get(api).json()
+        if not info:
+            return
+        assert info.pop('poiid') == location_id
+        lat, lng = round_loc(info.pop('lat'), info.pop('lng'))
+        res = dict(
+            id=location_id,
+            short_name=info.pop('name'),
+            address=info.pop('address'),
+            latitude=lat,
+            longitude=lng,
+            country=info.pop('country'),
+            url=f'https://weibo.com/p/100101{location_id}',
+            url_m=f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}',
+            version='v2'
+        )
+        info.pop('pic')
+        assert not info
+        return res
 
     @staticmethod
     def get_location_info(location_id: str) -> dict | None:
@@ -540,9 +567,10 @@ class Location(BaseModel):
             id=location_id,
             latitude=lat,
             longitude=lng,
+            short_name=short_name,
             url=url,
             url_m=url_m,
-            short_name=short_name)
+            version='v1')
 
 
 class Artist(BaseModel):

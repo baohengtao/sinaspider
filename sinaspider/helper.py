@@ -204,10 +204,11 @@ def normalize_str(amount):
     return amount
 
 
-def round_loc(lat: float, lng: float, tolerance: float = 0.01) -> tuple[float, float]:
+def round_loc(lat: float | str, lng: float | str, tolerance: float = 0.01) -> tuple[float, float]:
     """
     return rounded location with err small than tolerance meter
     """
+    lat, lng = float(lat), float(lng)
     for precision in itertools.count(start=1):
         lat_, lng_ = round(lat, precision), round(lng, precision)
         if (err := geodesic((lat, lng), (lat_, lng_)).meters) < tolerance:
