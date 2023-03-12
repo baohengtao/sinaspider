@@ -128,8 +128,8 @@ class WeiboParser:
 
         self.weibo['video_duration'] = page_info['media_info']['duration']
 
-    @staticmethod
-    def text_info(text: str):
+    @classmethod
+    def text_info(cls, text: str):
         if not text.strip():
             return {}
         at_list, topics_list = [], []
@@ -166,6 +166,8 @@ class WeiboParser:
                     console.log(
                         f"cannot parse {location}'s id: {href}", style='error')
                     location_src = href
+        if location:
+            cls._location_search(location, location_id)
         return {
             'text': soup.get_text(' ', strip=True),
             'at_users': at_list,
@@ -174,6 +176,25 @@ class WeiboParser:
             'location_id': location_id,
             'location_src': location_src
         }
+
+    @staticmethod
+    def _location_search(name, id):
+        from sinaspider.model import Location, Weibo
+        if not (Weibo.select().where(Weibo.location == name)
+                .where(Weibo.location_id.is_null())
+                .where(Weibo.update_status != 'updated')):
+            console.log(f'discard location: {name}({id})')
+            return
+        if not id:
+            assert False
+        location = Location.from_id(id)
+        if not location.name:
+            location.name = name
+            location.save()
+        else:
+            assert location.name == name
+        console.log(f'🥰 find location {name}({id})', style='notice')
+        console.log(location, '\n', style='notice')
 
 
 class UserParser:
