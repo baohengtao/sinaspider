@@ -7,7 +7,7 @@ from typer import Typer
 
 from sinaspider import console
 from sinaspider.helper import download_files, normalize_wb_id
-from sinaspider.model import UserConfig, Weibo
+from sinaspider.model import Location, UserConfig, Weibo
 
 from .helper import default_path, logsaver
 
@@ -68,6 +68,28 @@ def update_location():
     for i, weibo in enumerate(weibos):
         console.log(f'✨ processing {i} / {len(weibos)}')
         weibo.update_location()
+
+
+@app.command()
+@logsaver
+def fix_location():
+    """todo"""
+    weibos = (Weibo.select()
+              .where(Weibo.location.is_null(False))
+              .where(Weibo.location_id.is_null())
+              .order_by(Weibo.location))
+    for weibo in weibos:
+        assert weibo.update_status != 'updated'
+        assert not (Location.select().where(
+            Location.name == weibo.location))
+        assert not Weibo.select().where(
+            Weibo.location == weibo.location).where(Weibo.location_id.is_null(False))
+        continue
+        weibo.location_id = location.id
+        weibo.latitude = location.latitude
+        weibo.longitude = location.longitude
+        weibo.save()
+        console.log(weibo, '\n')
 
 
 @app.command()

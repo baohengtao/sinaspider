@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Iterator, Self
 
 import pendulum
-from bs4 import BeautifulSoup
 from geopy.distance import geodesic
 from peewee import Model
 from playhouse.postgres_ext import (
@@ -533,10 +532,10 @@ class Location(BaseModel):
         res = dict(
             id=location_id,
             short_name=info.pop('name'),
-            address=info.pop('address'),
+            address=info.pop('address') or None,
             latitude=lat,
             longitude=lng,
-            country=info.pop('country'),
+            country=info.pop('country') or None,
             url=f'https://weibo.com/p/100101{location_id}',
             url_m=f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}',
             version='v2'
@@ -569,7 +568,7 @@ class Location(BaseModel):
             latitude=lat,
             longitude=lng,
             short_name=short_name,
-            address=address,
+            address=address or None,
             url=url,
             url_m=url_m,
             version='v1.5')
