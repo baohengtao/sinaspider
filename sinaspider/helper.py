@@ -209,14 +209,18 @@ def round_loc(lat: float | str, lng: float | str, tolerance: float = 0.01) -> tu
     return rounded location with err small than tolerance meter
     """
     lat, lng = float(lat), float(lng)
-    for precision in itertools.count(start=1):
-        lat_, lng_ = round(lat, precision), round(lng, precision)
-        if (err := geodesic((lat, lng), (lat_, lng_)).meters) < tolerance:
+    while True:
+        for precision in itertools.count(start=1):
+            lat_, lng_ = round(lat, precision), round(lng, precision)
+            if (err := geodesic((lat, lng), (lat_, lng_)).meters) < tolerance:
+                break
+        if err:
+            console.log(
+                f'round loction: {lat, lng} -> {lat_, lng_} '
+                f'with precision {precision} (err: {err}m)')
+            lat, lng = lat_, lng_
+        else:
             break
-    if err:
-        console.log(
-            f'round loction: {lat, lng} -> {lat_, lng_} '
-            f'with precision {precision} (err: {err}m)')
     return lat_, lng_
 
 

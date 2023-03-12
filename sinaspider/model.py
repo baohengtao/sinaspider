@@ -517,7 +517,7 @@ class Location(BaseModel):
         """
         if not cls.get_or_none(id=location_id):
             if not (location_info := cls.get_location_info_v2(location_id)):
-                if not (location_info := cls.get_location_info(location_id)):
+                if not (location_info := cls.get_location_info_v1p5(location_id)):
                     return
             cls.insert(location_info).execute()
         return cls.get_by_id(location_id)
@@ -546,14 +546,13 @@ class Location(BaseModel):
         return res
 
     @staticmethod
-    def get_location_info(location_id: str) -> dict | None:
+    def get_location_info_v1p5(location_id: str) -> dict | None:
         url = f'https://weibo.com/p/100101{location_id}'
         url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
-        api = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
-        while not (js := fetcher.get(api).json())['ok']:
-            continue
-        card = js['data']['cards'][0]['card_group']
-        pic = card[0]['pic']
+        api = f'https://api.weibo.cn/2/cardlist?&from=10CB193010&c=iphone&s=BF3838D9&containerid=2306570042{location_id}'
+        js = fetcher.get(api).json()
+        cards = js['cards'][0]['card_group']
+        pic = cards[0]['pic']
         if 'android_delete_poi.png' in pic:
             console.log(
                 f'location has been deleted: {url} {url_m}', style='error')
@@ -561,16 +560,46 @@ class Location(BaseModel):
         pattern = 'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
         lng, lat = map(float, re.search(pattern, pic).groups())
         lat, lng = round_loc(lat, lng)
-        short_name = card[1]['group'][0]['item_title']
+        short_name = cards[1]['group'][0]['item_title']
+
+        address = cards[3]['title'] if len(cards) >= 4 else None
         assert lng and lat
         return dict(
             id=location_id,
             latitude=lat,
             longitude=lng,
             short_name=short_name,
+            address=address,
             url=url,
             url_m=url_m,
-            version='v1')
+            version='v1.5')
+
+    # @staticmethod
+    # def get_location_info(location_id: str) -> dict | None:
+    #     url = f'https://weibo.com/p/100101{location_id}'
+    #     url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
+    #     api = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
+    #     while not (js := fetcher.get(api).json())['ok']:
+    #         continue
+    #     card = js['data']['cards'][0]['card_group']
+    #     pic = card[0]['pic']
+    #     if 'android_delete_poi.png' in pic:
+    #         console.log(
+    #             f'location has been deleted: {url} {url_m}', style='error')
+    #         return
+    #     pattern = 'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
+    #     lng, lat = map(float, re.search(pattern, pic).groups())
+    #     lat, lng = round_loc(lat, lng)
+    #     short_name = card[1]['group'][0]['item_title']
+    #     assert lng and lat
+    #     return dict(
+    #         id=location_id,
+    #         latitude=lat,
+    #         longitude=lng,
+    #         short_name=short_name,
+    #         url=url,
+    #         url_m=url_m,
+    #         version='v1')
 
 
 class Artist(BaseModel):
