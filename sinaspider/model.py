@@ -463,7 +463,7 @@ class Weibo(BaseModel):
             "ImageSupplierID": self.user_id,
             "ImageSupplierName": "Weibo",
             "ImageCreatorName": self.username,
-            "BlogTitle": title,
+            "BlogTitle": title.strip(),
             "BlogURL": self.url,
             "Location": self.location,
             "DateCreated": (self.created_at +
@@ -475,7 +475,10 @@ class Weibo(BaseModel):
         xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
             "%Y:%m:%d %H:%M:%S.%f"
         )
-        return {"XMP:" + k: v for k, v in xmp_info.items() if v}
+        res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
+        if self.location_id:
+            res['WeiboLocation'] = (self.latitude, self.longitude)
+        return res
 
     def __str__(self):
         model = model_to_dict(self, recurse=False)
