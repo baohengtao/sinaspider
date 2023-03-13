@@ -72,31 +72,6 @@ def update_location():
 
 @app.command()
 @logsaver
-def fix_location():
-    """todo"""
-    weibos = (Weibo.select()
-              .where(Weibo.location.is_null(False))
-              .where(Weibo.location_id.is_null())
-              .order_by(Weibo.location))
-    for weibo in weibos:
-        assert weibo.update_status != 'updated'
-        if query := Location.select().where(
-                Location.name == weibo.location):
-            assert len(query) == 1
-            location = query[0]
-        else:
-            assert not Weibo.select().where(
-                Weibo.location == weibo.location).where(Weibo.location_id.is_null(False))
-            continue
-        weibo.location_id = location.id
-        weibo.latitude = location.latitude
-        weibo.longitude = location.longitude
-        weibo.save()
-        console.log(weibo, '\n')
-
-
-@app.command()
-@logsaver
 def update_weibo():
     from playhouse.shortcuts import update_model_from_dict
 
