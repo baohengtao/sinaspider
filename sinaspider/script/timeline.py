@@ -7,7 +7,7 @@ from typer import Option, Typer
 from sinaspider import console
 from sinaspider.model import UserConfig
 
-from .helper import default_path, logsaver, tidy_img, update_user_config
+from .helper import default_path, logsaver, update_user_config
 
 app = Typer()
 
@@ -26,10 +26,7 @@ def timeline(days: float = Option(...),
         next_since = pendulum.now()
         update_user_config()
         _get_timeline(download_dir, since, dry_run)
-        if dry_run:
-            return
-        tidy_img(download_dir)
-        if frequency is None:
+        if dry_run or frequency is None:
             return
         # updat since
         since = next_since
@@ -55,6 +52,17 @@ def _get_timeline(download_dir: Path,
             if dry_run:
                 uc.weibo_fetch_at = fetch_at
                 uc.save()
+
+
+@app.command()
+def img_tidy(download_dir: Path = default_path):
+    from imgmeta.script import rename, write_meta
+    folders = ['Users', 'New']
+    for folder in folders:
+        ori = download_dir / folder
+        if ori.exists():
+            write_meta(ori)
+            rename(ori, new_dir=True, root=ori.parent / (ori.stem + 'Pro'))
 
 
 # @app.command(help='Update users from timeline')

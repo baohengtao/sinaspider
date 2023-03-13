@@ -9,7 +9,7 @@ from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import normalize_user_id
 from sinaspider.model import UserConfig
 
-from .helper import default_path, logsaver, tidy_img
+from .helper import default_path, logsaver
 
 app = Typer()
 
@@ -44,7 +44,6 @@ def user(download_dir: Path = default_path):
                 console.log('记得取消关注', style='warning')
         elif uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
             uc.fetch_weibo(download_dir)
-            tidy_img(download_dir)
 
 
 @app.command(help="Loop through users in database and fetch weibos")
@@ -69,7 +68,6 @@ def user_loop(new_user: bool = False, download_dir: Path = default_path):
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
             config.fetch_weibo(download_dir)
-    tidy_img(download_dir)
 
 
 def _need_fetch(config: UserConfig) -> bool:

@@ -17,6 +17,8 @@ def logsaver(func):
     def wrapper(*args, **kwargs):
         argv = sys.argv
         argv[0] = Path(argv[0]).name
+        console.log(
+            f" run command  @ {pendulum.now().format('YYYY-MM-DD HH:mm:ss')}")
         console.log(' '.join(argv))
         callargs = signature(func).bind(*args, **kwargs).arguments
         try:
@@ -33,16 +35,6 @@ def logsaver(func):
             console.save_html(download_dir / log_file, theme=MONOKAI)
 
     return wrapper
-
-
-def tidy_img(download_dir: Path):
-    from imgmeta.script import rename, write_meta
-    folders = ['Users', 'New']
-    for folder in folders:
-        ori = download_dir / folder
-        if ori.exists():
-            write_meta(ori)
-            rename(ori, new_dir=True, root=ori.parent / (ori.stem + 'Pro'))
 
 
 def update_user_config():
