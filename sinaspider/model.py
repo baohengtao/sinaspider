@@ -159,9 +159,7 @@ class UserConfig(BaseModel):
                         "获取完毕")
                     return
             weibo_dict['username'] = self.username
-            weibo_id = Weibo.insert(weibo_dict).on_conflict(
-                conflict_target=[Weibo.id],
-                update=weibo_dict).execute()
+            weibo_id = Weibo.upsert(weibo_dict)
             weibo = Weibo.get_by_id(weibo_id)
 
             medias = list(weibo.medias(download_dir))
@@ -370,10 +368,37 @@ class Weibo(BaseModel):
             except Weibo.DoesNotExist:
                 pass
         weibo_dict = WeiboParser(wb_id).parse()
-        Weibo.insert(weibo_dict).on_conflict(
-            conflict_target=[Weibo.id],
-            update=weibo_dict).execute()
+        Weibo.upsert(weibo_dict)
         return cls.get_by_id(wb_id)
+
+    @classmethod
+    def upsert(cls, weibo_dict) -> int:
+        """
+        return upserted weibo id
+        """
+        wid = weibo_dict['id']
+        if not (model := cls.get_or_none(id=wid)):
+            cls.insert(weibo_dict).execute()
+            return wid
+        if model.location is None:
+            assert 'location' not in weibo_dict
+        elif model.update_status == 'updated':
+            assert model.location_id == weibo_dict['location_id']
+        else:
+            console.log('an invisible weibo have been update!',
+                        style='warning')
+            weibo_dict['latitude'], weibo_dict['longitude'] = model.get_coordinate()
+            Location.from_id(weibo_dict['location_id'])
+        model_dict = model_to_dict(model, recurse=False)
+        model_dict['user_id'] = model_dict.pop('user')
+        for k, v in weibo_dict.items():
+            assert v or v == 0
+            if v == model_dict[k]:
+                continue
+            console.log(f'+{k}:{v}')
+            if (ori := model_dict[k]) is not None:
+                console.log(f'-{k}:{ori}')
+        return cls.update(weibo_dict).where(cls.id == wid).execute()
 
     def update_location(self):
         if self.location_src:

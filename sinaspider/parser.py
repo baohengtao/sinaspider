@@ -94,20 +94,20 @@ class WeiboParser:
         if 'pic_infos' in self.info:
             for i, pic_id in enumerate(self.info['pic_ids'], start=1):
                 pic_info = self.info['pic_infos'][pic_id]
-                photos[i] = [
+                photos[str(i)] = [
                     pic_info['largest']['url'], pic_info.get('video')]
         elif pics := self.info.get('pics'):
             pics = pics.values() if isinstance(pics, dict) else pics
             pics = [p for p in pics if 'pid' in p]
             for i, pic in enumerate(pics, start=1):
-                photos[i] = [pic['large']['url'], pic.get('videoSrc')]
+                photos[str(i)] = [pic['large']['url'], pic.get('videoSrc')]
         else:
             assert self.weibo['pic_num'] == 1
             page_info = self.info['page_info']
             page_pic = page_info['page_pic']
             url = page_pic if isinstance(
                 page_pic, str) else page_pic['url']
-            photos[1] = [url, None]
+            photos['1'] = [url, None]
 
         assert len(photos) == len(self.info['pic_ids'])
         self.weibo['photos'] = photos
