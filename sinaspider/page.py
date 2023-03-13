@@ -13,15 +13,43 @@ class Page:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
 
-    def friends(self):
-        """Get user's friends."""
-        for page in itertools.count():
-            url = ("https://api.weibo.cn/2/friendships/bilateral?"
-                   f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
-            js = fetcher.get(url).json()
-            if not (users := js['users']):
-                break
-            yield from users
+    def homepage(self, start_page: int = 1, parse: bool = True) -> Iterator[dict]:
+        """
+        Fetch user's homepage weibo.
+
+        Args:
+                start_page: the start page to fetch
+                parse: whether to parse weibo, default True
+        """
+        url = ('https://m.weibo.cn/api/container/getIndex'
+               f'?containerid=107603{self.id}&page=%s')
+        for page in itertools.count(start=max(start_page, 1)):
+            for try_time in itertools.count(start=1):
+                if (js := fetcher.get(url % page).json())['ok']:
+                    break
+                if js['msg'] == '请求过于频繁，歇歇吧':
+                    raise ConnectionError(js['msg'])
+                if try_time > 3:
+                    console.log(
+                        "not js['ok'], seems reached end, no wb return for "
+                        f"page {page}", style='warning')
+                    return
+
+            mblogs = [card['mblog'] for card in js['data']['cards']
+                      if card['card_type'] == 9]
+
+            for weibo_info in mblogs:
+                if weibo_info['user']['id'] != self.id:
+                    assert '评论过的微博' in weibo_info['title']['text']
+                    continue
+                if weibo_info['source'] == '生日动态':
+                    continue
+                if 'retweeted_status' in weibo_info:
+                    continue
+                yield WeiboParser(weibo_info).parse() if parse else weibo_info
+            else:
+                console.log(
+                    f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
     @staticmethod
     def timeline(since: pendulum.DateTime):
@@ -93,6 +121,16 @@ class Page:
             else:
                 yield weibo_info
 
+    def friends(self):
+        """Get user's friends."""
+        for page in itertools.count():
+            url = ("https://api.weibo.cn/2/friendships/bilateral?"
+                   f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
+            js = fetcher.get(url).json()
+            if not (users := js['users']):
+                break
+            yield from users
+
     def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""
         url = ('https://m.weibo.cn/api/container/getIndex'
@@ -129,44 +167,6 @@ class Page:
                 return True
             start = mid + 1
         return False
-
-    def homepage(self, start_page: int = 1, parse: bool = True) -> Iterator[dict]:
-        """
-        Fetch user's homepage weibo.
-
-        Args:
-                start_page: the start page to fetch
-                parse: whether to parse weibo, default True
-        """
-        url = ('https://m.weibo.cn/api/container/getIndex'
-               f'?containerid=107603{self.id}&page=%s')
-        for page in itertools.count(start=max(start_page, 1)):
-            for try_time in itertools.count(start=1):
-                if (js := fetcher.get(url % page).json())['ok']:
-                    break
-                if js['msg'] == '请求过于频繁，歇歇吧':
-                    raise ConnectionError(js['msg'])
-                if try_time > 3:
-                    console.log(
-                        "not js['ok'], seems reached end, no wb return for "
-                        f"page {page}", style='warning')
-                    return
-
-            mblogs = [card['mblog'] for card in js['data']['cards']
-                      if card['card_type'] == 9]
-
-            for weibo_info in mblogs:
-                if weibo_info['user']['id'] != self.id:
-                    assert '评论过的微博' in weibo_info['title']['text']
-                    continue
-                if weibo_info['source'] == '生日动态':
-                    continue
-                if 'retweeted_status' in weibo_info:
-                    continue
-                yield WeiboParser(weibo_info).parse() if parse else weibo_info
-            else:
-                console.log(
-                    f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
 
 def _yield_from_cards(cards):
