@@ -80,11 +80,14 @@ def fix_location():
               .order_by(Weibo.location))
     for weibo in weibos:
         assert weibo.update_status != 'updated'
-        assert not (Location.select().where(
-            Location.name == weibo.location))
-        assert not Weibo.select().where(
-            Weibo.location == weibo.location).where(Weibo.location_id.is_null(False))
-        continue
+        if query := Location.select().where(
+                Location.name == weibo.location):
+            assert len(query) == 1
+            location = query[0]
+        else:
+            assert not Weibo.select().where(
+                Weibo.location == weibo.location).where(Weibo.location_id.is_null(False))
+            continue
         weibo.location_id = location.id
         weibo.latitude = location.latitude
         weibo.longitude = location.longitude
