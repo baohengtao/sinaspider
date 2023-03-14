@@ -54,7 +54,7 @@ class WeiboParser:
         self.basic_info()
         self.photos_info()
         self.video_info()
-        self.weibo |= self.text_info_v2(self.info['text'])
+        self.weibo |= self.text_info_v2()
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             self.weibo['is_pinned'] = self.is_pinned
@@ -170,7 +170,7 @@ class WeiboParser:
                 location_src = href
 
         return {
-            'text': soup.get_text(' ', strip=True),
+            # 'text': soup.get_text(' ', strip=True),
             'at_users': at_list,
             'topics': topics_list,
             'location': location,
@@ -178,12 +178,12 @@ class WeiboParser:
             'location_src': location_src
         }
 
-    @classmethod
-    def text_info_v2(cls, text):
+    def text_info_v2(self):
+        hypertext = self.info['text'].strip()
         topics = []
         at_users = []
         location_collector = []
-        soup = BeautifulSoup(text, 'html.parser')
+        soup = BeautifulSoup(hypertext, 'html.parser')
         for child in soup.contents:
             if child.name != 'a':
                 continue
@@ -198,11 +198,15 @@ class WeiboParser:
                 if not url_icon.attrs['class'] == ['url-icon']:
                     continue
                 _icn = 'timeline_card_small_location_default.png'
-                if _icn not in url_icon.img.attrs['src']:
-                    continue
-                assert surl_text.attrs['class'] == ['surl-text']
-                location_collector.append(
-                    [surl_text.text, child.attrs['href']])
+                _icn_video = 'timeline_card_small_video_default.png'
+                if _icn in url_icon.img.attrs['src']:
+
+                    assert surl_text.attrs['class'] == ['surl-text']
+                    location_collector.append(
+                        [surl_text.text, child.attrs['href']])
+                    child.decompose()
+                elif _icn_video in url_icon.img.attrs['src']:
+                    child.decompose()
         location, location_id, location_src = '', '', ''
         if location_collector:
             assert len(location_collector) <= 2
@@ -216,14 +220,20 @@ class WeiboParser:
                     f"cannot parse {location}'s id: {href}", style='error')
                 location_src = href
         res = {
-            'text': soup.get_text(' ', strip=True),
             'at_users': at_users,
             'topics': topics,
             'location': location,
             'location_id': location_id,
             'location_src': location_src
         }
-        assert res == cls.text_info(text)
+        text = soup.get_text(' ', strip=True)
+        assert text == text.strip()
+        # text = text.removesuffix(f'{self.weibo["username"]}的微博视频').strip()
+        if location:
+            text += f' 📍{location}'
+        res['text'] = text.strip()
+        for k, v in self.text_info(hypertext).items():
+            assert res[k] == v
         return res
 
 
