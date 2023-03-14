@@ -19,6 +19,7 @@ from playhouse.postgres_ext import (
     TextField
 )
 from playhouse.shortcuts import model_to_dict
+from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.helper import (
@@ -368,11 +369,12 @@ class Weibo(BaseModel):
             except Weibo.DoesNotExist:
                 pass
         weibo_dict = WeiboParser(wb_id).parse()
+        weibo_dict['username'] = User.get_by_id(weibo_dict['user_id']).username
         Weibo.upsert(weibo_dict)
         return cls.get_by_id(wb_id)
 
     @classmethod
-    def upsert(cls, weibo_dict) -> int:
+    def upsert(cls, weibo_dict: dict) -> int:
         """
         return upserted weibo id
         """
@@ -383,10 +385,20 @@ class Weibo(BaseModel):
         if model.location is None:
             assert 'location' not in weibo_dict
         elif model.update_status == 'updated':
-            assert model.location_id == weibo_dict['location_id']
+            if model.location_src:
+                assert model.location_src == weibo_dict['location_src']
+            else:
+                if 'location_id' not in weibo_dict:
+                    _info = parse_loc_src(weibo_dict.pop('location_src'))
+                    _loc = model_to_dict(Location.from_id(_info['id']))
+                    for k, v in _info.items():
+                        assert _loc[k] == v
+                    weibo_dict['location_id'] = _info['id']
+                assert model.location_id == weibo_dict['location_id']
+
         else:
-            console.log('an invisible weibo have been update!',
-                        style='warning')
+            if not Confirm.ask(f'an invisible weibo {wid} with location found, continue?'):
+                return
             weibo_dict['latitude'], weibo_dict['longitude'] = model.get_coordinate()
             Location.from_id(weibo_dict['location_id'])
         model_dict = model_to_dict(model, recurse=False)
@@ -395,9 +407,9 @@ class Weibo(BaseModel):
             assert v or v == 0
             if v == model_dict[k]:
                 continue
-            console.log(f'+{k}:{v}')
+            console.log(f'+{k}: {v}')
             if (ori := model_dict[k]) is not None:
-                console.log(f'-{k}:{ori}')
+                console.log(f'-{k}: {ori}')
         return cls.update(weibo_dict).where(cls.id == wid).execute()
 
     def update_location(self):
