@@ -230,6 +230,7 @@ class WeiboParser:
         assert text == text.strip()
         # text = text.removesuffix(f'{self.weibo["username"]}的微博视频').strip()
         if location:
+            assert not text.endswith('📍')
             text += f' 📍{location}'
         res['text'] = text.strip()
         for k, v in self.text_info(hypertext).items():

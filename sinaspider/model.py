@@ -22,6 +22,7 @@ from playhouse.shortcuts import model_to_dict
 from rich.prompt import Confirm
 
 from sinaspider import console
+from sinaspider.exceptions import WeiboNotFoundError
 from sinaspider.helper import (
     download_files, fetcher,
     normalize_wb_id,
@@ -368,9 +369,15 @@ class Weibo(BaseModel):
                 return Weibo.get_by_id(wb_id)
             except Weibo.DoesNotExist:
                 pass
-        weibo_dict = WeiboParser(wb_id).parse()
-        weibo_dict['username'] = User.get_by_id(weibo_dict['user_id']).username
-        Weibo.upsert(weibo_dict)
+        try:
+            weibo_dict = WeiboParser(wb_id).parse()
+        except WeiboNotFoundError:
+            console.log(
+                f'Weibo {wb_id} is not accessible, loading from database...', style="error")
+        else:
+            weibo_dict['username'] = User.get_by_id(
+                weibo_dict['user_id']).username
+            Weibo.upsert(weibo_dict)
         return cls.get_by_id(wb_id)
 
     @classmethod
