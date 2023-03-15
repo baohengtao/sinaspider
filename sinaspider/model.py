@@ -310,16 +310,29 @@ class User(BaseModel):
                 pass
         user_dict = UserParser(user_id).parse()
         if followed_by := user_dict.pop('followed_by', None):
-            user_dict['followed_by'] = [
-                u.username for u in cls.select().where(cls.id.in_(followed_by))]
+            user_dict['followed_by'] = sorted(
+                u.username for u in cls.select().where(cls.id.in_(followed_by)))
+        cls.upsert(user_dict)
+        return cls.get_by_id(user_id)
 
-        if cls.get_or_none(id=user_id):
-            cls.update(user_dict).where(cls.id == user_id).execute()
-        else:
+    @classmethod
+    def upsert(cls, user_dict):
+        user_id = user_dict['id']
+        if not (model := cls.get_or_none(id=user_id)):
             if 'username' not in user_dict:
                 user_dict['username'] = user_dict['screen_name']
-            cls.insert(user_dict).execute()
-        return cls.get_by_id(user_id)
+            return cls.insert(user_dict).execute()
+        model_dict = model_to_dict(model)
+        for k, v in user_dict.items():
+            if 'count' in k:
+                continue
+            assert v or v == 0
+            if v == model_dict[k]:
+                continue
+            console.log(f'+{k}: {v}')
+            if (ori := model_dict[k]) is not None:
+                console.log(f'-{k}: {ori}')
+        return cls.update(user_dict).where(cls.id == user_id).execute()
 
     def __str__(self):
         keys = [

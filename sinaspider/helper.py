@@ -201,6 +201,10 @@ def normalize_str(amount):
                 amount = float(num) * (10 ** 8)
             case '万':
                 amount = float(num) * (10 ** 4)
+            case _:
+                if amount.isnumeric():
+                    amount = int(amount)
+
     return amount
 
 
