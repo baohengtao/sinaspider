@@ -7,7 +7,7 @@ from typer import Typer
 
 from sinaspider import console
 from sinaspider.helper import download_files, normalize_wb_id
-from sinaspider.model import Location, UserConfig, Weibo
+from sinaspider.model import Artist, User, UserConfig, Weibo
 
 from .helper import default_path, logsaver
 
@@ -16,7 +16,6 @@ app = Typer()
 
 @app.command()
 def artist():
-    from sinaspider.model import Artist
     while username := Prompt.ask('请输入用户名:smile:'):
         if username.isdigit():
             artist = Artist.get_or_none(user_id=int(username))
@@ -133,27 +132,34 @@ def _get_update():
 
 
 @app.command()
-def database_clean():
+def database_clean(dry_run: bool = False):
     import questionary
     from photosinfo.model import Photo
 
-    from sinaspider.model import Artist, User, UserConfig, Weibo
-    if not questionary.confirm('Have you backup database to rpi?').ask():
-        console.log('Backup first, bye!')
-        return
-    if not questionary.confirm('Have you put all photos to Photos.app?').ask():
-        console.log('put them to Photos.app first, bye!')
-        return
+    if not dry_run:
+        if not questionary.confirm('Have you backup database to rpi?').ask():
+            console.log('Backup first, bye!')
+            return
+        if not questionary.confirm('Have you put all photos to Photos.app?').ask():
+            console.log('put them to Photos.app first, bye!')
+            return
     photos = (Photo.select()
               .where(Photo.image_supplier_name == "Weibo")
               .where(Photo.image_unique_id.is_null(False)))
     photo_bids = {p.image_unique_id for p in photos}
     console.log(f'{len(photo_bids)} weibos in photos.app\n'
                 f'{len(Weibo)} weibos in sina database')
-    del_count = Weibo.delete().where(Weibo.bid.not_in(photo_bids)).execute()
-    console.log(f'{del_count} weibos have been deleted\n'
-                f'{len(Weibo)} weibos left in sina database')
-    uids = {u.user_id for u in UserConfig} | {u.user_id for u in Artist}
-    del_count = User.delete().where(User.id.not_in(uids)).execute()
-    console.log(f'{del_count} users have been deleted')
-    console.log('Done!')
+
+    if dry_run:
+        to_del = Weibo.select().where(Weibo.bid.not_in(photo_bids)).order_by(Weibo.user_id)
+        for w in to_del:
+            console.log(w, '\n')
+        console.log(f'{len(to_del)} weibos will be deleted\n')
+    else:
+        del_count = Weibo.delete().where(Weibo.bid.not_in(photo_bids)).execute()
+        console.log(f'{del_count} weibos have been deleted\n'
+                    f'{len(Weibo)} weibos left in sina database')
+        uids = {u.user_id for u in UserConfig} | {u.user_id for u in Artist}
+        del_count = User.delete().where(User.id.not_in(uids)).execute()
+        console.log(f'{del_count} users have been deleted')
+        console.log('Done!')
