@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pendulum
 from rich.prompt import Confirm, Prompt
-from typer import Typer
+from typer import Option, Typer
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
@@ -48,7 +48,7 @@ def user(download_dir: Path = default_path):
 
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver
-def user_loop(new_user: bool = False, download_dir: Path = default_path):
+def user_loop(new_user: bool = Option(False, "--new-user", "-n"), download_dir: Path = default_path):
     if new_user:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)

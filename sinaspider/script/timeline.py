@@ -39,6 +39,8 @@ def _get_timeline(download_dir: Path,
                   since: pendulum.DateTime,
                   dry_run: bool = False):
     from sinaspider.page import Page
+    if dry_run:
+        download_dir /= 'dry_run'
     for status in Page.timeline(since=since):
         uid = status['user']['id']
         if not (uc := UserConfig.get_or_none(user_id=uid)):

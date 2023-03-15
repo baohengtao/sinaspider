@@ -44,6 +44,7 @@ Home = "https://github.com/baohengtao/sinaspider"
 
 [project.scripts]
 sinaspider = 'sinaspider.script:app'
+sina = 'sinaspider.script:app'
 
 [tool.isort]
 multi_line_output = 5
