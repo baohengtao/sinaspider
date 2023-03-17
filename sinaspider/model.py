@@ -310,8 +310,8 @@ class User(BaseModel):
                 pass
         user_dict = UserParser(user_id).parse()
         if followed_by := user_dict.pop('followed_by', None):
-            user_dict['followed_by'] = sorted(
-                u.username for u in cls.select().where(cls.id.in_(followed_by)))
+            if query := cls.select().where(cls.id.in_(followed_by)):
+                user_dict['followed_by'] = sorted(u.username for u in query)
         cls.upsert(user_dict)
         return cls.get_by_id(user_id)
 

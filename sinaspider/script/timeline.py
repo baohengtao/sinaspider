@@ -59,8 +59,7 @@ def _get_timeline(download_dir: Path,
 @app.command()
 def write_meta(download_dir: Path = default_path):
     from imgmeta.script import rename, write_meta
-    folders = ['Users', 'New']
-    for folder in folders:
+    for folder in ['Users', 'New']:
         ori = download_dir / folder
         if ori.exists():
             write_meta(ori)
