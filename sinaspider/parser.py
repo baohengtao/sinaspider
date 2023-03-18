@@ -387,6 +387,7 @@ class UserParser:
             user_info.pop(key, None)
         assert user_info['followers_count'] == user_info.pop(
             'followers_count_str')
+        assert user_info.pop('close_blue_v') is False
         return user_info
 
     def get_user_info_v2(self) -> dict:

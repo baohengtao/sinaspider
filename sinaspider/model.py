@@ -194,6 +194,11 @@ class UserConfig(BaseModel):
         self.save()
 
     def fetch_friends(self):
+        if Friend.get_or_none(user_id=self.user_id):
+            console.log(f"{self.username}的好友已经获取过了, skip...")
+            return
+        else:
+            console.log(f"开始获取 {self.username} 的好友")
         friends = list(self.page.friends())
         for friend in friends:
             friend['username'] = self.username
@@ -283,7 +288,6 @@ class User(BaseModel):
     follow_me = BooleanField(null=True)
 
     avatar_hd = TextField(null=True)
-    close_blue_v = BooleanField(null=True)
     like = BooleanField(null=True)
     like_me = BooleanField(null=True)
     mbrank = BigIntegerField(null=True)
