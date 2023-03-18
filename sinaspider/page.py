@@ -1,4 +1,5 @@
 import itertools
+import re
 from time import sleep
 from typing import Iterator
 
@@ -123,13 +124,35 @@ class Page:
 
     def friends(self):
         """Get user's friends."""
-        for page in itertools.count():
+        pattern = r'(https://tvax?\d\.sinaimg\.cn)/(?:crop\.\d+\.\d+\.\d+\.\d+\.\d+\/)?(.*?)\?.*$'
+        friend_count = 0
+        for page in itertools.count(start=1):
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
                    f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
             js = fetcher.get(url).json()
             if not (users := js['users']):
+                console.log(
+                    f"{friend_count} friends fetched (total_number: {js['total_number']})")
                 break
-            yield from users
+            for raw in users:
+                info = {
+                    'user_id': self.id,
+                    'friend_id': (friend_id := raw['id']),
+                    'friend_name': raw['screen_name'],
+                    'gender': raw['gender'],
+                    'location': raw['location'],
+                    'description': raw['description'],
+                    'homepage': f'https://weibo.com/u/{friend_id}',
+                    'statuses_count': raw['statuses_count'],
+                    'followers_count': raw['followers_count'],
+                    'follow_count': raw['friends_count'],
+                }
+                info['created_at'] = pendulum.from_format(raw['created_at'],
+                                                          'ddd MMM DD HH:mm:ss Z YYYY')
+                p1, p2 = re.match(pattern, raw['avatar_hd']).groups()
+                info['avatar_hd'] = f'{p1}/large/{p2}'
+                yield info
+                friend_count += 1
 
     def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""

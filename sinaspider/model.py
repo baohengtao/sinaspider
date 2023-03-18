@@ -193,6 +193,14 @@ class UserConfig(BaseModel):
         self.liked_fetch_at = pendulum.now()
         self.save()
 
+    def fetch_friends(self):
+        friends = list(self.page.friends())
+        for friend in friends:
+            friend['username'] = self.username
+        console.log(f'{len(friends)} friends found! 🥰 ')
+        Friend.insert_many(friends).execute()
+        Friend.delete().where(Friend.gender == 'm').execute()
+
     def _save_liked(self, download_dir: Path) -> Iterator[dict]:
         download_dir /= self.username
         bulk = []
@@ -728,4 +736,29 @@ class LikedWeibo(BaseModel):
         )
 
 
-database.create_tables([User, UserConfig, Artist, Weibo, LikedWeibo, Location])
+class Friend(BaseModel):
+    user = ForeignKeyField(User, backref='friends')
+    username = TextField()
+    friend_id = BigIntegerField()
+    friend_name = TextField()
+    gender = CharField()
+    location = TextField()
+    description = TextField()
+    homepage = TextField()
+    statuses_count = IntegerField()
+    followers_count = IntegerField()
+    follow_count = IntegerField()
+    created_at = DateTimeTZField()
+    avatar_hd = TextField()
+
+    added_at = DateTimeTZField(default=pendulum.now)
+
+    class Meta:
+        table_name = "friend"
+        indexes = (
+            (('user_id', 'friend_id'), True),
+        )
+
+
+database.create_tables(
+    [User, UserConfig, Artist, Weibo, LikedWeibo, Location, Friend])
