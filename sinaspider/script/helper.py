@@ -24,7 +24,7 @@ def logsaver(func):
         callargs = signature(func).bind(*args, **kwargs).arguments
         try:
             return func(*args, **kwargs)
-        except BaseException:
+        except Exception:
             with console.capture():
                 console.print_exception(show_locals=True)
             raise
