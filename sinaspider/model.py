@@ -542,8 +542,7 @@ class Weibo(BaseModel):
         }
 
         xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
-            "%Y:%m:%d %H:%M:%S.%f"
-        )
+            "%Y:%m:%d %H:%M:%S.%f").strip('0').strip('.')
         res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
         if self.location_id:
             res['WeiboLocation'] = (self.latitude, self.longitude)

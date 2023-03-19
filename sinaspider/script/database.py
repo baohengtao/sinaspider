@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pendulum
 import questionary
+from photosinfo.model import Photo
 from rich.prompt import Prompt
 from typer import Typer
 
@@ -61,7 +62,13 @@ def weibo(download_dir: Path = default_path):
 @app.command()
 @logsaver
 def update_location():
+    photos = (Photo.select()
+              .where(Photo.image_supplier_name == "Weibo")
+              .where(Photo.location.is_null(False))
+              .where(Photo.image_unique_id.is_null(False)))
+    bids = {p.image_unique_id for p in photos}
     weibos = (Weibo.select().order_by(Weibo.location_id.desc())
+              .where(Weibo.bid.in_(bids))
               .where(Weibo.location_id.is_null(False) | Weibo.location_src.is_null(False))
               .where(Weibo.latitude.is_null()))
     for i, weibo in enumerate(weibos):
@@ -133,8 +140,6 @@ def _get_update():
 
 @app.command()
 def database_clean(dry_run: bool = False):
-    import questionary
-    from photosinfo.model import Photo
 
     if not dry_run:
         if not questionary.confirm('Have you backup database to rpi?').ask():
