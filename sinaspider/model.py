@@ -751,6 +751,8 @@ class Friend(BaseModel):
     statuses_count = IntegerField()
     followers_count = IntegerField()
     follow_count = IntegerField()
+    bi_followers_count = IntegerField()
+    following = BooleanField()
     created_at = DateTimeTZField()
     avatar_hd = TextField()
 

@@ -34,10 +34,6 @@ def logsaver(func):
             log_file = f"{func.__name__}_{time_format}.html"
             console.log(f'Saving log to {download_dir / log_file}')
             console.save_html(download_dir / log_file, theme=MONOKAI)
-            for folder in ['Users', 'New']:
-                ori = download_dir / folder
-                if ori.exists():
-                    write_meta(ori)
 
     return wrapper
 

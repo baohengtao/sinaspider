@@ -122,7 +122,7 @@ class Page:
             else:
                 yield weibo_info
 
-    def friends(self):
+    def friends(self, parse=True):
         """Get user's friends."""
         pattern = r'(https://tvax?\d\.sinaimg\.cn)/(?:crop\.\d+\.\d+\.\d+\.\d+\.\d+\/)?(.*?)\?.*$'
         friend_count = 0
@@ -146,12 +146,14 @@ class Page:
                     'statuses_count': raw['statuses_count'],
                     'followers_count': raw['followers_count'],
                     'follow_count': raw['friends_count'],
+                    'bi_followers_count': raw['bi_followers_count'],
+                    'following': raw['following'],
                 }
                 info['created_at'] = pendulum.from_format(raw['created_at'],
                                                           'ddd MMM DD HH:mm:ss Z YYYY')
                 p1, p2 = re.match(pattern, raw['avatar_hd']).groups()
                 info['avatar_hd'] = f'{p1}/large/{p2}'
-                yield info
+                yield info if parse else raw
                 friend_count += 1
 
     def get_visibility(self) -> bool:
