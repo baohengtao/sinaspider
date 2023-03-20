@@ -48,7 +48,9 @@ def user(download_dir: Path = default_path):
 
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver
-def user_loop(new_user: bool = Option(False, "--new-user", "-n"), download_dir: Path = default_path):
+def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
+              max_user: int = None,
+              download_dir: Path = default_path):
     if new_user:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
@@ -59,7 +61,8 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"), download_dir: 
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
         users = [uc for uc in users if _need_fetch(uc)]
-    for user in users:
+    users = users[:max_user]
+    for i, user in enumerate(users, start=1):
         try:
             config = UserConfig.from_id(user_id=user.user_id)
         except UserNotFoundError:
@@ -68,6 +71,7 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"), download_dir: 
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
             config.fetch_weibo(download_dir)
+        console.log(f'user {i}/{len(users)} completed!')
 
 
 def _need_fetch(config: UserConfig) -> bool:

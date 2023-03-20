@@ -50,7 +50,6 @@ def _get_timeline(download_dir: Path,
         fetch_at = uc.weibo_fetch_at
         if uc.weibo_fetch and fetch_at < created_at:
             uc = UserConfig.from_id(uid)
-            uc.fetch_friends()
             uc.fetch_weibo(download_dir)
             if dry_run:
                 uc.weibo_fetch_at = fetch_at

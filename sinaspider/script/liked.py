@@ -6,7 +6,7 @@ from typer import Typer
 
 from sinaspider import console
 from sinaspider.helper import normalize_user_id
-from sinaspider.model import UserConfig
+from sinaspider.model import Friend, UserConfig
 
 from .helper import default_path, logsaver
 
@@ -41,3 +41,16 @@ def liked_loop(download_dir: Path = default_path, max_user: int = 1):
                .limit(max_user))
     for config in configs:
         config.fetch_liked(download_dir)
+
+
+@app.command()
+@logsaver
+def friends(max_user: int = None):
+    uids = {f.user_id for f in Friend}
+    for config in (UserConfig.select().limit(max_user)
+                   .where(UserConfig.following)
+                   .where(UserConfig.user_id.not_in(uids))
+                   ):
+        config = UserConfig.from_id(config.user_id)
+        if config.following:
+            config.fetch_friends()

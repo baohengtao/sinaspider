@@ -183,7 +183,11 @@ class WeiboParser:
         topics = []
         at_users = []
         location_collector = []
-        soup = BeautifulSoup(hypertext, 'html.parser')
+        with warnings.catch_warnings(
+            action='ignore',
+            category=bs4.MarkupResemblesLocatorWarning
+        ):
+            soup = BeautifulSoup(hypertext, 'html.parser')
         for child in soup.contents:
             if child.name != 'a':
                 continue

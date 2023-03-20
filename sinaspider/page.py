@@ -188,7 +188,7 @@ class Page:
                 assert mid == 1
                 return False
             post_on = WeiboParser(mblogs[-1]).parse(online=False)['created_at']
-            if post_on < pendulum.now().subtract(months=6):
+            if post_on < pendulum.now().subtract(months=6, days=5):
                 return True
             start = mid + 1
         return False
