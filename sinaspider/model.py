@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Self
@@ -206,6 +207,7 @@ class UserConfig(BaseModel):
         console.log(f'{len(friends)} friends found! 🥰 ')
         Friend.insert_many(friends).execute()
         Friend.delete().where(Friend.gender == 'm').execute()
+        Friend.update_frequency()
 
     def _save_liked(self, download_dir: Path) -> Iterator[dict]:
         download_dir /= self.username
@@ -771,12 +773,21 @@ class Friend(BaseModel):
     avatar_hd = TextField()
 
     added_at = DateTimeTZField(default=pendulum.now)
+    frequency = IntegerField(default=1)
 
     class Meta:
         table_name = "friend"
         indexes = (
             (('user_id', 'friend_id'), True),
         )
+
+    @classmethod
+    def update_frequency(cls):
+        count = Counter(f.friend_id for f in cls)
+        for friend in cls:
+            if friend.frequency != count[friend.friend_id]:
+                friend.frequency = count[friend.friend_id]
+                friend.save()
 
 
 database.create_tables(
