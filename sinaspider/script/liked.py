@@ -5,6 +5,7 @@ from rich.prompt import Confirm, Prompt
 from typer import Typer
 
 from sinaspider import console
+from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import normalize_user_id
 from sinaspider.model import Friend, UserConfig
 
@@ -51,6 +52,10 @@ def friends(max_user: int = None):
                    .where(UserConfig.following)
                    .where(UserConfig.user_id.not_in(uids))
                    ):
-        config = UserConfig.from_id(config.user_id)
+        try:
+            config = UserConfig.from_id(config.user_id)
+        except UserNotFoundError:
+            pass
         if config.following:
+            console.log(config)
             config.fetch_friends()

@@ -71,9 +71,10 @@ def update_location():
               .where(Weibo.bid.in_(bids))
               .where(Weibo.location_id.is_null(False) | Weibo.location_src.is_null(False))
               .where(Weibo.latitude.is_null()))
-    for i, weibo in enumerate(weibos):
+    for i, weibo in enumerate(weibos, start=1):
         console.log(f'✨ processing {i} / {len(weibos)}')
         weibo.update_location()
+        console.log(weibo, '\n')
 
 
 @app.command()
@@ -148,13 +149,13 @@ def database_clean(dry_run: bool = False):
         if not questionary.confirm('Have you put all photos to Photos.app?').ask():
             console.log('put them to Photos.app first, bye!')
             return
+
     photos = (Photo.select()
               .where(Photo.image_supplier_name == "Weibo")
               .where(Photo.image_unique_id.is_null(False)))
     photo_bids = {p.image_unique_id for p in photos}
     console.log(f'{len(photo_bids)} weibos in photos.app\n'
                 f'{len(Weibo)} weibos in sina database')
-
     if dry_run:
         to_del = Weibo.select().where(Weibo.bid.not_in(photo_bids)).order_by(Weibo.user_id)
         console.log(f'{len(to_del)} weibos will be deleted\n')

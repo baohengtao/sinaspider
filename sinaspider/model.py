@@ -341,19 +341,18 @@ class User(BaseModel):
             assert v or v == 0
             if v == model_dict[k]:
                 continue
-            console.log(f'+{k}: {v}')
+            console.log(f'+{k}: {v}', style='green')
             if (ori := model_dict[k]) is not None:
-                console.log(f'-{k}: {ori}')
+                console.log(f'-{k}: {ori}', style='red')
         return cls.update(user_dict).where(cls.id == user_id).execute()
 
     def __str__(self):
-        keys = [
-            "id", "username", "following", "followed_by", "gender", "birthday", "location",
-            "homepage", "description", "statuses_count", "followers_count", "follow_count", "IP"
-        ]
+        keys = ['avatar_hd', 'like', 'like_me', 'mbrank', 'mbtype', 'urank',
+                'verified', 'verified_reason', 'verified_type', 'verified_type_ext', 'svip',
+                '公司', '工作经历', '性取向', '感情状况', '标签', '注册时间', '阳光信用']
         model = model_to_dict(self)
         return "\n".join(f"{k}: {v}" for k, v in model.items()
-                         if k in keys and v is not None)
+                         if v is not None and k not in keys)
 
 
 class Weibo(BaseModel):

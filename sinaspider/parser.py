@@ -356,8 +356,9 @@ class UserParser:
                     key, value = re.split('[:：]', line, maxsplit=1)
                     info[key] = value
             elif tip.text in ['学习经历', '工作经历']:
-                info[tip.text] = c.text.strip(
-                    '·').replace('\xa0', ' ').split('·')
+                info[tip.text] = (c.text
+                                  .strip('·').replace('\xa0', ' ')
+                                  .strip().split('·'))
             else:
                 assert tip.text == '其他信息'
         assert info.get('认证') == info.pop('认证信息', None)
