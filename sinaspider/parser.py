@@ -188,7 +188,7 @@ class WeiboParser:
             category=bs4.MarkupResemblesLocatorWarning
         ):
             soup = BeautifulSoup(hypertext, 'html.parser')
-        for child in soup.contents:
+        for child in list(soup.contents):
             if child.name != 'a':
                 continue
             if m := re.match('^#(.*)#$', child.text):
@@ -298,8 +298,6 @@ class UserParser:
         assert 'age' not in user
         if remark := user.pop('remark', ''):
             user['username'] = remark
-        if birthday := user.get('birthday'):
-            user['age'] = pendulum.parse(birthday).diff().years
         user['homepage'] = f'https://weibo.com/u/{user["id"]}'
         console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
         for v in user.values():

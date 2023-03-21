@@ -202,6 +202,7 @@ class UserConfig(BaseModel):
         friends = list(self.page.friends())
         for friend in friends:
             friend['username'] = self.username
+        friends = {f['friend_id']: f for f in friends}.values()
         console.log(f'{len(friends)} friends found! 🥰 ')
         Friend.insert_many(friends).execute()
         Friend.delete().where(Friend.gender == 'm').execute()
@@ -276,16 +277,17 @@ class User(BaseModel):
     age = IntegerField(null=True)
     gender = TextField()
     education = ArrayField(field_class=TextField, null=True)
-    location = TextField(null=True)
     followed_by = ArrayField(field_class=TextField, null=True)
 
-    hometown = TextField(null=True)
     description = TextField(null=True)
     homepage = TextField(null=True)
     statuses_count = IntegerField(null=True)
     followers_count = IntegerField(null=True)
     follow_count = IntegerField(null=True)
     follow_me = BooleanField(null=True)
+    hometown = TextField(null=True)
+    location = TextField(null=True)
+    IP = TextField(null=True)
 
     avatar_hd = TextField(null=True)
     like = BooleanField(null=True)
@@ -297,10 +299,9 @@ class User(BaseModel):
     verified_reason = TextField(null=True)
     verified_type = BigIntegerField(null=True)
     verified_type_ext = BigIntegerField(null=True)
-    IP = TextField(null=True)
     svip = IntegerField(null=True)
     公司 = TextField(null=True)
-    工作经历 = TextField(null=True)
+    工作经历 = ArrayField(field_class=TextField, null=True)
     性取向 = TextField(null=True)
     感情状况 = TextField(null=True)
     标签 = TextField(null=True)
@@ -335,6 +336,19 @@ class User(BaseModel):
                 user_dict['username'] = user_dict['screen_name']
             return cls.insert(user_dict).execute()
         model_dict = model_to_dict(model)
+        if edu := user_dict.pop('education', []):
+            for s in model_dict.get('education', []):
+                if s not in edu:
+                    edu.append(s)
+            user_dict['education'] = edu
+
+        if birth := user_dict.pop('birthday', None):
+            if not model.birthday or model.birthday >= birth:
+                user_dict['birthday'] = birth
+                user_dict['age'] = pendulum.parse(birth).diff().in_years()
+            else:
+                console.log(f'ignore {birth}', style='warning')
+
         for k, v in user_dict.items():
             if 'count' in k:
                 continue
@@ -441,7 +455,8 @@ class Weibo(BaseModel):
             console.log(f'+{k}: {v}')
             if (ori := model_dict[k]) is not None:
                 console.log(f'-{k}: {ori}')
-        return cls.update(weibo_dict).where(cls.id == wid).execute()
+        cls.update(weibo_dict).where(cls.id == wid).execute()
+        return wid
 
     def update_location(self):
         if self.location_src:
@@ -543,7 +558,7 @@ class Weibo(BaseModel):
         xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
             "%Y:%m:%d %H:%M:%S.%f").strip('0').strip('.')
         res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
-        if self.location_id:
+        if self.location_id or self.location_src:
             res['WeiboLocation'] = (self.latitude, self.longitude)
         return res
 
