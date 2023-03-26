@@ -42,8 +42,8 @@ def artist():
         if questionary.confirm(ques).unsafe_ask():
             artist.folder = folder
             artist.save()
-            console.print(
-                f'{artist.username}: folder changed to [bold red]{folder}[/bold red]')
+            console.print(f'{artist.username}: '
+                          'folder changed to [bold red]{folder}[/bold red]')
 
 
 @app.command(help="fetch weibo by weibo_id")
@@ -107,7 +107,8 @@ def _get_update():
     from sinaspider.page import Page
     recent_weibo = (Weibo.select()
                     .where(Weibo.update_status.is_null())
-                    .where(Weibo.created_at > pendulum.now().subtract(months=6))
+                    .where(Weibo.created_at > pendulum.now()
+                           .subtract(months=6))
                     .order_by(Weibo.user_id.asc())
                     .order_by(Weibo.id.asc()))
     for i, weibo in enumerate(recent_weibo, start=1):
@@ -128,13 +129,13 @@ def _get_update():
             if visible:
                 if config := UserConfig.get_or_none(user_id=uid):
                     if not config.visible:
-                        console.log(
-                            f' {config.username}({uid}) is visible!', style='error')
+                        console.log(f'{config.username}({uid}) is visible!',
+                                    style='error')
         if not uid2visible[uid]:
             weibo.update_status = 'invisible'
             weibo.username = weibo.user.username
             console.log(
-                f"{weibo.username}({weibo.url}): :disappointed_relieved: invisible")
+                f"{weibo.username}({weibo.url}): 😥 invisible")
             weibo.save()
         else:
             yield weibo
@@ -147,7 +148,8 @@ def database_clean(dry_run: bool = False):
         if not questionary.confirm('Have you backup database to rpi?').ask():
             console.log('Backup first, bye!')
             return
-        if not questionary.confirm('Have you put all photos to Photos.app?').ask():
+        if not questionary.confirm(
+                'Have you put all photos to Photos.app?').ask():
             console.log('put them to Photos.app first, bye!')
             return
 
@@ -170,7 +172,9 @@ def database_clean(dry_run: bool = False):
         for u in to_del:
             console.log(u, '\n')
     else:
-        del_count = Weibo.delete().where(Weibo.bid.not_in(photo_bids)).execute()
+        del_count = (Weibo.delete()
+                     .where(Weibo.bid.not_in(photo_bids))
+                     .execute())
         console.log(f'{del_count} weibos have been deleted\n'
                     f'{len(Weibo)} weibos left in sina database')
         uids = {u.user_id for u in UserConfig} | {u.user_id for u in Artist}

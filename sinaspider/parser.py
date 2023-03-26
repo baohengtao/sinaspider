@@ -162,8 +162,10 @@ class WeiboParser:
         if location_collector:
             location, href = location_collector[-1]
             pattern1 = r'http://weibo\.com/p/100101(\w+)'
-            pattern2 = r'https://m\.weibo\.cn/p/index\?containerid=2306570042(\w+)'
-            if match := (re.search(pattern1, href) or re.search(pattern2, href)):
+            pattern2 = (r'https://m\.weibo\.cn/p/index\?'
+                        r'containerid=2306570042(\w+)')
+            if match := (re.search(pattern1, href)
+                         or re.search(pattern2, href)):
                 location_id = match.group(1)
             else:
                 console.log(
@@ -217,8 +219,10 @@ class WeiboParser:
             assert len(location_collector) <= 2
             location, href = location_collector[-1]
             pattern1 = r'http://weibo\.com/p/100101(\w+)'
-            pattern2 = r'https://m\.weibo\.cn/p/index\?containerid=2306570042(\w+)'
-            if match := (re.search(pattern1, href) or re.search(pattern2, href)):
+            pattern2 = (r'https://m\.weibo\.cn/p/index\?containerid='
+                        r'2306570042(\w+)')
+            if match := (re.search(pattern1, href)
+                         or re.search(pattern2, href)):
                 location_id = match.group(1)
             else:
                 console.log(
@@ -380,7 +384,8 @@ class UserParser:
 
     def get_user_info(self) -> dict:
         """获取主信息."""
-        url = f'https://m.weibo.cn/api/container/getIndex?containerid=100505{self.id}'
+        url = ('https://m.weibo.cn/api/container/getIndex?'
+               f'containerid=100505{self.id}')
         while not (js := fetcher.get(url).json())['ok']:
             console.log(
                 f'not js[ok] for {url}, sleeping 60 secs...', style='warning')
@@ -416,7 +421,8 @@ class UserParser:
         Returns:
             list[int] | None: list of users' id
         """
-        url = ("https://api.weibo.cn/2/cardlist?from=10CB193010&c=iphone&s=BF3838D9"
+        url = ("https://api.weibo.cn/2/cardlist?"
+               "from=10CB193010&c=iphone&s=BF3838D9"
                f"&containerid=231051_-_myfollow_followprofile_-_{self.id}")
         r = fetcher.get(url)
         if not (cards := r.json()['cards']):

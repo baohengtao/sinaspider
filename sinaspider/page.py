@@ -126,7 +126,8 @@ class Page:
 
     def friends(self, parse=True):
         """Get user's friends."""
-        pattern = r'(https://tvax?\d\.sinaimg\.cn)/(?:crop\.\d+\.\d+\.\d+\.\d+\.\d+\/)?(.*?)\?.*$'
+        pattern = (r'(https://tvax?\d\.sinaimg\.cn)/'
+                   r'(?:crop\.\d+\.\d+\.\d+\.\d+\.\d+\/)?(.*?)\?.*$')
         friend_count = 0
         for page in itertools.count(start=1):
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
@@ -134,7 +135,8 @@ class Page:
             js = fetcher.get(url).json()
             if not (users := js['users']):
                 console.log(
-                    f"{friend_count} friends fetched (total_number: {js['total_number']})")
+                    f"{friend_count} friends fetched "
+                    f"(total_number: {js['total_number']})")
                 break
             for raw in users:
                 info = {
@@ -151,8 +153,8 @@ class Page:
                     'bi_followers_count': raw['bi_followers_count'],
                     'following': raw['following'],
                 }
-                info['created_at'] = pendulum.from_format(raw['created_at'],
-                                                          'ddd MMM DD HH:mm:ss Z YYYY')
+                info['created_at'] = pendulum.from_format(
+                    raw['created_at'], 'ddd MMM DD HH:mm:ss Z YYYY')
                 p1, p2 = re.match(pattern, raw['avatar_hd']).groups()
                 info['avatar_hd'] = f'{p1}/large/{p2}'
                 yield info if parse else raw
@@ -172,8 +174,8 @@ class Page:
                 return True
             start = end + 1
             end = min(max(end + 3, end * 180 // days), end * 2)
-            console.log(
-                f'checking page {(start, end)}...to get visibility (days:{days})')
+            console.log(f'checking page {(start, end)}...'
+                        f'to get visibility (days:{days})')
         else:
             end -= 1
 
@@ -184,8 +186,8 @@ class Page:
             if not js['ok']:
                 end = mid - 1
                 continue
-            mblogs = [card['mblog']
-                      for card in js['data']['cards'] if card['card_type'] == 9]
+            mblogs = [card['mblog'] for card in js['data']['cards']
+                      if card['card_type'] == 9]
             if not mblogs:
                 assert mid == 1
                 return False

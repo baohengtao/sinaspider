@@ -612,10 +612,11 @@ class Location(BaseModel):
         or None if location has been deleted
         """
         if not cls.get_or_none(id=location_id):
-            if not (location_info := cls.get_location_info_v2(location_id)):
-                if not (location_info := cls.get_location_info_v1p5(location_id)):
-                    return
-            cls.insert(location_info).execute()
+            if info := (cls.get_location_info_v2(location_id)
+                        or cls.get_location_info_v1p5(location_id)):
+                cls.insert(info).execute()
+            else:
+                return
         return cls.get_by_id(location_id)
 
     @staticmethod
@@ -634,7 +635,8 @@ class Location(BaseModel):
             longitude=lng,
             country=info.pop('country') or None,
             url=f'https://weibo.com/p/100101{location_id}',
-            url_m=f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}',
+            url_m=('https://m.weibo.cn/p/index?'
+                   f'containerid=2306570042{location_id}'),
             version='v2'
         )
         info.pop('pic')
@@ -644,9 +646,10 @@ class Location(BaseModel):
     @staticmethod
     def get_location_info_v1p5(location_id: str) -> dict | None:
         url = f'https://weibo.com/p/100101{location_id}'
-        url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
-        api = ('https://api.weibo.cn/2/cardlist?&from=10CB193010&c=iphone&s=BF3838D9'
-               f'&containerid=2306570042{location_id}')
+        url_m = ('https://m.weibo.cn/p/index?'
+                 f'containerid=2306570042{location_id}')
+        api = ('https://api.weibo.cn/2/cardlist?&from=10CB193010'
+               f'&c=iphone&s=BF3838D9&containerid=2306570042{location_id}')
         js = fetcher.get(api).json()
         cards = js['cards'][0]['card_group']
         pic = cards[0]['pic']
@@ -674,8 +677,10 @@ class Location(BaseModel):
     # @staticmethod
     # def get_location_info(location_id: str) -> dict | None:
     #     url = f'https://weibo.com/p/100101{location_id}'
-    #     url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
-    #     api = f'https://m.weibo.cn/api/container/getIndex?containerid=2306570042{location_id}'
+    #     url_m = ('https://m.weibo.cn/p/index?'
+    #              f'containerid=2306570042{location_id}')
+    #     api = ('https://m.weibo.cn/api/container/getIndex'
+    #            f'?containerid=2306570042{location_id}')
     #     while not (js := fetcher.get(api).json())['ok']:
     #         continue
     #     card = js['data']['cards'][0]['card_group']
