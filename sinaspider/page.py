@@ -160,16 +160,26 @@ class Page:
                 yield info if parse else raw
                 friend_count += 1
 
+    @staticmethod
+    def _get_page_post_on(js: dict):
+        mblogs = [card['mblog'] for card in js['data']['cards']
+                  if card['card_type'] == 9]
+        mblogs = [mblog for mblog in mblogs
+                  if '评论过的微博' not in
+                  mblog.get('title', {}).get('text', '')]
+        if not mblogs:
+            return
+        post_on = WeiboParser(
+            mblogs[-1]).parse(online=False)['created_at']
+        return post_on
+
     def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""
         url = ('https://m.weibo.cn/api/container/getIndex'
                f'?containerid=107603{self.id}&page=%s')
         start, end = 1, 4
         while (js := fetcher.get(url % end).json())['ok']:
-            mblogs = [card['mblog'] for card in js['data']['cards']
-                      if card['card_type'] == 9]
-            post_on = WeiboParser(
-                mblogs[-1]).parse(online=False)['created_at']
+            post_on = self._get_page_post_on(js)
             if (days := post_on.diff().days) > 186:
                 return True
             start = end + 1
@@ -182,19 +192,15 @@ class Page:
         while start <= end:
             mid = (start + end) // 2
             console.log(f'checking page {mid}...to get visibility')
-            js = fetcher.get(url % mid).json()
-            if not js['ok']:
+            if not (js := fetcher.get(url % mid).json())['ok']:
                 end = mid - 1
-                continue
-            mblogs = [card['mblog'] for card in js['data']['cards']
-                      if card['card_type'] == 9]
-            if not mblogs:
+            elif not (post_on := self._get_page_post_on(js)):
                 assert mid == 1
                 return False
-            post_on = WeiboParser(mblogs[-1]).parse(online=False)['created_at']
-            if post_on < pendulum.now().subtract(months=6, days=5):
+            elif post_on < pendulum.now().subtract(months=6, days=5):
                 return True
-            start = mid + 1
+            else:
+                start = mid + 1
         return False
 
 
