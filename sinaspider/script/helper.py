@@ -4,7 +4,6 @@ from inspect import signature
 from pathlib import Path
 
 import pendulum
-from imgmeta.script import write_meta
 from rich.terminal_theme import MONOKAI
 
 from sinaspider import console

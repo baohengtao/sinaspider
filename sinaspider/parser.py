@@ -25,7 +25,8 @@ class WeiboParser:
         self.is_pinned = self.info.get('title', {}).get('text') == '置顶'
         if self.info['pic_num'] < len(self.info['pic_ids']):
             console.log(
-                f"pic_num < len(pic_ids) for {self.info['id']}", style="warning")
+                f"pic_num < len(pic_ids) for {self.info['id']}",
+                style="warning")
         self.weibo = {}
 
     @property
@@ -364,7 +365,8 @@ class UserParser:
 
     def _fetch_user_card(self) -> dict:
         """获取来自m.weibo.com的信息."""
-        url = f'https://m.weibo.cn/api/container/getIndex?containerid=230283{self.id}_-_INFO'
+        url = ('https://m.weibo.cn/api/container/'
+               f'getIndex?containerid=230283{self.id}_-_INFO')
         js = fetcher.get(url).json()
         user_card = js['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
@@ -400,8 +402,8 @@ class UserParser:
         user_info = js['userInfo']
         to_pop = [
             'status', 'badge', 'avatar_extend_info', 'extend', 'dialog',
-            'profile_image_url', 'cover_image_phone', 'lang', 'follower_number_text',
-            'covers'
+            'profile_image_url', 'cover_image_phone', 'lang',
+            'follower_number_text', 'covers'
         ]
         for key in to_pop:
             user_info.pop(key)

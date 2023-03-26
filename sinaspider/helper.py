@@ -208,7 +208,8 @@ def normalize_str(amount):
     return amount
 
 
-def round_loc(lat: float | str, lng: float | str, tolerance: float = 0.01) -> tuple[float, float]:
+def round_loc(lat: float | str, lng: float | str,
+              tolerance: float = 0.01) -> tuple[float, float]:
     """
     return rounded location with err small than tolerance meter
     """
@@ -230,7 +231,8 @@ def round_loc(lat: float | str, lng: float | str, tolerance: float = 0.01) -> tu
 
 def parse_loc_src(loc_src: str) -> dict:
     """
-    >> loc_src = 'https://m.weibo.cn/p/index?containerid=100808fcf3af2237af9eae5bb1c3f55951b731_-_lbs'
+    >> loc_src = ('https://m.weibo.cn/p/index?containerid='
+                  '100808fcf3af2237af9eae5bb1c3f55951b731_-_lbs')
     >> parse_loc_src(loc_src)
         {
             'id': '8008646020000000000',
@@ -240,14 +242,15 @@ def parse_loc_src(loc_src: str) -> dict:
             }
     """
     containerid = re.search(r'containerid=([\w-]+)', loc_src).group(1)
-    api = f'https://m.weibo.cn/api/container/getIndex?containerid={containerid}'
+    api = ('https://m.weibo.cn/api/container/getIndex?'
+           f'containerid={containerid}')
     js = fetcher.get(api).json()
     cards = js['data']['cards'][0]['card_group'][:2]
     name = cards[1]['group'][0]['item_title']
-    lng, lat = re.search(
-        'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)', cards[0]['pic']).groups()
+    lng, lat = re.search(r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)',
+                         cards[0]['pic']).groups()
     fid = cards[0]['actionlog']['fid']
-    location_id = re.match('2306570042(\w+)', fid).group(1)
+    location_id = re.match(r'2306570042(\w+)', fid).group(1)
     return dict(
         id=location_id,
         short_name=name,

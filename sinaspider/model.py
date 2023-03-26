@@ -47,7 +47,8 @@ class BaseModel(Model):
             if isinstance(v, datetime):
                 model[k] = v.strftime("%Y-%m-%d %H:%M:%S")
 
-        return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
+        return "\n".join(f'{k}: {v}' for k, v in model.items()
+                         if v is not None)
 
     @classmethod
     def get_or_none(cls, *query, **filters) -> Self | None:
@@ -366,8 +367,9 @@ class User(BaseModel):
 
     def __str__(self):
         keys = ['avatar_hd', 'like', 'like_me', 'mbrank', 'mbtype', 'urank',
-                'verified', 'verified_reason', 'verified_type', 'verified_type_ext', 'svip',
-                '公司', '工作经历', '性取向', '感情状况', '标签', '注册时间', '阳光信用']
+                'verified', 'verified_reason', 'verified_type',
+                'verified_type_ext', 'svip', '公司', '工作经历',
+                '性取向', '感情状况', '标签', '注册时间', '阳光信用']
         model = model_to_dict(self)
         return "\n".join(f"{k}: {v}" for k, v in model.items()
                          if v is not None and k not in keys)
@@ -415,7 +417,8 @@ class Weibo(BaseModel):
             weibo_dict = WeiboParser(wb_id).parse()
         except WeiboNotFoundError:
             console.log(
-                f'Weibo {wb_id} is not accessible, loading from database...', style="error")
+                f'Weibo {wb_id} is not accessible, loading from database...',
+                style="error")
         else:
             weibo_dict['username'] = User.get_by_id(
                 weibo_dict['user_id']).username
@@ -446,9 +449,12 @@ class Weibo(BaseModel):
                 assert model.location_id == weibo_dict['location_id']
 
         else:
-            if not Confirm.ask(f'an invisible weibo {wid} with location found, continue?'):
+            if not Confirm.ask(f'an invisible weibo {wid} '
+                               'with location found, continue?'):
                 return
-            weibo_dict['latitude'], weibo_dict['longitude'] = model.get_coordinate()
+            lat, lng = model.get_coordinate()
+            weibo_dict['latitude'] = lat
+            weibo_dict['longitude'] = lng
             Location.from_id(weibo_dict['location_id'])
         model_dict = model_to_dict(model, recurse=False)
         model_dict['user_id'] = model_dict.pop('user')
@@ -482,7 +488,8 @@ class Weibo(BaseModel):
         if coord and location:
             if (err := geodesic(coord, location.coordinate).meters) > 1:
                 console.log(
-                    f'the distance between coord and location is {err}m', style='notice')
+                    f'the distance between coord and location is {err}m',
+                    style='notice')
         console.log()
         self.latitude, self.longitude = coord or location.coordinate
         self.save()
@@ -498,8 +505,9 @@ class Weibo(BaseModel):
         self.save()
 
     def get_coordinate(self) -> tuple[float, float] | None:
-        url = ('https://api.weibo.cn/2/comments/build_comments?launchid=10000365--x'
-               f'&from=10CB193010&c=iphone&s=BF3838D9&id={self.id}&is_show_bulletin=2')
+        url = ('https://api.weibo.cn/2/comments/build_comments?'
+               'launchid=10000365--x&from=10CB193010&c=iphone&s=BF3838D9'
+               f'&id={self.id}&is_show_bulletin=2')
         status = fetcher.get(url).json()['status']
         if 'geo' not in status:
             console.log(
@@ -637,7 +645,8 @@ class Location(BaseModel):
     def get_location_info_v1p5(location_id: str) -> dict | None:
         url = f'https://weibo.com/p/100101{location_id}'
         url_m = f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}'
-        api = f'https://api.weibo.cn/2/cardlist?&from=10CB193010&c=iphone&s=BF3838D9&containerid=2306570042{location_id}'
+        api = ('https://api.weibo.cn/2/cardlist?&from=10CB193010&c=iphone&s=BF3838D9'
+               f'&containerid=2306570042{location_id}')
         js = fetcher.get(api).json()
         cards = js['cards'][0]['card_group']
         pic = cards[0]['pic']
@@ -645,7 +654,7 @@ class Location(BaseModel):
             console.log(
                 f'location has been deleted: {url} {url_m}', style='error')
             return
-        pattern = 'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
+        pattern = r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
         lng, lat = map(float, re.search(pattern, pic).groups())
         lat, lng = round_loc(lat, lng)
         short_name = cards[1]['group'][0]['item_title']

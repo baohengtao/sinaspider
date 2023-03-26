@@ -14,7 +14,8 @@ class Page:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
 
-    def homepage(self, start_page: int = 1, parse: bool = True) -> Iterator[dict]:
+    def homepage(self, start_page: int = 1,
+                 parse: bool = True) -> Iterator[dict]:
         """
         Fetch user's homepage weibo.
 
@@ -117,7 +118,8 @@ class Page:
                     yield WeiboParser(weibo_info).parse(online=False)
                 except (KeyError, AttributeError):
                     console.log(
-                        f"parse weibo_info failed for https://m.weibo.cn/status/{weibo_info['id']}",
+                        "parse weibo_info failed for "
+                        f"https://m.weibo.cn/status/{weibo_info['id']}",
                         style='error')
             else:
                 yield weibo_info
