@@ -161,6 +161,11 @@ def database_clean(dry_run: bool = False):
         console.log(f'{len(to_del)} weibos will be deleted\n')
         for w in to_del:
             console.log(w, '\n')
+        uids = {u.user_id for u in UserConfig} | {u.user_id for u in Artist}
+        to_del = User.select().where(User.id.not_in(uids))
+        console.log(f'{len(to_del)} users will be deleted\n')
+        for u in to_del:
+            console.log(u, '\n')
     else:
         del_count = Weibo.delete().where(Weibo.bid.not_in(photo_bids)).execute()
         console.log(f'{del_count} weibos have been deleted\n'

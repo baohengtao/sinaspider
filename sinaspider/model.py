@@ -336,6 +336,8 @@ class User(BaseModel):
         if not (model := cls.get_or_none(id=user_id)):
             if 'username' not in user_dict:
                 user_dict['username'] = user_dict['screen_name']
+            if birth := user_dict.get('birthday'):
+                user_dict['age'] = pendulum.parse(birth).diff().in_years()
             return cls.insert(user_dict).execute()
         model_dict = model_to_dict(model)
         if edu := user_dict.pop('education', []):
