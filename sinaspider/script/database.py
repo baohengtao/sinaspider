@@ -43,7 +43,7 @@ def artist():
             artist.folder = folder
             artist.save()
             console.print(f'{artist.username}: '
-                          'folder changed to [bold red]{folder}[/bold red]')
+                          f'folder changed to [bold red]{folder}[/bold red]')
 
 
 @app.command(help="fetch weibo by weibo_id")
@@ -67,7 +67,7 @@ def update_location():
               .where(Photo.location.is_null(False))
               .where(Photo.image_unique_id.is_null(False)))
     bids = {p.image_unique_id for p in photos}
-    weibos = (Weibo.select().order_by(Weibo.location_id.desc())
+    weibos = (Weibo.select().order_by(Weibo.id.asc())
               .where(Weibo.bid.in_(bids))
               .where(Weibo.location_id.is_null(False) |
                      Weibo.location_src.is_null(False))

@@ -49,7 +49,6 @@ def user(download_dir: Path = default_path):
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver
 def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
-              max_user: int = None,
               download_dir: Path = default_path):
     if new_user:
         users = (UserConfig.select()
@@ -61,7 +60,9 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
         users = [uc for uc in users if _need_fetch(uc)]
-    users = users[:max_user]
+        if len(users) < 10:
+            console.log(f'只有{len(users)}个用户需要抓取，不执行', style='warning')
+            return
     for i, user in enumerate(users, start=1):
         try:
             config = UserConfig.from_id(user_id=user.user_id)

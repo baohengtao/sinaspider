@@ -13,7 +13,6 @@ app = Typer()
 
 
 @app.command(help='Update users from timeline')
-@logsaver
 def timeline(days: float = Option(...),
              frequency: float = None,
              dry_run: bool = False,
@@ -23,6 +22,7 @@ def timeline(days: float = Option(...),
     while True:
         while pendulum.now() < next_fetching_time:
             sleep(600)
+        console.log(f'Fetching timeline since {since}...')
         next_since = pendulum.now()
         update_user_config()
         _get_timeline(download_dir, since, dry_run)
@@ -32,9 +32,9 @@ def timeline(days: float = Option(...),
         since = next_since
         # wait for next fetching
         next_fetching_time = max(since.add(days=frequency), pendulum.now())
-        console.log(f'next fetching time: {next_fetching_time}')
 
 
+@logsaver
 def _get_timeline(download_dir: Path,
                   since: pendulum.DateTime,
                   dry_run: bool = False):

@@ -237,7 +237,6 @@ class WeiboParser:
         }
         text = soup.get_text(' ', strip=True)
         assert text == text.strip()
-        # text = text.removesuffix(f'{self.weibo["username"]}的微博视频').strip()
         if location:
             text = text.removesuffix('📍')
             assert not text.endswith('📍')
@@ -254,6 +253,16 @@ class UserParser:
         self._user = None
 
     def parse(self) -> dict:
+        while True:
+            try:
+                return self._parse()
+            except AssertionError:
+                console.log(
+                    f'AssertionError, retrying parse user {self.id}',
+                    style='error')
+                time.sleep(60)
+
+    def _parse(self) -> dict:
         if self._user is not None:
             return self._user.copy()
         user_cn = self.get_user_cn()

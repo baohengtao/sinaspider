@@ -129,7 +129,8 @@ class UserConfig(BaseModel):
         console.log(f"{self.user.username}微博获取完毕\n")
 
         self.weibo_fetch_at = now
-        for weibo_dict in self.page.homepage():
+        for weibo_info in self.page.homepage(parse=False):
+            weibo_dict = WeiboParser(weibo_info).parse(online=False)
             if not weibo_dict.get('is_pinned'):
                 self.post_at = weibo_dict['created_at']
                 break
