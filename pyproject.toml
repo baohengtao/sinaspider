@@ -20,7 +20,7 @@ dependencies = [
     'python-baseconv',
     'PyExifTool',
     "lxml",
-    'keyring',
+    "python-dotenv",
     'typer',
     'bs4',
     'psycopg2',

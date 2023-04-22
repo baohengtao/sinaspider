@@ -1,4 +1,5 @@
 import itertools
+import os
 import random
 import re
 import time
@@ -8,10 +9,10 @@ from time import sleep
 from typing import Iterable
 from urllib.parse import unquote, urlparse
 
-import keyring
 import pendulum
 import requests
 from baseconv import base62
+from dotenv import load_dotenv
 from exiftool import ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteException
 from geopy.distance import geodesic
@@ -28,8 +29,13 @@ class Fetcher:
             'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
             'AppleWebKit/537.36 (KHTML, like Gecko) '
             'Chrome/100.0.4896.75 Mobile Safari/537.36')
-        self.sess.headers['Cookie'] = keyring.get_password(
-            'sinaspider', 'cookie')
+        env_file = Path(__file__).with_name('.env')
+        load_dotenv(env_file)
+        if not (cookie := os.getenv('SINA_COOKIE')):
+            while not (cookie := input('Please input your cookie: ')):
+                continue
+            env_file.write_text(f'SINA_COOKIE={cookie}')
+        self.sess.headers['Cookie'] = cookie
         self._visit_count = 0
         self._sleep_until = time.time()
 
