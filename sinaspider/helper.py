@@ -127,6 +127,11 @@ def download_single_file(
         if urlparse(r.url).path == '/images/default_d_w_large.gif':
             img = img.with_suffix('.gif')
 
+        if int(r.headers['Content-Length']) != len(r.content):
+            console.log(f"expected length: {r.headers['Content-Length']}, "
+                        f"actual length: {len(r.content)} for {img}",
+                        style="error")
+
         img.write_bytes(r.content)
 
         if xmp_info:

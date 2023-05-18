@@ -256,7 +256,7 @@ class UserParser:
         while True:
             try:
                 return self._parse()
-            except AssertionError:
+            except (AssertionError, KeyError):
                 console.log(
                     f'AssertionError, retrying parse user {self.id}',
                     style='error')
