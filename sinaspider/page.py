@@ -164,14 +164,13 @@ class Page:
     def _get_page_post_on(js: dict):
         mblogs = [card['mblog'] for card in js['data']['cards']
                   if card['card_type'] == 9]
-        mblogs = [mblog for mblog in mblogs
-                  if '评论过的微博' not in
-                  mblog.get('title', {}).get('text', '')]
-        if not mblogs:
-            return
-        post_on = WeiboParser(
-            mblogs[-1]).parse(online=False)['created_at']
-        return post_on
+        while mblogs:
+            mblog = mblogs.pop()
+            if '评论过的微博' in mblog.get('title', {}).get('text', ''):
+                continue
+            if mblog['source'] == '生日动态':
+                continue
+            return WeiboParser(mblog).parse(online=False)['created_at']
 
     def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""

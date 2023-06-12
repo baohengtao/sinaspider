@@ -1,5 +1,6 @@
+import select
+import sys
 from pathlib import Path
-from time import sleep
 
 import pendulum
 from typer import Option, Typer
@@ -21,7 +22,11 @@ def timeline(days: float = Option(...),
     next_fetching_time = pendulum.now()
     while True:
         while pendulum.now() < next_fetching_time:
-            sleep(600)
+            # sleeping for  600 seconds while listing for enter key
+            if select.select([sys.stdin], [], [], 600)[0]:
+                if input() == "":
+                    console.log("Enter key pressed. continuing immediately.")
+                    break
         console.log(f'Fetching timeline since {since}...')
         next_since = pendulum.now()
         update_user_config()

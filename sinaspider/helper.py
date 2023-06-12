@@ -48,7 +48,7 @@ class Fetcher:
             try:
                 return get(url)
             except ConnectionError as e:
-                period = 60
+                period = 3600 if '/feed/friends' in url else 60
                 console.log(
                     f"{e}: Sleepping {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
@@ -131,6 +131,8 @@ def download_single_file(
             console.log(f"expected length: {r.headers['Content-Length']}, "
                         f"actual length: {len(r.content)} for {img}",
                         style="error")
+            console.log(f'retrying download for {img}')
+            continue
 
         img.write_bytes(r.content)
 
