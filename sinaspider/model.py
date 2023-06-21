@@ -146,9 +146,9 @@ class UserConfig(BaseModel):
         """
 
         if since > pendulum.now().subtract(years=1):
-            user_root = 'Users'
+            user_root = 'Timeline'
         else:
-            user_root = 'New'
+            user_root = 'User'
         download_dir = Path(download_dir) / user_root / self.username
 
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
@@ -477,11 +477,14 @@ class Weibo(BaseModel):
             return
         coord = self.get_coordinate()
         if location := Location.from_id(self.location_id):
-            if not location.name:
+            if location.name != self.location:
+                if location.name:
+                    console.log(
+                        'location name changed from'
+                        f'{location.name} to {self.location}',
+                        style='warning')
                 location.name = self.location
                 location.save()
-            else:
-                assert location.name == self.location
             console.log(location)
         else:
             assert coord

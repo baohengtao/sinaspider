@@ -21,8 +21,7 @@ def artist():
         if username.isdigit():
             artist = Artist.get_or_none(user_id=int(username))
         else:
-            artist = (Artist.select().where(
-                Artist.username == username).get_or_none())
+            artist = Artist.get_or_none(username=username)
         if not artist:
             console.log(f'用户 {username} 不在列表中')
             continue

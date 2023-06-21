@@ -107,6 +107,8 @@ def download_single_file(
     if img.exists():
         console.log(f'{img} already exists..skipping...', style='info')
         return
+    else:
+        console.log(f'downloading {img}...')
     if match := re.search(r'[\?&]Expires=(\d+)(&|$)', url):
         expires = pendulum.from_timestamp(int(match.group(1)), tz='local')
         if expires < pendulum.now():
