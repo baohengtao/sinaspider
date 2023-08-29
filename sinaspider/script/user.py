@@ -49,20 +49,28 @@ def user(download_dir: Path = default_path):
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver
 def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
-              download_dir: Path = default_path):
+              download_dir: Path = default_path,
+              following: bool = Option(False, "--following", "-f")):
     if new_user:
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null()))
+        if (not_following := [u for u in users if not u.following]):
+            console.log(not_following)
+            if not Confirm.ask('There are unfollowing users, continue?'):
+                return
+
     else:
         users = (UserConfig.select()
+                 .where(UserConfig.following == following)
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
-        users = [uc for uc in users if _need_fetch(uc)]
-        if len(users) < 10:
-            console.log(f'只有{len(users)}个用户需要抓取，不执行', style='warning')
-            return
+        users = [uc for uc in users if _need_fetch_v2(uc)]
+        # if len(users) < 10:
+        #     console.log(f'只有{len(users)}个用户需要抓取，不执行', style='warning')
+        #     return
+    console.log(f'{len(users)} will be fetched...')
     for i, user in enumerate(users, start=1):
         try:
             config = UserConfig.from_id(user_id=user.user_id)
@@ -71,7 +79,7 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
             console.log(
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
-            config.fetch_weibo(download_dir)
+            config.fetch_weibo(download_dir / 'Loop')
         console.log(f'user {i}/{len(users)} completed!')
 
 
@@ -86,3 +94,14 @@ def _need_fetch(config: UserConfig) -> bool:
         next_fetch = config.weibo_fetch_at - config.post_at
         next_fetch += config.weibo_fetch_at
         return pendulum.now() > next_fetch
+
+
+def _need_fetch_v2(config: UserConfig) -> bool:
+
+    if config.post_at:
+        interval = (config.weibo_fetch_at - config.post_at).days
+        interval = min(max(15, interval), 60)
+    else:
+        interval = 60
+    interval *= (1 + config.following)
+    return pendulum.now().diff(config.weibo_fetch_at).in_days() > interval
