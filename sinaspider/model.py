@@ -678,35 +678,6 @@ class Location(BaseModel):
             url_m=url_m,
             version='v1.5')
 
-    # @staticmethod
-    # def get_location_info(location_id: str) -> dict | None:
-    #     url = f'https://weibo.com/p/100101{location_id}'
-    #     url_m = ('https://m.weibo.cn/p/index?'
-    #              f'containerid=2306570042{location_id}')
-    #     api = ('https://m.weibo.cn/api/container/getIndex'
-    #            f'?containerid=2306570042{location_id}')
-    #     while not (js := fetcher.get(api).json())['ok']:
-    #         continue
-    #     card = js['data']['cards'][0]['card_group']
-    #     pic = card[0]['pic']
-    #     if 'android_delete_poi.png' in pic:
-    #         console.log(
-    #             f'location has been deleted: {url} {url_m}', style='error')
-    #         return
-    #     pattern = 'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
-    #     lng, lat = map(float, re.search(pattern, pic).groups())
-    #     lat, lng = round_loc(lat, lng)
-    #     short_name = card[1]['group'][0]['item_title']
-    #     assert lng and lat
-    #     return dict(
-    #         id=location_id,
-    #         latitude=lat,
-    #         longitude=lng,
-    #         short_name=short_name,
-    #         url=url,
-    #         url_m=url_m,
-    #         version='v1')
-
 
 class Artist(BaseModel):
     username = CharField(index=True)

@@ -66,7 +66,8 @@ def update_location():
               .where(Photo.location.is_null(False))
               .where(Photo.image_unique_id.is_null(False)))
     bids = {p.image_unique_id for p in photos}
-    weibos = (Weibo.select().order_by(Weibo.id.asc())
+    weibos = (Weibo.select()
+              .order_by(Weibo.user_id.desc(), Weibo.id.desc())
               .where(Weibo.bid.in_(bids))
               .where(Weibo.location_id.is_null(False) |
                      Weibo.location_src.is_null(False))
