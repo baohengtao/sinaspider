@@ -228,10 +228,9 @@ class UserConfig(BaseModel):
             weibo = Weibo(**weibo_dict)
             if UserConfig.get_or_none(user_id=weibo.user_id):
                 continue
-            if Friend.get_or_none(friend_id=weibo.user_id):
-                assert Friend.get_or_none(
-                    friend_id=weibo.user_id, user_id=self.user_id)
-            else:
+            if not Friend.get_or_none(
+                    friend_id=weibo.user_id,
+                    user_id=self.user_id):
                 continue
             if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
