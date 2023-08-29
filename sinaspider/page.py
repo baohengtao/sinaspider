@@ -100,7 +100,7 @@ class Page:
         Args:
                 parse: whether to parse weibo, default True
         """
-        from sinaspider.helper import normalize_str
+        # from sinaspider.helper import normalize_str
         for weibo_info in self._liked_card():
             if weibo_info.get('deleted') == '1':
                 continue
@@ -109,10 +109,10 @@ class Page:
             user_info = weibo_info['user']
             if user_info['gender'] == 'm':
                 continue
-            followers_count = int(
-                normalize_str(user_info['followers_count']))
-            if followers_count > 50000 or followers_count < 500:
-                continue
+            # followers_count = int(
+            #     normalize_str(user_info['followers_count']))
+            # if followers_count > 50000 or followers_count < 500:
+            #     continue
             if parse:
                 try:
                     yield WeiboParser(weibo_info).parse(online=False)

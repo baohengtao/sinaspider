@@ -178,15 +178,21 @@ class UserConfig(BaseModel):
     def fetch_liked(self, download_dir: Path):
         if not self.liked_fetch:
             return
+        self.fetch_friends(update=True)
         console.rule(f"开始获取 {self.username} 的赞")
         console.log(f"Media Saving: {download_dir}")
         imgs = self._save_liked(download_dir / "Liked")
         download_files(imgs)
         if count := len(self._liked_list):
-            (LikedWeibo
-             .update(order_num=LikedWeibo.order_num + count)
-             .where(LikedWeibo.user == self.user)
-             .execute())
+            for w in LikedWeibo.select().where(
+                    LikedWeibo.user == self.user).order_by(
+                    LikedWeibo.order_num.desc()):
+                w.order_num += count
+                w.save()
+            # (LikedWeibo
+            #  .update(order_num=LikedWeibo.order_num + count)
+            #  .where(LikedWeibo.user == self.user)
+            #  .execute())
             LikedWeibo.insert_many(self._liked_list).execute()
             console.log(f"插入 {count} 条新赞")
             LikedWeibo.delete().where(LikedWeibo.order_num > 200).execute()
@@ -196,8 +202,10 @@ class UserConfig(BaseModel):
         self.liked_fetch_at = pendulum.now()
         self.save()
 
-    def fetch_friends(self):
-        if Friend.get_or_none(user_id=self.user_id):
+    def fetch_friends(self, update=False):
+        if update:
+            Friend.delete().where(Friend.user_id == self.user_id).execute()
+        elif Friend.get_or_none(user_id=self.user_id):
             console.log(f"{self.username}的好友已经获取过了, skip...")
             return
         else:
@@ -212,12 +220,18 @@ class UserConfig(BaseModel):
         Friend.update_frequency()
 
     def _save_liked(self, download_dir: Path) -> Iterator[dict]:
+        assert Friend.get_or_none(user_id=self.user_id)
         download_dir /= self.username
         bulk = []
         early_stopping = False
         for weibo_dict in self.page.liked():
             weibo = Weibo(**weibo_dict)
             if UserConfig.get_or_none(user_id=weibo.user_id):
+                continue
+            if Friend.get_or_none(friend_id=weibo.user_id):
+                assert Friend.get_or_none(
+                    friend_id=weibo.user_id, user_id=self.user_id)
+            else:
                 continue
             if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):

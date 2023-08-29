@@ -83,17 +83,17 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
         console.log(f'user {i}/{len(users)} completed!')
 
 
-def _need_fetch(config: UserConfig) -> bool:
-    if config.weibo_fetch_at < pendulum.now().subtract(months=3):
-        return True
-    elif config.weibo_fetch_at > pendulum.now().subtract(days=15):
-        return False
-    elif config.post_at is None:
-        return False
-    else:
-        next_fetch = config.weibo_fetch_at - config.post_at
-        next_fetch += config.weibo_fetch_at
-        return pendulum.now() > next_fetch
+# def _need_fetch(config: UserConfig) -> bool:
+#     if config.weibo_fetch_at < pendulum.now().subtract(months=3):
+#         return True
+#     elif config.weibo_fetch_at > pendulum.now().subtract(days=15):
+#         return False
+#     elif config.post_at is None:
+#         return False
+#     else:
+#         next_fetch = config.weibo_fetch_at - config.post_at
+#         next_fetch += config.weibo_fetch_at
+#         return pendulum.now() > next_fetch
 
 
 def _need_fetch_v2(config: UserConfig) -> bool:
