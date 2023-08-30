@@ -180,6 +180,9 @@ class UserConfig(BaseModel):
             return
         self.fetch_friends(update=True)
         console.rule(f"开始获取 {self.username} 的赞")
+        if self.liked_fetch_at:
+            console.log(f" 上次抓取时间为: {self.liked_fetch_at}")
+        console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         imgs = self._save_liked(download_dir / "Liked")
         download_files(imgs)

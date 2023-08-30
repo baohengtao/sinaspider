@@ -1,8 +1,9 @@
 
 from pathlib import Path
 
+import pendulum
 from rich.prompt import Confirm, Prompt
-from typer import Typer
+from typer import Option, Typer
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
@@ -35,11 +36,23 @@ def liked(download_dir: Path = default_path):
 
 @app.command(help="Fetch users' liked weibo")
 @logsaver
-def liked_loop(download_dir: Path = default_path, max_user: int = 1):
-    configs = (UserConfig.select()
-               .where(UserConfig.liked_fetch)
-               .where(UserConfig.liked_fetch_at.is_null(True))
-               .limit(max_user))
+def liked_loop(download_dir: Path = default_path,
+               max_user: int = 1,
+               refresh: bool = Option(False, "--refresh", "-r")):
+    if refresh:
+        configs = (UserConfig.select()
+                   .where(UserConfig.liked_fetch)
+                   .where(UserConfig.liked_fetch_at
+                          < pendulum.now().subtract(months=3))
+                   .order_by(UserConfig.liked_fetch_at.asc())
+                   .limit(max_user)
+                   )
+    else:
+
+        configs = (UserConfig.select()
+                   .where(UserConfig.liked_fetch)
+                   .where(UserConfig.liked_fetch_at.is_null(True))
+                   .limit(max_user))
     for config in configs:
         config.fetch_liked(download_dir)
 
