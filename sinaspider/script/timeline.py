@@ -17,7 +17,6 @@ app = Typer()
 @app.command(help='Update users from timeline')
 def timeline(days: float = Option(...),
              frequency: float = None,
-             dry_run: bool = False,
              download_dir: Path = default_path):
     since = pendulum.now().subtract(days=days)
     next_fetching_time = pendulum.now()
@@ -31,9 +30,9 @@ def timeline(days: float = Option(...),
         console.log(f'Fetching timeline since {since}...')
         next_since = pendulum.now()
         update_user_config()
-        _get_timeline(download_dir, since, dry_run)
+        _get_timeline(download_dir, since)
 
-        if dry_run or frequency is None:
+        if frequency is None:
             return
         # update since
         since = next_since
@@ -44,10 +43,8 @@ def timeline(days: float = Option(...),
 @logsaver
 def _get_timeline(download_dir: Path,
                   since: pendulum.DateTime,
-                  dry_run: bool = False):
+                  ):
     from sinaspider.page import Page
-    if dry_run:
-        download_dir /= 'dry_run'
     for status in Page.timeline(since=since):
         uid = status['user']['id']
         if not (uc := UserConfig.get_or_none(user_id=uid)):
@@ -58,9 +55,6 @@ def _get_timeline(download_dir: Path,
         if uc.weibo_fetch and fetch_at < created_at:
             uc = UserConfig.from_id(uid)
             uc.fetch_weibo(download_dir)
-            if dry_run:
-                uc.weibo_fetch_at = fetch_at
-                uc.save()
             if uc.liked_fetch and uc.liked_fetch_at:
                 if uc.liked_fetch_at < pendulum.now().subtract(months=1):
                     if random.random() < 0.2:
