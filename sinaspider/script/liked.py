@@ -23,7 +23,7 @@ def liked(download_dir: Path = default_path):
             user_id = config.user_id
         else:
             user_id = normalize_user_id(user_id)
-        if not UserConfig.get_or_none(user_id=user_id):
+        if not (config := UserConfig.get_or_none(user_id=user_id)):
             console.log(f'用户{user_id}不在列表中')
             continue
         console.log(config, '\n')

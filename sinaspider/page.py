@@ -78,13 +78,18 @@ class Page:
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
         for page in itertools.count(start=1):
-            while (r := fetcher.get(url % page)).status_code != 200:
-                console.log(
-                    f'{r.url} get status code {r.status_code}...',
-                    style='warning')
+            while True:
+                if (r := fetcher.get(url % page)).status_code != 200:
+                    console.log(
+                        f'{r.url} get status code {r.status_code}...',
+                        style='warning')
+                elif 'cards' not in (js := r.json()):
+                    console.log(f'{r.url} get js error: {js}', style='error')
+                else:
+                    break
                 console.log('sleeping 60 seconds')
                 sleep(60)
-            js = r.json()
+
             if (cards := js['cards']) is None:
                 console.log(
                     f"js[cards] is None for [link={r.url}]r.url[/link]",

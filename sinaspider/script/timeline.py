@@ -1,3 +1,4 @@
+import random
 import select
 import sys
 from pathlib import Path
@@ -31,9 +32,10 @@ def timeline(days: float = Option(...),
         next_since = pendulum.now()
         update_user_config()
         _get_timeline(download_dir, since, dry_run)
+
         if dry_run or frequency is None:
             return
-        # updat since
+        # update since
         since = next_since
         # wait for next fetching
         next_fetching_time = max(since.add(days=frequency), pendulum.now())
@@ -59,6 +61,15 @@ def _get_timeline(download_dir: Path,
             if dry_run:
                 uc.weibo_fetch_at = fetch_at
                 uc.save()
+            if uc.liked_fetch and uc.liked_fetch_at:
+                if uc.liked_fetch_at < pendulum.now().subtract(months=1):
+                    if random.random() < 0.2:
+                        uc.fetch_liked(download_dir)
+
+    prob = since.diff().in_seconds() / 24*3600
+    if random.random() < prob:
+        if config := UserConfig.get(liked_fetch=True, liked_fetch_at=None):
+            config.fetch_liked(download_dir)
 
 
 @app.command()
@@ -69,14 +80,3 @@ def write_meta(download_dir: Path = default_path):
         if ori.exists():
             write_meta(ori)
             rename(ori, new_dir=True, root=ori.parent / (ori.stem + 'Pro'))
-
-
-# @app.command(help='Update users from timeline')
-# @logsaver
-# def timeline_(download_dir: Path = default_path,
-#               days: float = None,
-#               dry_run: bool = False):
-#     since = pendulum.now().subtract(days=days)
-#     get_timeline(download_dir, since, dry_run)
-#     if not dry_run:
-#         tidy_img(download_dir)

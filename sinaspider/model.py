@@ -180,11 +180,13 @@ class UserConfig(BaseModel):
             return
         self.fetch_friends(update=True)
         console.rule(f"开始获取 {self.username} 的赞")
-        if self.liked_fetch_at:
-            console.log(f" 上次抓取时间为: {self.liked_fetch_at}")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        imgs = self._save_liked(download_dir / "Liked")
+        if self.liked_fetch_at:
+            console.log(f" 上次抓取时间为: {self.liked_fetch_at}")
+            imgs = self._save_liked(download_dir / "Liked")
+        else:
+            imgs = self._save_liked(download_dir / "Liked_New")
         download_files(imgs)
         if count := len(self._liked_list):
             for w in LikedWeibo.select().where(
@@ -377,9 +379,9 @@ class User(BaseModel):
             assert v or v == 0
             if v == model_dict[k]:
                 continue
-            console.log(f'+{k}: {v}', style='green')
+            console.log(f'+{k}: {v}', style='green bold on dark_green')
             if (ori := model_dict[k]) is not None:
-                console.log(f'-{k}: {ori}', style='red')
+                console.log(f'-{k}: {ori}', style='red bold on dark_red')
         return cls.update(user_dict).where(cls.id == user_id).execute()
 
     def __str__(self):
