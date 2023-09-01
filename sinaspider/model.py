@@ -179,14 +179,16 @@ class UserConfig(BaseModel):
         if not self.liked_fetch:
             return
         self.fetch_friends(update=True)
-        console.rule(f"开始获取 {self.username} 的赞")
-        console.log(self.user)
-        console.log(f"Media Saving: {download_dir}")
+        msg = f"开始获取 {self.username} 的赞"
         if self.liked_fetch_at:
-            console.log(f" 上次抓取时间为: {self.liked_fetch_at}")
             imgs = self._save_liked(download_dir / "Liked")
+            msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
         else:
             imgs = self._save_liked(download_dir / "Liked_New")
+            msg = "🎈" + msg
+        console.rule(msg, style="magenta")
+        console.log(self.user)
+        console.log(f"Media Saving: {download_dir}")
         download_files(imgs)
         if count := len(self._liked_list):
             for w in LikedWeibo.select().where(
@@ -199,7 +201,7 @@ class UserConfig(BaseModel):
             #  .where(LikedWeibo.user == self.user)
             #  .execute())
             LikedWeibo.insert_many(self._liked_list).execute()
-            console.log(f"插入 {count} 条新赞")
+            console.log(f"🎀 插入 {count} 条新赞", style="bold green on dark_green")
             LikedWeibo.delete().where(LikedWeibo.order_num > 200).execute()
             self._liked_list.clear()
 

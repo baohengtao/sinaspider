@@ -26,10 +26,10 @@ def liked(download_dir: Path = default_path):
         if not (config := UserConfig.get_or_none(user_id=user_id)):
             console.log(f'用户{user_id}不在列表中')
             continue
-        console.log(config, '\n')
+        console.log(config)
         config.liked_fetch = Confirm.ask('是否获取该用户的点赞？', default=True)
         config.save()
-        console.log(f'用户{config.username}更新完成')
+        console.log(f'✨ set liked_fetch to {config.liked_fetch}\n')
         if config.liked_fetch and Confirm.ask('是否现在抓取', default=False):
             config.fetch_liked(download_dir)
 
