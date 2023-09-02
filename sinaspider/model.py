@@ -190,7 +190,7 @@ class UserConfig(BaseModel):
             msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
         else:
             imgs = self._save_liked(download_dir / "Liked_New")
-            msg = "🎈" + msg
+            msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
@@ -293,6 +293,8 @@ class UserConfig(BaseModel):
                 'weibo_by': weibo.user_id,
                 'pic_num': weibo.pic_num,
                 'user_id': self.user_id,
+                'username': self.username,
+                'created_at': weibo.created_at,
                 'order_num': i
             })
 
@@ -762,6 +764,8 @@ class LikedWeibo(BaseModel):
     user = ForeignKeyField(User, backref='liked_weibos')
     order_num = IntegerField()
     added_at = DateTimeTZField(default=pendulum.now)
+    username = TextField(null=True)
+    created_at = DateTimeTZField(null=True)
 
     class Meta:
         table_name = "liked"
