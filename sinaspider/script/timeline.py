@@ -17,9 +17,11 @@ app = Typer()
 @app.command(help='Update users from timeline')
 def timeline(days: float = Option(...),
              frequency: float = None,
+             liked_freq: float = 1,
              download_dir: Path = default_path):
     since = pendulum.now().subtract(days=days)
     next_fetching_time = pendulum.now()
+    next_liked_fetching = pendulum.now().add(days=liked_freq)
     while True:
         while pendulum.now() < next_fetching_time:
             # sleeping for  600 seconds while listing for enter key
@@ -30,7 +32,13 @@ def timeline(days: float = Option(...),
         console.log(f'Fetching timeline since {since}...')
         next_since = pendulum.now()
         update_user_config()
-        _get_timeline(download_dir, since)
+        if next_liked_fetching < pendulum.now():
+            liked_fetch = True
+            next_liked_fetching = pendulum.now().add(days=liked_freq)
+        else:
+            liked_fetch = False
+
+        _get_timeline(download_dir, since, liked_fetch)
 
         if frequency is None:
             return
@@ -43,6 +51,7 @@ def timeline(days: float = Option(...),
 @logsaver
 def _get_timeline(download_dir: Path,
                   since: pendulum.DateTime,
+                  liked_fetch: bool
                   ):
     from sinaspider.page import Page
     for status in Page.timeline(since=since):
@@ -59,10 +68,9 @@ def _get_timeline(download_dir: Path,
                 if uc.liked_fetch_at < pendulum.now().subtract(months=1):
                     if random.random() < 0.2:
                         uc.fetch_liked(download_dir)
-
-    prob = since.diff().in_seconds() / 24*3600
-    if random.random() < prob:
-        if config := UserConfig.get(liked_fetch=True, liked_fetch_at=None):
+    if liked_fetch:
+        if config := UserConfig.get_or_none(
+                liked_fetch=True, liked_fetch_at=None):
             config.fetch_liked(download_dir)
 
 

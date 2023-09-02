@@ -169,6 +169,11 @@ class UserConfig(BaseModel):
 
             medias = list(weibo.medias(download_dir))
             console.log(weibo)
+            for target in ['ins', 'ig']:
+                if target in weibo.text.lower():
+                    console.log('🍬 Find Instagram info',
+                                style='bold green on dark_green')
+                    break
             if medias:
                 console.log(
                     f"Downloading {len(medias)} files to {download_dir}..")
