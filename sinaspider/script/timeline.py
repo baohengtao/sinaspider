@@ -65,9 +65,10 @@ def _get_timeline(download_dir: Path,
             uc = UserConfig.from_id(uid)
             uc.fetch_weibo(download_dir)
             if uc.liked_fetch and uc.liked_fetch_at:
-                if uc.liked_fetch_at < pendulum.now().subtract(months=1):
-                    if random.random() < 0.2:
-                        uc.fetch_liked(download_dir)
+                random_days = 30 + random.random() * 180
+                days = (pendulum.now() - uc.liked_fetch_at).in_days()
+                if days > random_days:
+                    uc.fetch_liked(download_dir)
     if liked_fetch:
         if config := UserConfig.get_or_none(
                 liked_fetch=True, liked_fetch_at=None):

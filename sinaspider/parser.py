@@ -45,6 +45,13 @@ class WeiboParser:
         html = rec.match(text).groups(1)[0]
         weibo_info = json.loads(html, strict=False)['status']
         console.log(f"{weibo_id} fetched in online.")
+        pic_num = len(weibo_info['pic_ids'])
+        if not weibo_info['pic_num'] == pic_num:
+            console.log(f'actually there are {pic_num} pictures for {url} '
+                        f'but pic_num is {weibo_info["pic_num"]}',
+                        style='error')
+            weibo_info['pic_num'] = pic_num
+
         return weibo_info
 
     def parse(self, online=True):
@@ -402,7 +409,7 @@ class UserParser:
             time.sleep(60)
         user_info = js['data']['userInfo']
         keys = ['cover_image_phone', 'profile_image_url',
-                'profile_url', 'toolbar_menus']
+                'profile_url', 'toolbar_menus', 'badge']
         for key in keys:
             user_info.pop(key, None)
         assert user_info['followers_count'] == user_info.pop(

@@ -117,7 +117,12 @@ class UserConfig(BaseModel):
             since = pendulum.instance(self.weibo_fetch_at)
         else:
             since = pendulum.from_timestamp(0)
-        console.rule(f"开始获取 {self.username} 的主页 (fetch_at:{since:%y-%m-%d})")
+        msg = f"fetch_at:{since:%y-%m-%d}"
+        if self.liked_fetch_at:
+            msg += f" liked_fetch:{self.liked_fetch_at:%y-%m-%d}"
+        elif self.liked_fetch:
+            msg += " liked_fetch: True"
+        console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         if not self.set_visibility():
@@ -170,7 +175,7 @@ class UserConfig(BaseModel):
             medias = list(weibo.medias(download_dir))
             console.log(weibo)
             for target in ['ins', 'ig']:
-                if target in weibo.text.lower():
+                if target in (weibo.text or '').lower():
                     console.log('🍬 Find Instagram info',
                                 style='bold green on dark_green')
                     break
@@ -184,17 +189,27 @@ class UserConfig(BaseModel):
         if not self.liked_fetch:
             return
         self.fetch_friends(update=True)
-        msg = f"开始获取 {self.username} 的赞"
+        if LikedWeibo.get_or_none(user=self.user, username=None):
+            update = True
+        else:
+            update = False
+
+        msg = f"开始获取 {self.username} 的赞 (update={update})"
         if self.liked_fetch_at:
-            imgs = self._save_liked(download_dir / "Liked")
+            imgs = self._save_liked(download_dir / "Liked", update=update)
             msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
         else:
-            imgs = self._save_liked(download_dir / "Liked_New")
+            imgs = self._save_liked(download_dir / "Liked_New", update=update)
             msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         download_files(imgs)
+
+        if update:
+            (LikedWeibo.delete()
+             .where(LikedWeibo.user == self.user)
+             .execute())
         if count := len(self._liked_list):
             for w in LikedWeibo.select().where(
                     LikedWeibo.user == self.user).order_by(
@@ -207,7 +222,7 @@ class UserConfig(BaseModel):
             #  .execute())
             LikedWeibo.insert_many(self._liked_list).execute()
             console.log(f"🎀 插入 {count} 条新赞", style="bold green on dark_green")
-            LikedWeibo.delete().where(LikedWeibo.order_num > 200).execute()
+            LikedWeibo.delete().where(LikedWeibo.order_num > 1000).execute()
             self._liked_list.clear()
 
         console.log(f"{self.user.username}的赞获取完毕\n")
@@ -231,12 +246,13 @@ class UserConfig(BaseModel):
         Friend.delete().where(Friend.gender == 'm').execute()
         Friend.update_frequency()
 
-    def _save_liked(self, download_dir: Path) -> Iterator[dict]:
+    def _save_liked(self, download_dir: Path, update: bool) -> Iterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
         download_dir /= self.username
         bulk = []
         early_stopping = False
-        for weibo_dict in self.page.liked():
+        liked_page = self.page.liked()
+        for weibo_dict in liked_page:
             weibo = Weibo(**weibo_dict)
             if UserConfig.get_or_none(user_id=weibo.user_id):
                 continue
@@ -287,6 +303,20 @@ class UserConfig(BaseModel):
                 'liked_fetch_at is set but not early stopping', style='error')
 
         assert self._liked_list == []
+        if update:
+            console.log(
+                'continue fetching liked since update is True',
+                style='warning')
+            for weibo_dict in liked_page:
+                weibo = Weibo(**weibo_dict)
+                if UserConfig.get_or_none(user_id=weibo.user_id):
+                    continue
+                if not Friend.get_or_none(
+                        friend_id=weibo.user_id,
+                        user_id=self.user_id):
+                    continue
+                bulk.append(weibo)
+
         for i, weibo in enumerate(bulk, start=1):
             self._liked_list.append({
                 'weibo_id': weibo.id,
@@ -338,6 +368,8 @@ class User(BaseModel):
     标签 = TextField(null=True)
     注册时间 = TextField(null=True)
     阳光信用 = TextField(null=True)
+    friendships_relation = IntegerField(null=True)
+    special_follow = BooleanField(null=True)
 
     def __repr__(self):
         return super().__repr__()

@@ -8,7 +8,9 @@ from rich.terminal_theme import MONOKAI
 
 from sinaspider import console
 
-default_path = Path.home() / 'Pictures/Sinaspider'
+if not (d := Path('/Volumes/Art')).exists():
+    d = Path.home()/'Pictures'
+default_path = d / 'Sinaspider'
 
 
 def logsaver(func):

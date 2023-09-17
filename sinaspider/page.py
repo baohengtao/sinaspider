@@ -78,6 +78,7 @@ class Page:
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
         for page in itertools.count(start=1):
+            console.log(f'Fetching liked weibo page {page}...')
             while True:
                 if (r := fetcher.get(url % page)).status_code != 200:
                     console.log(

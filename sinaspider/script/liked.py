@@ -38,8 +38,8 @@ def liked(download_dir: Path = default_path):
 @logsaver
 def liked_loop(download_dir: Path = default_path,
                max_user: int = 1,
-               refresh: bool = Option(False, "--refresh", "-r")):
-    if refresh:
+               new_user: bool = Option(False, "--new-user", "-n")):
+    if not new_user:
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
                    .where(UserConfig.liked_fetch_at
