@@ -194,11 +194,12 @@ class UserConfig(BaseModel):
         else:
             update = False
 
-        msg = f"开始获取 {self.username} 的赞 (update={update})"
+        msg = f"开始获取 {self.username} 的赞"
         if self.liked_fetch_at:
             imgs = self._save_liked(download_dir / "Liked", update=update)
-            msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
+            msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d}, update={update})"
         else:
+            assert update
             imgs = self._save_liked(download_dir / "Liked_New", update=update)
             msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")

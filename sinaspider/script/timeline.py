@@ -7,45 +7,49 @@ import pendulum
 from typer import Option, Typer
 
 from sinaspider import console
-from sinaspider.model import UserConfig
+from sinaspider.model import LikedWeibo, UserConfig
 
 from .helper import default_path, logsaver, update_user_config
 
 app = Typer()
 
 
-@app.command(help='Update users from timeline')
+@app.command()
 def timeline(days: float = Option(...),
-             frequency: float = None,
-             liked_freq: float = 1,
+             frequency: float = 6,
              download_dir: Path = default_path):
+    """
+    Fetch timeline for users in database
+
+    days: days to fetch
+
+    frequency: hours between each fetching
+
+    download_dir: image saving directory
+    """
     since = pendulum.now().subtract(days=days)
-    next_fetching_time = pendulum.now()
-    next_liked_fetching = pendulum.now().add(days=liked_freq)
+    fetching_time = pendulum.now()
+    liked_fetch = False
     while True:
-        while pendulum.now() < next_fetching_time:
+        while pendulum.now() < fetching_time:
             # sleeping for  600 seconds while listing for enter key
             if select.select([sys.stdin], [], [], 600)[0]:
                 if input() == "":
                     console.log("Enter key pressed. continuing immediately.")
+                    liked_fetch = False
                     break
         console.log(f'Fetching timeline since {since}...')
         next_since = pendulum.now()
         update_user_config()
-        if next_liked_fetching < pendulum.now():
-            liked_fetch = True
-            next_liked_fetching = pendulum.now().add(days=liked_freq)
-        else:
-            liked_fetch = False
 
         _get_timeline(download_dir, since, liked_fetch)
 
-        if frequency is None:
-            return
         # update since
         since = next_since
         # wait for next fetching
-        next_fetching_time = max(since.add(days=frequency), pendulum.now())
+        fetching_time = next_since.add(hours=frequency)
+        # always fetch liked after first update
+        liked_fetch = True
 
 
 @logsaver
@@ -64,15 +68,51 @@ def _get_timeline(download_dir: Path,
         if uc.weibo_fetch and fetch_at < created_at:
             uc = UserConfig.from_id(uid)
             uc.fetch_weibo(download_dir)
-            if uc.liked_fetch and uc.liked_fetch_at:
-                random_days = 30 + random.random() * 180
-                days = (pendulum.now() - uc.liked_fetch_at).in_days()
-                if days > random_days:
-                    uc.fetch_liked(download_dir)
+            if _need_liked_fetch(uc):
+                uc.fetch_liked(download_dir)
     if liked_fetch:
-        if config := UserConfig.get_or_none(
-                liked_fetch=True, liked_fetch_at=None):
+        query = (UserConfig.select()
+                 .where(UserConfig.liked_fetch)
+                 .where(UserConfig.liked_fetch_at.is_null())
+                 .order_by(UserConfig.post_at.desc(nulls='last'))
+                 )
+        if config := query.first():
             config.fetch_liked(download_dir)
+
+
+def _need_liked_fetch(config: UserConfig) -> bool:
+    if not config.liked_fetch:
+        return False
+    if config.liked_fetch_at is None:
+        return False
+    query = (LikedWeibo.select()
+             .where(LikedWeibo.user == config.user)
+             .order_by(LikedWeibo.created_at.desc())
+             )
+    if query.where(LikedWeibo.username.is_null()):
+        console.log('liked weibo need update, fetching...',
+                    style='warning')
+        return True
+    assert query
+    assert not query.where(LikedWeibo.created_at.is_null())
+    count = 0
+    for liked in query:
+        count += liked.pic_num
+        if count > 200:
+            break
+    else:
+        console.log(
+            f'{config.username} only has {count} liked pics', style='warning')
+    liked_fetch_at = pendulum.instance(config.liked_fetch_at)
+    duration = (liked_fetch_at - liked.created_at) * 200 / count
+    if (days := duration.in_days()) > 180:
+        console.log(
+            f'duration is {days} which great than 180 days', style='warning')
+    next_fetch = liked_fetch_at + duration
+    console.log(
+        f'latest liked fetch at {liked_fetch_at:%y-%m-%d}, '
+        f'next fetching time should be {next_fetch:%y-%m-%d}')
+    return pendulum.now() > next_fetch
 
 
 @app.command()
