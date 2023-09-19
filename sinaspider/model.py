@@ -117,11 +117,11 @@ class UserConfig(BaseModel):
             since = pendulum.instance(self.weibo_fetch_at)
         else:
             since = pendulum.from_timestamp(0)
-        msg = f"fetch_at:{since:%y-%m-%d}"
+        msg = f"fetch_at:{since:%y-%m-%d} liked_fetch:"
         if self.liked_fetch_at:
-            msg += f" liked_fetch:{self.liked_fetch_at:%y-%m-%d}"
-        elif self.liked_fetch:
-            msg += " liked_fetch: True"
+            msg += f" {self.liked_fetch_at:%y-%m-%d}"
+        else:
+            msg += f" {self.liked_fetch}"
         console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
@@ -189,27 +189,24 @@ class UserConfig(BaseModel):
         if not self.liked_fetch:
             return
         self.fetch_friends(update=True)
-        if LikedWeibo.get_or_none(user=self.user, username=None):
-            update = True
-        else:
-            update = False
+        # update = False
 
         msg = f"开始获取 {self.username} 的赞"
         if self.liked_fetch_at:
-            imgs = self._save_liked(download_dir / "Liked", update=update)
-            msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d}, update={update})"
+            imgs = self._save_liked(download_dir / "Liked")
+            msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
         else:
-            imgs = self._save_liked(download_dir / "Liked_New", update=update)
+            imgs = self._save_liked(download_dir / "Liked_New")
             msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         download_files(imgs)
 
-        if update:
-            (LikedWeibo.delete()
-             .where(LikedWeibo.user == self.user)
-             .execute())
+        # if update:
+        #     (LikedWeibo.delete()
+        #      .where(LikedWeibo.user == self.user)
+        #      .execute())
         if count := len(self._liked_list):
             for w in LikedWeibo.select().where(
                     LikedWeibo.user == self.user).order_by(
@@ -246,7 +243,9 @@ class UserConfig(BaseModel):
         Friend.delete().where(Friend.gender == 'm').execute()
         Friend.update_frequency()
 
-    def _save_liked(self, download_dir: Path, update: bool) -> Iterator[dict]:
+    def _save_liked(self,
+                    download_dir: Path,
+                    update: bool = False) -> Iterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
         download_dir /= self.username
         bulk = []
@@ -337,15 +336,10 @@ class UserConfig(BaseModel):
                  .where(LikedWeibo.user == self.user)
                  .order_by(LikedWeibo.created_at.desc())
                  )
-        if query.where(LikedWeibo.username.is_null()):
-            console.log('liked weibo need update, fetching...',
-                        style='warning')
-            return True
         if not query:
             console.log(
                 f"no liked weibo found for {self.username}", style="warning")
             return self.liked_fetch_at < pendulum.now().subtract(months=6)
-        assert not query.where(LikedWeibo.created_at.is_null())
         count = 0
         for liked in query:
             count += liked.pic_num
@@ -353,14 +347,17 @@ class UserConfig(BaseModel):
                 break
         else:
             console.log(
-                f'{self.username} only has {count} liked pics', style='warning')
+                f'{self.username} only has {count} liked pics',
+                style='warning')
         liked_fetch_at = pendulum.instance(self.liked_fetch_at)
         duration = (liked_fetch_at - liked.created_at) * 200 / count
         if (days := duration.in_days()) > 180:
             console.log(
-                f'duration is {days} which great than 180 days',
+                f'duration is {days} which great than 180 days, '
+                'truncating to 180 days',
                 style='warning')
-        next_fetch = liked_fetch_at + duration
+            days = 180
+        next_fetch = liked_fetch_at.add(days=days)
         console.log(
             f'latest liked fetch at {liked_fetch_at:%y-%m-%d}, '
             f'next fetching time should be {next_fetch:%y-%m-%d}')
@@ -844,8 +841,8 @@ class LikedWeibo(BaseModel):
     user = ForeignKeyField(User, backref='liked_weibos')
     order_num = IntegerField()
     added_at = DateTimeTZField(default=pendulum.now)
-    username = TextField(null=True)
-    created_at = DateTimeTZField(null=True)
+    username = TextField()
+    created_at = DateTimeTZField()
 
     class Meta:
         table_name = "liked"

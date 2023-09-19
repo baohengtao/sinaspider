@@ -1,7 +1,6 @@
 
 from pathlib import Path
 
-import pendulum
 from rich.prompt import Confirm, Prompt
 from typer import Option, Typer
 
@@ -39,17 +38,17 @@ def liked(download_dir: Path = default_path):
 def liked_loop(download_dir: Path = default_path,
                max_user: int = 1,
                new_user: bool = Option(False, "--new-user", "-n")):
-    if not new_user:
+    if new_user:
+        configs = (UserConfig.select()
+                   .where(UserConfig.liked_fetch)
+                   .where(UserConfig.liked_fetch_at.is_null(True))
+                   .limit(max_user))
+    else:
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
                    .order_by(UserConfig.liked_fetch_at.asc())
                    )
         configs = [c for c in configs if c.need_liked_fetch()][:max_user]
-    else:
-        configs = (UserConfig.select()
-                   .where(UserConfig.liked_fetch)
-                   .where(UserConfig.liked_fetch_at.is_null(True))
-                   .limit(max_user))
     for config in configs:
         config.fetch_liked(download_dir)
 
