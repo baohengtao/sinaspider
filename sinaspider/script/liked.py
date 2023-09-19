@@ -42,11 +42,9 @@ def liked_loop(download_dir: Path = default_path,
     if not new_user:
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
-                   .where(UserConfig.liked_fetch_at
-                          < pendulum.now().subtract(months=3))
                    .order_by(UserConfig.liked_fetch_at.asc())
-                   .limit(max_user)
                    )
+        configs = [c for c in configs if c.need_liked_fetch()][:max_user]
     else:
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)

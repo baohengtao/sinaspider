@@ -199,7 +199,6 @@ class UserConfig(BaseModel):
             imgs = self._save_liked(download_dir / "Liked", update=update)
             msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d}, update={update})"
         else:
-            assert update
             imgs = self._save_liked(download_dir / "Liked_New", update=update)
             msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")
@@ -328,6 +327,54 @@ class UserConfig(BaseModel):
                 'created_at': weibo.created_at,
                 'order_num': i
             })
+
+    def need_liked_fetch(self) -> bool:
+        if not self.liked_fetch:
+            return False
+        if self.liked_fetch_at is None:
+            return False
+        query = (LikedWeibo.select()
+                 .where(LikedWeibo.user == self.user)
+                 .order_by(LikedWeibo.created_at.desc())
+                 )
+        if query.where(LikedWeibo.username.is_null()):
+            console.log('liked weibo need update, fetching...',
+                        style='warning')
+            return True
+        if not query:
+            console.log(
+                f"no liked weibo found for {self.username}", style="warning")
+            return self.liked_fetch_at < pendulum.now().subtract(months=6)
+        assert not query.where(LikedWeibo.created_at.is_null())
+        count = 0
+        for liked in query:
+            count += liked.pic_num
+            if count > 200:
+                break
+        else:
+            console.log(
+                f'{self.username} only has {count} liked pics', style='warning')
+        liked_fetch_at = pendulum.instance(self.liked_fetch_at)
+        duration = (liked_fetch_at - liked.created_at) * 200 / count
+        if (days := duration.in_days()) > 180:
+            console.log(
+                f'duration is {days} which great than 180 days',
+                style='warning')
+        next_fetch = liked_fetch_at + duration
+        console.log(
+            f'latest liked fetch at {liked_fetch_at:%y-%m-%d}, '
+            f'next fetching time should be {next_fetch:%y-%m-%d}')
+        return pendulum.now() > next_fetch
+
+    def need_weibo_fetch(self) -> bool:
+
+        if self.post_at:
+            interval = (self.weibo_fetch_at - self.post_at).days
+            interval = min(max(15, interval), 60)
+        else:
+            interval = 60
+        interval *= (1 + self.following)
+        return pendulum.now().diff(self.weibo_fetch_at).in_days() > interval
 
 
 class User(BaseModel):

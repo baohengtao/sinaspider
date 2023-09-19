@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pendulum
 from rich.prompt import Confirm, Prompt
 from typer import Option, Typer
 
@@ -66,7 +65,7 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
-        users = [uc for uc in users if _need_fetch_v2(uc)]
+        users = [uc for uc in users if uc.need_weibo_fetch()]
         # if len(users) < 10:
         #     console.log(f'只有{len(users)}个用户需要抓取，不执行', style='warning')
         #     return
@@ -81,27 +80,3 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
         else:
             config.fetch_weibo(download_dir / 'Loop')
         console.log(f'user {i}/{len(users)} completed!')
-
-
-# def _need_fetch(config: UserConfig) -> bool:
-#     if config.weibo_fetch_at < pendulum.now().subtract(months=3):
-#         return True
-#     elif config.weibo_fetch_at > pendulum.now().subtract(days=15):
-#         return False
-#     elif config.post_at is None:
-#         return False
-#     else:
-#         next_fetch = config.weibo_fetch_at - config.post_at
-#         next_fetch += config.weibo_fetch_at
-#         return pendulum.now() > next_fetch
-
-
-def _need_fetch_v2(config: UserConfig) -> bool:
-
-    if config.post_at:
-        interval = (config.weibo_fetch_at - config.post_at).days
-        interval = min(max(15, interval), 60)
-    else:
-        interval = 60
-    interval *= (1 + config.following)
-    return pendulum.now().diff(config.weibo_fetch_at).in_days() > interval
