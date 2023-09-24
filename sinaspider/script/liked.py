@@ -42,6 +42,7 @@ def liked_loop(download_dir: Path = default_path,
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
                    .where(UserConfig.liked_fetch_at.is_null(True))
+                   .order_by(UserConfig.post_at.desc(nulls='last'))
                    .limit(max_user))
     else:
         configs = (UserConfig.select()

@@ -680,6 +680,7 @@ class Weibo(BaseModel):
         res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
         if self.location_id or self.location_src:
             res['WeiboLocation'] = (self.latitude, self.longitude)
+        res["File:FileCreateDate"] = res['XMP:DateCreated']
         return res
 
     def __str__(self):

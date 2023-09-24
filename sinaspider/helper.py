@@ -37,12 +37,12 @@ class Fetcher:
             env_file.write_text(f'SINA_COOKIE={cookie}')
         self.sess.headers['Cookie'] = cookie
         self._visit_count = 0
-        self._sleep_until = time.time()
+        self._last_fetch = time.time()
 
     def get(self, url: str, mainthread=True) -> requests.Response:
         # write with session and pause
         if mainthread:
-            self._pause()
+            self._pause_v2()
         get = self.sess.get if mainthread else requests.get
         while True:
             try:
@@ -54,10 +54,17 @@ class Fetcher:
                     f"retry [link={url}]{url}[/link]...", style='error')
                 sleep(period)
 
-    def _pause(self):
-        if time.time() - self._sleep_until > 1024:
+    def _pause_v2(self):
+
+        if time.time()-self._last_fetch > 1024:
             self._visit_count = 0
-        self._visit_count += 1
+            console.log('reset visit count to zero', style='info')
+
+        if self._visit_count == 0:
+            self._visit_count = 1
+            self._last_fetch = time.time()
+            return
+
         if self._visit_count % 256 == 0:
             sleep_time = 256
         elif self._visit_count % 64 == 0:
@@ -65,14 +72,35 @@ class Fetcher:
         elif self._visit_count % 16 == 0:
             sleep_time = 16
         else:
-            sleep_time = 0.1
+            sleep_time = 1
         sleep_time *= random.uniform(0.5, 1.5)
         console.log(
             f'sleep {sleep_time:.1f} seconds...(count: {self._visit_count})',
             style='info')
-        self._sleep_until = time.time() + sleep_time
-        while time.time() < self._sleep_until:
-            sleep(1)
+        self._last_fetch = time.time() + sleep_time
+        while time.time() < self._last_fetch:
+            sleep(0.1)
+        self._visit_count += 1
+
+    # def _pause(self):
+    #     if time.time() - self._sleep_until > 1024:
+    #         self._visit_count = 0
+    #     self._visit_count += 1
+    #     if self._visit_count % 256 == 0:
+    #         sleep_time = 256
+    #     elif self._visit_count % 64 == 0:
+    #         sleep_time = 64
+    #     elif self._visit_count % 16 == 0:
+    #         sleep_time = 16
+    #     else:
+    #         sleep_time = 0.1
+    #     sleep_time *= random.uniform(0.5, 1.5)
+    #     console.log(
+    #         f'sleep {sleep_time:.1f} seconds...(count: {self._visit_count})',
+    #         style='info')
+    #     self._sleep_until = time.time() + sleep_time
+    #     while time.time() < self._sleep_until:
+    #         sleep(1)
 
 
 fetcher = Fetcher()
