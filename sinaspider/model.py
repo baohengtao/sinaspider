@@ -76,6 +76,7 @@ class UserConfig(BaseModel):
     photos_num = IntegerField(null=True)
     followed_by = ArrayField(field_class=TextField, null=True)
     IP = TextField(null=True)
+    folder = TextField(null=True)
 
     class Meta:
         table_name = "userconfig"

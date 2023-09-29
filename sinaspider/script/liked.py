@@ -1,6 +1,7 @@
 
 from pathlib import Path
 
+import pendulum
 from rich.prompt import Confirm, Prompt
 from typer import Option, Typer
 
@@ -37,21 +38,31 @@ def liked(download_dir: Path = default_path):
 @logsaver
 def liked_loop(download_dir: Path = default_path,
                max_user: int = 1,
+               fetching_time: int = None,
                new_user: bool = Option(False, "--new-user", "-n")):
     if new_user:
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
                    .where(UserConfig.liked_fetch_at.is_null(True))
                    .order_by(UserConfig.post_at.desc(nulls='last'))
-                   .limit(max_user))
+                   )
     else:
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
                    .order_by(UserConfig.liked_fetch_at.asc())
                    )
-        configs = [c for c in configs if c.need_liked_fetch()][:max_user]
-    for config in configs:
+        configs = [c for c in configs if c.need_liked_fetch()]
+    if fetching_time:
+        max_user = None
+        stop_time = pendulum.now().add(minutes=fetching_time)
+    else:
+        stop_time = None
+    console.log(f'Found {len(configs)} users to fetch liked weibo')
+    for config in configs[:max_user]:
         config.fetch_liked(download_dir)
+        if stop_time and stop_time < pendulum.now():
+            console.log(f'stop since {fetching_time} minutes passed')
+            break
 
 
 @app.command()

@@ -47,4 +47,5 @@ def update_user_config():
     for uc in UserConfig:
         if artist := Artist.get_or_none(user=uc.user):
             uc.photos_num = artist.photos_num
+            uc.folder = artist.folder
             uc.save()
