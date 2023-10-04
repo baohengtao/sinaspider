@@ -124,10 +124,13 @@ class WeiboParser:
         page_info = self.info.get('page_info', {})
         if not page_info.get('type') == "video":
             return
+        if (urls := page_info['urls']) is None:
+            console.log('cannot get video url', style='error')
+            return
         keys = ['mp4_1080p_mp4', 'mp4_720p_mp4',
                 'mp4_hd_mp4', 'mp4_ld_mp4']
         for key in keys:
-            if url := page_info['urls'].get(key):
+            if url := urls.get(key):
                 self.weibo['video_url'] = url
                 break
         else:

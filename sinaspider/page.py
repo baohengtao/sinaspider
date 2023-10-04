@@ -84,10 +84,12 @@ class Page:
                     console.log(
                         f'{r.url} get status code {r.status_code}...',
                         style='warning')
-                elif 'cards' not in (js := r.json()):
-                    console.log(f'{r.url} get js error: {js}', style='error')
-                else:
+                elif 'cards' in (js := r.json()):
                     break
+                elif js.get('errmsg') == 'attitude: user status wrong':
+                    raise ValueError(f'attitude: user {self.id} status wrong')
+                else:
+                    console.log(f'{r.url} get js error: {js}', style='error')
                 console.log('sleeping 60 seconds')
                 sleep(60)
 

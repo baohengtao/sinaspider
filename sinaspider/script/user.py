@@ -69,6 +69,7 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
         # if len(users) < 10:
         #     console.log(f'只有{len(users)}个用户需要抓取，不执行', style='warning')
         #     return
+        download_dir /= 'Loop'
     console.log(f'{len(users)} will be fetched...')
     for i, user in enumerate(users, start=1):
         try:
@@ -78,5 +79,5 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
             console.log(
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
-            config.fetch_weibo(download_dir / 'Loop')
+            config.fetch_weibo(download_dir)
         console.log(f'user {i}/{len(users)} completed!')

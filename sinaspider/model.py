@@ -151,11 +151,16 @@ class UserConfig(BaseModel):
         :return: generator of medias to downloads
         """
 
-        if since > pendulum.now().subtract(years=1):
-            user_root = 'Timeline'
-        else:
+        if since < pendulum.now().subtract(years=1):
             user_root = 'User'
-        download_dir = Path(download_dir) / user_root / self.username
+        elif self.photos_num == 0:
+            console.log(
+                f'seems {self.username} not processed, using User folder',
+                style='green on dark_green')
+            user_root = 'User'
+        else:
+            user_root = 'Timeline'
+        download_dir = download_dir / user_root / self.username
 
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         for weibo_dict in self.page.homepage():
@@ -287,6 +292,7 @@ class UserConfig(BaseModel):
                     'XMP:Artist': weibo.username,
                     'XMP:ImageSupplierName': 'WeiboLiked',
                 })
+                xmp_info["File:FileCreateDate"] = xmp_info['XMP:DateCreated']
 
                 yield {
                     "url": url,
@@ -681,7 +687,6 @@ class Weibo(BaseModel):
         res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
         if self.location_id or self.location_src:
             res['WeiboLocation'] = (self.latitude, self.longitude)
-        res["File:FileCreateDate"] = res['XMP:DateCreated']
         return res
 
     def __str__(self):

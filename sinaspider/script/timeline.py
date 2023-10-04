@@ -63,7 +63,8 @@ def _get_timeline(download_dir: Path,
             continue
         created_at = pendulum.from_format(
             status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-        fetch_at = uc.weibo_fetch_at
+        if not (fetch_at := uc.weibo_fetch_at):
+            continue
         if uc.weibo_fetch and fetch_at < created_at:
             uc = UserConfig.from_id(uid)
             uc.fetch_weibo(download_dir)
@@ -82,7 +83,7 @@ def _get_timeline(download_dir: Path,
 @app.command()
 def write_meta(download_dir: Path = default_path):
     from imgmeta.script import rename, write_meta
-    for folder in ['User', 'Timeline', 'Loop/User', 'Loop/Timeline']:
+    for folder in ['User', 'Timeline', 'Loop/Timeline']:
         ori = download_dir / folder
         if ori.exists():
             write_meta(ori)
