@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pendulum
 from rich.prompt import Confirm, Prompt
 from typer import Option, Typer
 
@@ -17,7 +18,7 @@ app = Typer()
 @logsaver
 def user(download_dir: Path = default_path):
     """Add user to database of users whom we want to fetch from"""
-    while user_id := Prompt.ask('请输入用户名:smile:'):
+    while user_id := Prompt.ask('请输入用户名:smile:').strip():
         if uc := UserConfig.get_or_none(username=user_id):
             user_id = uc.user_id
         try:
@@ -47,17 +48,27 @@ def user(download_dir: Path = default_path):
 
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver
-def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
-              download_dir: Path = default_path,
+def user_loop(download_dir: Path = default_path,
+              max_user: int = 1,
+              fetching_duration: int = None,
+              new_user: bool = Option(False, "--new-user", "-n"),
               following: bool = Option(False, "--following", "-f")):
     if new_user:
+
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null()))
-        if (not_following := [u for u in users if not u.following]):
-            console.log(not_following)
-            if not Confirm.ask('There are unfollowing users, continue?'):
-                return
+        if nofo := users.where(~UserConfig.following):
+            for uc in nofo:
+                UserConfig.from_id(uc.user_id)
+        if nofo := users.where(~UserConfig.following):
+            console.log(list(nofo))
+            console.log('some users are not following, skipping them')
+        users = users.where(UserConfig.following)
+        console.log(f'{len(users)} users has been found')
+        if not fetching_duration:
+            users = users[:max_user]
+            console.log(f'{len(users)} users will be fetched')
 
     else:
         users = (UserConfig.select()
@@ -66,11 +77,12 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
         users = [uc for uc in users if uc.need_weibo_fetch()]
-        # if len(users) < 10:
-        #     console.log(f'只有{len(users)}个用户需要抓取，不执行', style='warning')
-        #     return
         download_dir /= 'Loop'
-    console.log(f'{len(users)} will be fetched...')
+        console.log(f'{len(users)} will be fetched...')
+    if fetching_duration:
+        stop_time = pendulum.now().add(minutes=fetching_duration)
+    else:
+        stop_time = None
     for i, user in enumerate(users, start=1):
         try:
             config = UserConfig.from_id(user_id=user.user_id)
@@ -81,3 +93,6 @@ def user_loop(new_user: bool = Option(False, "--new-user", "-n"),
         else:
             config.fetch_weibo(download_dir)
         console.log(f'user {i}/{len(users)} completed!')
+        if stop_time and stop_time < pendulum.now():
+            console.log(f'stop since {fetching_duration} minutes passed')
+            break

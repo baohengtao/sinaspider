@@ -1,5 +1,6 @@
 import select
 import sys
+import time
 from pathlib import Path
 
 import pendulum
@@ -26,35 +27,67 @@ def timeline(days: float = Option(...),
 
     download_dir: image saving directory
     """
+    from .liked import liked_loop
+    from .user import user_loop
+
     since = pendulum.now().subtract(days=days)
     fetching_time = pendulum.now()
-    liked_fetch = False
+    fetching_duration = 0
     while True:
         while pendulum.now() < fetching_time:
             # sleeping for  600 seconds while listing for enter key
             if select.select([sys.stdin], [], [], 600)[0]:
-                if input() == "":
-                    console.log("Enter key pressed. continuing immediately.")
-                    liked_fetch = False
-                    break
+                match (t := input()):
+                    case "":
+                        console.log(
+                            "Enter key pressed. continuing immediately.")
+                        fetching_duration = 0
+                        break
+                    case "q":
+                        console.log("q pressed. exiting.")
+                        return
+                    case t if t.isdigit():
+                        console.log(
+                            "number detected,"
+                            f"fetching new users for {t} minutes")
+                        fetching_duration = int(t)
+                        break
+                    case _:
+                        console.log(
+                            "Press enter to fetching immediately,\n"
+                            "Q to exit,\n"
+                            "int number for the time in minutes to fetch new users")
+                        continue
+
         console.log(f'Fetching timeline since {since}...')
         next_since = pendulum.now()
         update_user_config()
 
-        _get_timeline(download_dir, since, liked_fetch)
+        _get_timeline(download_dir, since)
+        if fetching_duration > 0:
+            fetch_until = time.time() + fetching_duration * 60
+            if UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None):
+                user_loop(download_dir=download_dir,
+                          new_user=True, fetching_duration=fetching_duration)
+                console.log()
+            if (remain := fetch_until - time.time()) > 0:
+                if UserConfig.get_or_none(
+                        liked_fetch=True, liked_fetch_at=None):
+                    liked_loop(download_dir=download_dir,
+                               new_user=True, fetching_duration=remain/60)
 
         # update since
         since = next_since
         # wait for next fetching
         fetching_time = next_since.add(hours=frequency)
-        # always fetch liked after first update
-        liked_fetch = True
+        # always fetch new user for 1 hour after first update
+        fetching_duration = 60
+        console.log(f'waiting for next fetching at {fetching_time:%H:%M:%S}')
 
 
 @logsaver
 def _get_timeline(download_dir: Path,
                   since: pendulum.DateTime,
-                  liked_fetch: bool
                   ):
     from sinaspider.page import Page
     for status in Page.timeline(since=since):
@@ -70,14 +103,6 @@ def _get_timeline(download_dir: Path,
             uc.fetch_weibo(download_dir)
             if uc.need_liked_fetch():
                 uc.fetch_liked(download_dir)
-    if liked_fetch:
-        query = (UserConfig.select()
-                 .where(UserConfig.liked_fetch)
-                 .where(UserConfig.liked_fetch_at.is_null())
-                 .order_by(UserConfig.post_at.desc(nulls='last'))
-                 )
-        if config := query.first():
-            config.fetch_liked(download_dir)
 
 
 @app.command()
