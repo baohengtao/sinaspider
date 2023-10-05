@@ -38,7 +38,7 @@ def liked(download_dir: Path = default_path):
 @logsaver
 def liked_loop(download_dir: Path = default_path,
                max_user: int = 1,
-               fetching_time: int = None,
+               fetching_duration: int = None,
                new_user: bool = Option(False, "--new-user", "-n")):
     if new_user:
         configs = (UserConfig.select()
@@ -52,16 +52,16 @@ def liked_loop(download_dir: Path = default_path,
                    .order_by(UserConfig.liked_fetch_at.asc())
                    )
         configs = [c for c in configs if c.need_liked_fetch()]
-    if fetching_time:
+    if fetching_duration:
         max_user = None
-        stop_time = pendulum.now().add(minutes=fetching_time)
+        stop_time = pendulum.now().add(minutes=fetching_duration)
     else:
         stop_time = None
     console.log(f'Found {len(configs)} users to fetch liked weibo')
     for config in configs[:max_user]:
         config.fetch_liked(download_dir)
         if stop_time and stop_time < pendulum.now():
-            console.log(f'stop since {fetching_time} minutes passed')
+            console.log(f'stop since {fetching_duration} minutes passed')
             break
 
 

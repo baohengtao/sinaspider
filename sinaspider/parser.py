@@ -36,10 +36,20 @@ class WeiboParser:
     @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
         url = f'https://m.weibo.cn/detail/{weibo_id}'
-        text = fetcher.get(url).text
-        soup = BeautifulSoup(text, 'html.parser')
-        if soup.title.text == '微博-出错了':
-            raise WeiboNotFoundError(soup.body.get_text(' ', strip=True))
+        while True:
+            text = fetcher.get(url).text
+            soup = BeautifulSoup(text, 'html.parser')
+            if soup.title.text == '微博-出错了':
+                err_msg = soup.body.get_text(' ', strip=True)
+                if err_msg == '请求超时':
+                    console.log(
+                        f'{err_msg} for {url}, sleeping 60 secs...',
+                        style='error')
+                    time.sleep(60)
+                    continue
+                else:
+                    raise WeiboNotFoundError(err_msg)
+            break
         rec = re.compile(
             r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
         html = rec.match(text).groups(1)[0]
