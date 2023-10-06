@@ -22,10 +22,11 @@ class WeiboParser:
             assert self.pic_match
         else:
             self.info = weibo_info
+        self.id = self.info['id']
         self.is_pinned = self.info.get('title', {}).get('text') == '置顶'
         if self.info['pic_num'] < len(self.info['pic_ids']):
             console.log(
-                f"pic_num < len(pic_ids) for {self.info['id']}",
+                f"pic_num < len(pic_ids) for {self.id}",
                 style="warning")
         self.weibo = {}
 
@@ -64,24 +65,49 @@ class WeiboParser:
 
         return weibo_info
 
-    def parse(self, online=True, photo_in_dict=True):
+    def parse(self, online=True):
         if online and not self.pic_match:
             assert self.info['pic_num'] > 9
             self.info = self._fetch_info(self.info['id'])
             assert self.pic_match
         self.basic_info()
-        self.photos_info()
         self.video_info()
+
+        if photos := self.photos_info_with_hist():
+            photos = {
+                str(i+1): list(p) for i, p in enumerate(photos)}
+            self.weibo['photos'] = photos
         self.weibo |= self.text_info_v2()
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             self.weibo['is_pinned'] = self.is_pinned
         if self.pic_match:
             self.weibo['update_status'] = 'updated'
-        if photo_in_dict and self.weibo.get('photos'):
-            self.weibo['photos'] = {
-                str(i+1): list(p) for i, p in enumerate(self.weibo['photos'])}
         return self.weibo
+
+    def photos_info_with_hist(self):
+        if (edit_count := self.info.get('edit_count')) is None:
+            return self.photos_info()
+        console.log(
+            f'{self.id} edited in {edit_count} times, '
+            'finding all pics in history')
+        edit_url = f"https://m.weibo.cn/api/container/getIndex?containerid=231440_-_{self.id}"
+        js = fetcher.get(edit_url).json()
+        res = []
+        for card in js['data']['cards']:
+            card = card['card_group']
+            assert len(card) == 1
+            card = card[0]
+            if card['card_type'] != 9:
+                continue
+            mblog = card['mblog']
+            photos = WeiboParser(mblog).photos_info()
+            for p in photos:
+                if p not in res:
+                    res.append(p)
+        for p1, p2 in zip(self.photos_info(), res):
+            assert p1[0] == p2[0]
+        return res
 
     def basic_info(self):
         user = self.info['user']
@@ -107,10 +133,10 @@ class WeiboParser:
                 v = 1000000
             self.weibo[key] = v
 
-    def photos_info(self):
+    def photos_info(self) -> list[tuple[str, str]]:
         self.weibo['pic_num'] = self.info['pic_num']
         if self.weibo['pic_num'] == 0:
-            return
+            return []
         if 'pic_infos' in self.info:
             pic_infos = [self.info['pic_infos'][pic_id]
                          for pic_id in self.info['pic_ids']]
@@ -130,7 +156,7 @@ class WeiboParser:
             photos = [(url, None)]
 
         assert len(photos) == len(self.info['pic_ids'])
-        self.weibo['photos'] = photos
+        return photos
 
     def video_info(self):
         page_info = self.info.get('page_info', {})
