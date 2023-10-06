@@ -41,14 +41,14 @@ class WeiboParser:
             soup = BeautifulSoup(text, 'html.parser')
             if soup.title.text == '微博-出错了':
                 err_msg = soup.body.get_text(' ', strip=True)
-                if err_msg == '请求超时':
+                if err_msg in ['请求超时', 'Redis执行失败']:
                     console.log(
                         f'{err_msg} for {url}, sleeping 60 secs...',
                         style='error')
                     time.sleep(60)
                     continue
                 else:
-                    raise WeiboNotFoundError(err_msg)
+                    raise WeiboNotFoundError(f"{err_msg} for {url}")
             break
         rec = re.compile(
             r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
@@ -64,7 +64,7 @@ class WeiboParser:
 
         return weibo_info
 
-    def parse(self, online=True):
+    def parse(self, online=True, photo_in_dict=True):
         if online and not self.pic_match:
             assert self.info['pic_num'] > 9
             self.info = self._fetch_info(self.info['id'])
@@ -78,6 +78,9 @@ class WeiboParser:
             self.weibo['is_pinned'] = self.is_pinned
         if self.pic_match:
             self.weibo['update_status'] = 'updated'
+        if photo_in_dict and self.weibo.get('photos'):
+            self.weibo['photos'] = {
+                str(i+1): list(p) for i, p in enumerate(self.weibo['photos'])}
         return self.weibo
 
     def basic_info(self):
@@ -108,24 +111,23 @@ class WeiboParser:
         self.weibo['pic_num'] = self.info['pic_num']
         if self.weibo['pic_num'] == 0:
             return
-        photos = {}
         if 'pic_infos' in self.info:
-            for i, pic_id in enumerate(self.info['pic_ids'], start=1):
-                pic_info = self.info['pic_infos'][pic_id]
-                photos[str(i)] = [
-                    pic_info['largest']['url'], pic_info.get('video')]
+            pic_infos = [self.info['pic_infos'][pic_id]
+                         for pic_id in self.info['pic_ids']]
+            photos = [(pic_info['largest']['url'], pic_info.get('video'))
+                      for pic_info in pic_infos]
         elif pics := self.info.get('pics'):
             pics = pics.values() if isinstance(pics, dict) else pics
             pics = [p for p in pics if 'pid' in p]
-            for i, pic in enumerate(pics, start=1):
-                photos[str(i)] = [pic['large']['url'], pic.get('videoSrc')]
+            photos = [(pic['large']['url'], pic.get('videoSrc'))
+                      for pic in pics]
         else:
             assert self.weibo['pic_num'] == 1
             page_info = self.info['page_info']
             page_pic = page_info['page_pic']
             url = page_pic if isinstance(
                 page_pic, str) else page_pic['url']
-            photos['1'] = [url, None]
+            photos = [(url, None)]
 
         assert len(photos) == len(self.info['pic_ids'])
         self.weibo['photos'] = photos
