@@ -259,12 +259,16 @@ class UserConfig(BaseModel):
         liked_page = self.page.liked()
         for weibo_dict in liked_page:
             weibo = Weibo(**weibo_dict)
-            if UserConfig.get_or_none(user_id=weibo.user_id):
-                continue
             if not Friend.get_or_none(
                     friend_id=weibo.user_id,
                     user_id=self.user_id):
                 continue
+            if (config := UserConfig.get_or_none(user_id=weibo.user_id)):
+                if config.photos_num:
+                    continue
+                else:
+                    console.log(
+                        f'althoug {config.username} is fetched, but no pic, not skipping...', style='warning')
             if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
                 console.log(
@@ -286,11 +290,14 @@ class UserConfig(BaseModel):
                 description = weibo.url
                 if xmp_info.get('XMP:BlogTitle'):
                     description += f" {xmp_info['XMP:BlogTitle']}"
+                marker_note = model_to_dict(weibo, recurse=False)
+                marker_note['created_at'] = weibo.created_at.timestamp()
                 xmp_info.update({
                     'XMP:Title': f'{weibo.username}⭐️{self.username}',
                     'XMP:Description': description,
                     'XMP:Artist': weibo.username,
                     'XMP:ImageSupplierName': 'WeiboLiked',
+                    'XMP:MakerNote': marker_note
                 })
                 xmp_info["File:FileCreateDate"] = xmp_info['XMP:DateCreated']
 

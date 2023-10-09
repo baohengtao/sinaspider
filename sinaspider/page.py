@@ -82,6 +82,8 @@ class Page:
                     continue
                 if status.get('pic_ids'):
                     yield status
+                elif status.get('page_info', {}).get('type') == 'video':
+                    yield status
             console.log(f'created_at:{created_at}')
 
     def _liked_card(self) -> Iterator[dict]:

@@ -73,7 +73,7 @@ class WeiboParser:
         self.basic_info()
         self.video_info()
 
-        if photos := self.photos_info_with_hist():
+        if photos := self.photos_info_with_hist(online=online):
             photos = {
                 str(i+1): list(p) for i, p in enumerate(photos)}
             self.weibo['photos'] = photos
@@ -85,9 +85,12 @@ class WeiboParser:
             self.weibo['update_status'] = 'updated'
         return self.weibo
 
-    def photos_info_with_hist(self):
+    def photos_info_with_hist(self, online=True):
+        photos = self.photos_info()
+        if not online:
+            return photos
         if (edit_count := self.info.get('edit_count')) is None:
-            return self.photos_info()
+            return photos
         console.log(
             f'{self.id} edited in {edit_count} times, '
             'finding all pics in history')
@@ -101,12 +104,15 @@ class WeiboParser:
             if card['card_type'] != 9:
                 continue
             mblog = card['mblog']
-            photos = WeiboParser(mblog).photos_info()
-            for p in photos:
+            for p in WeiboParser(mblog).photos_info():
                 if p not in res:
                     res.append(p)
-        for p1, p2 in zip(self.photos_info(), res):
+        for p1, p2 in zip(photos, res):
             assert p1[0] == p2[0]
+        if len(res) > len(photos):
+            console.log(
+                f'🎉 the pic num increase from {len(photos)} to {len(res)}',
+                style='bold red')
         return res
 
     def basic_info(self):
@@ -124,7 +130,8 @@ class WeiboParser:
             url=f'https://weibo.com/{user_id}/{bid or id_}',
             url_m=f'https://m.weibo.cn/detail/{id_}',
             created_at=created_at,
-            source=self.info['source'].strip(),
+            source=BeautifulSoup(
+                self.info['source'].strip(), 'html.parser').text,
             retweeted=self.info.get('retweeted_status', {}).get('bid'),
             region_name=region_name,
         )
