@@ -209,20 +209,12 @@ class UserConfig(BaseModel):
         console.log(f"Media Saving: {download_dir}")
         download_files(imgs)
 
-        # if update:
-        #     (LikedWeibo.delete()
-        #      .where(LikedWeibo.user == self.user)
-        #      .execute())
         if count := len(self._liked_list):
             for w in LikedWeibo.select().where(
                     LikedWeibo.user == self.user).order_by(
                     LikedWeibo.order_num.desc()):
                 w.order_num += count
                 w.save()
-            # (LikedWeibo
-            #  .update(order_num=LikedWeibo.order_num + count)
-            #  .where(LikedWeibo.user == self.user)
-            #  .execute())
             LikedWeibo.insert_many(self._liked_list).execute()
             console.log(f"🎀 插入 {count} 条新赞", style="bold green on dark_green")
             LikedWeibo.delete().where(LikedWeibo.order_num > 1000).execute()

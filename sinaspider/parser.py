@@ -77,7 +77,7 @@ class WeiboParser:
             photos = {
                 str(i+1): list(p) for i, p in enumerate(photos)}
             self.weibo['photos'] = photos
-        self.weibo |= self.text_info_v2()
+        self.weibo |= self.text_info()
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             self.weibo['is_pinned'] = self.is_pinned
@@ -184,59 +184,7 @@ class WeiboParser:
 
         self.weibo['video_duration'] = page_info['media_info']['duration']
 
-    # @staticmethod
-    # def text_info(text: str):
-    #     if not text.strip():
-    #         return {}
-    #     at_list, topics_list = [], []
-    #     with warnings.catch_warnings(
-    #         action='ignore',
-    #         category=bs4.MarkupResemblesLocatorWarning
-    #     ):
-    #         soup = BeautifulSoup(text, 'html.parser')
-
-    #     for a in soup.find_all('a'):
-    #         at_sign, user = a.text[0], a.text[1:]
-    #         if at_sign == '@':
-    #             assert a.attrs['href'][3:] == user
-    #             at_list.append(user)
-
-    #     for topic in soup.find_all('span', class_='surl-text'):
-    #         if m := re.match('^#(.*)#$', topic.text):
-    #             topics_list.append(m.group(1))
-
-    #     location, location_id, location_src = '', '', ''
-    #     location_collector = []
-    #     for url_icon in soup.find_all('span', class_='url-icon'):
-    #         location_icon = 'timeline_card_small_location_default.png'
-    #         if location_icon in url_icon.find('img').attrs['src']:
-    #             location_span = url_icon.findNext('span')
-    #             assert location_span.attrs['class'] == ['surl-text']
-    #             location_collector.append(
-    #                 [location_span.text, location_span.parent.attrs['href']])
-    #     if location_collector:
-    #         location, href = location_collector[-1]
-    #         pattern1 = r'http://weibo\.com/p/100101(\w+)'
-    #         pattern2 = (r'https://m\.weibo\.cn/p/index\?'
-    #                     r'containerid=2306570042(\w+)')
-    #         if match := (re.search(pattern1, href)
-    #                      or re.search(pattern2, href)):
-    #             location_id = match.group(1)
-    #         else:
-    #             console.log(
-    #                 f"cannot parse {location}'s id: {href}", style='error')
-    #             location_src = href
-
-    #     return {
-    #         # 'text': soup.get_text(' ', strip=True),
-    #         'at_users': at_list,
-    #         'topics': topics_list,
-    #         'location': location,
-    #         'location_id': location_id,
-    #         'location_src': location_src
-    #     }
-
-    def text_info_v2(self):
+    def text_info(self):
         hypertext = self.info['text'].replace('\u200b', '').strip()
         topics = []
         at_users = []
@@ -297,8 +245,6 @@ class WeiboParser:
             assert not text.endswith('📍')
             text += f' 📍{location}'
         res['text'] = text.strip()
-        # for k, v in self.text_info(hypertext).items():
-        #     assert res[k] == v
         return res
 
 

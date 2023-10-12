@@ -130,10 +130,6 @@ class Page:
             user_info = weibo_info['user']
             if user_info['gender'] == 'm':
                 continue
-            # followers_count = int(
-            #     normalize_str(user_info['followers_count']))
-            # if followers_count > 50000 or followers_count < 500:
-            #     continue
             if parse:
                 try:
                     yield WeiboParser(weibo_info).parse(online=False)
