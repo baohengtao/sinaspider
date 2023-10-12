@@ -779,6 +779,11 @@ class Location(BaseModel):
             console.log(
                 f'location has been deleted: {url} {url_m}', style='error')
             return
+        elif not pic:
+            console.log(
+                f"location id {location_id}({url_m, url}) cannot  be parsed, "
+                "extra work need been done", style='error')
+            return
         pattern = r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
         lng, lat = map(float, re.search(pattern, pic).groups())
         lat, lng = round_loc(lat, lng)

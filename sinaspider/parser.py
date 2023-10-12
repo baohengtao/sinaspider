@@ -237,7 +237,7 @@ class WeiboParser:
     #     }
 
     def text_info_v2(self):
-        hypertext = self.info['text'].strip()
+        hypertext = self.info['text'].replace('\u200b', '').strip()
         topics = []
         at_users = []
         location_collector = []

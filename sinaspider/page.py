@@ -58,13 +58,14 @@ class Page:
     def timeline(since: pendulum.DateTime):
         """Get status on my timeline."""
         next_cursor = None
-        seed = 'https://m.weibo.cn/feed/friends'
+        # seed = 'https://m.weibo.cn/feed/friends'
+        seed = 'https://api.weibo.cn/2/statuses/friends_timeline?feature=1&c=weicoabroad&from=12CC293010&i=f185221&s=b59fafff'
         while True:
-            url = f'{seed}?max_id={next_cursor}' if next_cursor else seed
+            url = f'{seed}&max_id={next_cursor}' if next_cursor else seed
             while True:
                 r = fetcher.get(url)
                 try:
-                    data = r.json()['data']
+                    data = r.json()
                 except JSONDecodeError:
                     console.log(
                         f'{r.url} json decode error', style='error')
@@ -75,11 +76,11 @@ class Page:
             next_cursor = data['next_cursor']
             created_at = None
             for status in data['statuses']:
+                assert 'retweeted_status' not in status
                 created_at = pendulum.parse(status['created_at'], strict=False)
                 if created_at < since:
                     return
-                if 'retweeted_status' in status:
-                    continue
+
                 if status.get('pic_ids'):
                     yield status
                 elif status.get('page_info', {}).get('type') == 'video':
