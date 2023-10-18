@@ -77,6 +77,7 @@ class UserConfig(BaseModel):
     followed_by = ArrayField(field_class=TextField, null=True)
     IP = TextField(null=True)
     folder = TextField(null=True)
+    is_friend = BooleanField()
 
     class Meta:
         table_name = "userconfig"

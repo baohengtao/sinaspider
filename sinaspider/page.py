@@ -11,6 +11,120 @@ from sinaspider.helper import fetcher
 from sinaspider.parser import WeiboParser
 
 
+class SinaBot:
+    def __init__(self, art_login=False) -> None:
+        self.art_login = art_login
+        self.sess = fetcher.sess_art if self.art_login else fetcher.sess_main
+        url = (
+            "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
+        s = '694a9ce0' if self.art_login else '537c037e'
+        js = fetcher.get(url, art_login=self.art_login, params={'s': s}).json()
+        screen_name = js['mineinfo']['screen_name']
+        console.log(f'current logined as {screen_name}')
+
+    def set_remark(self, uid, remark):
+        url = "https://api.weibo.cn/2/friendships/remark/update"
+        data = {
+            "uid": uid,
+            "remark": remark,
+            "c": "weicoabroad",
+            "s": "c773e7e0",
+        }
+        response = self.sess.post(url,  data=data)
+        response.raise_for_status()
+
+    def follow(self, uid):
+        url = "https://api.weibo.cn/2/friendships/create"
+        data = {
+            "c": "weicoabroad",
+            "from": "12CC293010",
+            "s": "99312000",
+            "uid": uid
+        }
+        r = self.sess.post(url, data=data)
+        r.raise_for_status()
+        if (js := r.json()).get('errmsg'):
+            raise ValueError(js)
+        if (errmsg := r.json().get('errmsg')) == '该用户不存在':
+            console.log(f'{errmsg} (https://weibo.com/u/{uid})')
+            return
+        url = ('https://m.weibo.cn/api/container/getIndex?'
+               f'containerid=100505{uid}')
+        js = fetcher.get(url, art_login=self.art_login).json()
+        user_info = js['data']['userInfo']
+        assert user_info['following'] is True
+        user = f'{user_info["screen_name"]} (https://weibo.com/u/{uid}) '
+        console.log(f'following {user} successfully')
+
+    def unfollow(self, uid):
+        url = 'https://api.weibo.cn/2/friendships/destroy'
+        s = '0726b708'  # for art_login
+        data = {
+            'c': 'weicoabroad',
+            's': s,
+            'uid': uid,
+        }
+        response = self.sess.post(url,  data=data)
+        response.raise_for_status()
+        js = response.json()
+        if js.get('errmsg') == 'not followed':
+            console.log(f'{uid} alread unfollowed', )
+        else:
+            assert js['following'] is False
+            console.log(
+                f'{js["screen_name"]} (https://weibo.com/u/{uid}) unfollowed')
+
+    def get_following_list(self, pages=None):
+        s = '0726b708' if self.art_login else 'c773e7e0'
+        url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad'
+               f'&containerid=231093_-_selffollowed&page=%s&s={s}')
+        cnt = 0
+        if pages is None:
+            pages = itertools.count(start=1)
+        for page in pages:
+            r = fetcher.get(url % page, art_login=self.art_login)
+            cards = r.json()['cards']
+            if page == 1:
+                if cards[-1].get('name') == '没有更多内容了':
+                    cards.pop()
+                elif cards[-1].get('desc') == '来这里可以关注更多有意思的人':
+                    console.log('seems no following...')
+                    break
+                cards = cards[-1]
+            else:
+                cards = cards[0]
+            if cards.get("name") == "没有更多内容了":
+                console.log(f'{cnt} following fetched')
+                break
+            cards = cards['card_group']
+            keys = ['id', 'screen_name', 'remark']
+            console.log(f'{len(cards)} cards find on page {page}')
+            for card in cards:
+                assert card['card_type'] == 10
+                user = card['user']
+                user = {k: user[k] for k in keys}
+                yield user
+                cnt += 1
+
+    def get_friends_list(self):
+
+        s = 'c773e7e0'  # if self.art_login is False
+        url = ('https://api.weibo.cn/2/friendships/bilateral?c=weicoabroad'
+               f'&real_relationships=1&s={s}&trim_status=1&page=%s')
+        cnt = 0
+        for page in itertools.count(start=1):
+            r = fetcher.get(url % page, art_login=self.art_login)
+            js = r.json()
+            if not (users := js['users']):
+                console.log(f'{cnt} friends fetched')
+                break
+            console.log(f'{len(users)} users find on page {page}')
+            keys = ['id', 'screen_name', 'remark']
+            for user in users:
+                yield {k: user[k] for k in keys}
+                cnt += 1
+
+
 class Page:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
@@ -121,7 +235,6 @@ class Page:
         Args:
                 parse: whether to parse weibo, default True
         """
-        # from sinaspider.helper import normalize_str
         for weibo_info in self._liked_card():
             if weibo_info.get('deleted') == '1':
                 continue

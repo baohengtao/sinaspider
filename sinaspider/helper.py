@@ -22,31 +22,62 @@ from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 
 
+def _get_session():
+    env_file = Path(__file__).with_name('.env')
+    load_dotenv(env_file)
+    if not (cookie_main := os.getenv('COOKIE_MAIN')):
+        raise ValueError(f'no main cookie found in {env_file}')
+    if not (cookie_art := os.getenv('COOKIE_ART')):
+        raise ValueError(f'no art cookie found in {env_file}')
+    user_agent = (
+        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/100.0.4896.75 Mobile Safari/537.36')
+    sess_main = requests.Session()
+    sess_main.headers['User-Agent'] = user_agent
+    sess_main.headers['Cookie'] = cookie_main
+    sess_art = requests.Session()
+    sess_art.headers['User-Agent'] = user_agent
+    sess_art.headers['Cookie'] = cookie_art
+    return sess_main, sess_art
+
+
+sess_main, sess_art = _get_session()
+
+
 class Fetcher:
     def __init__(self) -> None:
-        self.sess = requests.Session()
-        self.sess.headers['User-Agent'] = (
-            'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/100.0.4896.75 Mobile Safari/537.36')
-        env_file = Path(__file__).with_name('.env')
-        load_dotenv(env_file)
-        if not (cookie := os.getenv('SINA_COOKIE')):
-            while not (cookie := input('Please input your cookie: ')):
-                continue
-            env_file.write_text(f'SINA_COOKIE={cookie}')
-        self.sess.headers['Cookie'] = cookie
+        self.sess_main, self.sess_art = _get_session()
         self._visit_count = 0
         self._last_fetch = time.time()
+        self._art_login = False
 
-    def get(self, url: str, mainthread=True) -> requests.Response:
+    @property
+    def art_login(self):
+        return self._art_login
+
+    def toggle_art(self, on: bool = True):
+        self._art_login = on
+        url = (
+            "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
+        s = '694a9ce0' if self.art_login else '537c037e'
+        js = fetcher.get(url, params={'s': s}).json()
+        screen_name = js['mineinfo']['screen_name']
+        console.log(f'current logined as {screen_name}')
+
+    def get(self, url: str, art_login: bool = None,
+            mainthread=True, params=None) -> requests.Response:
         # write with session and pause
-        if mainthread:
+        if art_login is None:
+            art_login = self.art_login
+        if not mainthread:
+            s = requests
+        else:
             self._pause()
-        get = self.sess.get if mainthread else requests.get
+            s = self.sess_art if art_login else self.sess_main
         while True:
             try:
-                return get(url)
+                return s.get(url, params=params)
             except ConnectionError as e:
                 period = 3600 if '/feed/friends' in url else 60
                 console.log(

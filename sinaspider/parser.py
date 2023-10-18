@@ -411,20 +411,6 @@ class UserParser:
         assert user_info.pop('close_blue_v') is False
         return user_info
 
-    def get_user_info_v2(self) -> dict:
-        url = ('https://api.weibo.cn/2/profile?&c=weicoabroad'
-               f'&from=129C893010&s=dddddddd&user_domain={self.id}')
-        js = fetcher.get(url).json()
-        user_info = js['userInfo']
-        to_pop = [
-            'status', 'badge', 'avatar_extend_info', 'extend', 'dialog',
-            'profile_image_url', 'cover_image_phone', 'lang',
-            'follower_number_text', 'covers'
-        ]
-        for key in to_pop:
-            user_info.pop(key)
-        return {k: v for k, v in user_info.items() if v != '' and v != 0}
-
     def followed_by(self) -> list[int] | None:
         """
         fetch users' id  who follow this user and also followed by me.
