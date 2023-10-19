@@ -57,6 +57,9 @@ class Fetcher:
         return self._art_login
 
     def toggle_art(self, on: bool = True):
+        if self._art_login == on:
+            console.log(f'art login is already {"on" if on else "off"}')
+            return
         self._art_login = on
         url = (
             "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")

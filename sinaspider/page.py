@@ -43,11 +43,12 @@ class SinaBot:
         }
         r = self.sess.post(url, data=data)
         r.raise_for_status()
-        if (js := r.json()).get('errmsg'):
-            raise ValueError(js)
-        if (errmsg := r.json().get('errmsg')) == '该用户不存在':
+        js = r.json()
+        if (errmsg := js.get('errmsg')) == '该用户不存在':
             console.log(f'{errmsg} (https://weibo.com/u/{uid})')
             return
+        elif errmsg:
+            raise ValueError(js)
         url = ('https://m.weibo.cn/api/container/getIndex?'
                f'containerid=100505{uid}')
         js = fetcher.get(url, art_login=self.art_login).json()

@@ -78,6 +78,8 @@ class UserConfig(BaseModel):
     IP = TextField(null=True)
     folder = TextField(null=True)
     is_friend = BooleanField()
+    bilateral = ArrayField(field_class=TextField, null=True)
+    blocked = BooleanField(default=False)
 
     class Meta:
         table_name = "userconfig"
@@ -113,6 +115,7 @@ class UserConfig(BaseModel):
         return visible
 
     def fetch_weibo(self, download_dir: Path):
+        self.fetch_friends()
         if not self.weibo_fetch:
             return
         if self.weibo_fetch_at:
@@ -391,6 +394,7 @@ class User(BaseModel):
     gender = TextField()
     education = ArrayField(field_class=TextField, null=True)
     followed_by = ArrayField(field_class=TextField, null=True)
+    bilateral = ArrayField(field_class=TextField, null=True)
 
     description = TextField(null=True)
     homepage = TextField(null=True)
@@ -437,6 +441,10 @@ class User(BaseModel):
             except cls.DoesNotExist:
                 pass
         user_dict = UserParser(user_id).parse()
+        fids = {f.friend_id for f in Friend.select().where(
+            Friend.user_id == user_id)}
+        if query := cls.select().where(cls.id.in_(fids)):
+            user_dict['bilateral'] = sorted(u.username for u in query)
         if followed_by := user_dict.pop('followed_by', None):
             if query := cls.select().where(cls.id.in_(followed_by)):
                 user_dict['followed_by'] = sorted(u.username for u in query)

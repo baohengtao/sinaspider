@@ -76,7 +76,8 @@ def user_loop(download_dir: Path = default_path,
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  .order_by(UserConfig.weibo_fetch_at))
-        users = [uc for uc in users if uc.need_weibo_fetch()]
+        users = [uc for uc in users if uc.need_weibo_fetch()
+                 and not uc.blocked]
         download_dir /= 'Loop'
         console.log(f'{len(users)} will be fetched...')
     if fetching_duration:
@@ -88,6 +89,8 @@ def user_loop(download_dir: Path = default_path,
             config = UserConfig.from_id(user_id=user.user_id)
         except UserNotFoundError:
             config = UserConfig.get(user_id=user.user_id)
+            config.blocked = True
+            config.save()
             console.log(
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
