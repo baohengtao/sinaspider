@@ -629,10 +629,17 @@ class Weibo(BaseModel):
         self.save()
 
     def get_coordinate(self) -> tuple[float, float] | None:
+        if art_login := self.user.following:
+            token = 'from=10DA093010&s=ba74941a'
+
+        else:
+            token = 'from=10CB193010&s=BF3838D9'
+
         url = ('https://api.weibo.cn/2/comments/build_comments?'
-               'launchid=10000365--x&from=10CB193010&c=iphone&s=BF3838D9'
+               f'launchid=10000365--x&c=iphone&{token}'
                f'&id={self.id}&is_show_bulletin=2')
-        status = fetcher.get(url).json()['status']
+        status = fetcher.get(url, art_login=art_login).json()[
+            'status']
         if 'geo' not in status:
             console.log(
                 f"seems have been deleted: {self.url} ", style='error')
@@ -746,7 +753,7 @@ class Location(BaseModel):
     @staticmethod
     def get_location_info_v2(location_id):
         api = f'http://place.weibo.com/wandermap/pois?poiid={location_id}'
-        info = fetcher.get(api).json()
+        info = fetcher.get(api, art_login=True).json()
         if not info:
             return
         assert info.pop('poiid') == location_id
@@ -772,9 +779,9 @@ class Location(BaseModel):
         url = f'https://weibo.com/p/100101{location_id}'
         url_m = ('https://m.weibo.cn/p/index?'
                  f'containerid=2306570042{location_id}')
-        api = ('https://api.weibo.cn/2/cardlist?&from=10CB193010'
-               f'&c=iphone&s=BF3838D9&containerid=2306570042{location_id}')
-        js = fetcher.get(api).json()
+        api = ('https://api.weibo.cn/2/cardlist?&from=10DA093010'
+               f'&c=iphone&s=ba74941a&containerid=2306570042{location_id}')
+        js = fetcher.get(api, art_login=True).json()
         cards = js['cards'][0]['card_group']
         pic = cards[0]['pic']
         if 'android_delete_poi.png' in pic:
@@ -783,7 +790,7 @@ class Location(BaseModel):
             return
         elif not pic:
             console.log(
-                f"location id {location_id}({url_m, url}) cannot  be parsed, "
+                f"location id {location_id} {url_m, url} cannot  be parsed, "
                 "extra work need been done", style='error')
             return
         pattern = r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
