@@ -6,7 +6,7 @@ from typer import Option, Typer
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
-from sinaspider.helper import normalize_user_id
+from sinaspider.helper import fetcher, normalize_user_id
 from sinaspider.model import UserConfig
 
 from .helper import default_path, logsaver
@@ -54,7 +54,6 @@ def user_loop(download_dir: Path = default_path,
               new_user: bool = Option(False, "--new-user", "-n"),
               following: bool = Option(False, "--following", "-f")):
     if new_user:
-
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null()))

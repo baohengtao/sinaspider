@@ -7,6 +7,7 @@ import pendulum
 from typer import Option, Typer
 
 from sinaspider import console
+from sinaspider.helper import fetcher
 from sinaspider.model import UserConfig
 
 from .helper import default_path, logsaver, update_user_config
@@ -90,19 +91,21 @@ def _get_timeline(download_dir: Path,
                   since: pendulum.DateTime,
                   ):
     from sinaspider.page import Page
-    for status in Page.timeline(since=since):
-        uid = status['user']['id']
-        if not (uc := UserConfig.get_or_none(user_id=uid)):
-            continue
-        created_at = pendulum.from_format(
-            status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-        if not (fetch_at := uc.weibo_fetch_at):
-            continue
-        if uc.weibo_fetch and fetch_at < created_at:
-            uc = UserConfig.from_id(uid)
-            uc.fetch_weibo(download_dir)
-            if uc.need_liked_fetch():
-                uc.fetch_liked(download_dir)
+    for art in [True, False]:
+        fetcher.toggle_art(art)
+        for status in Page.timeline(since=since):
+            uid = status['user']['id']
+            if not (uc := UserConfig.get_or_none(user_id=uid)):
+                continue
+            created_at = pendulum.from_format(
+                status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            if not (fetch_at := uc.weibo_fetch_at):
+                continue
+            if uc.weibo_fetch and fetch_at < created_at:
+                uc = UserConfig.from_id(uid)
+                uc.fetch_weibo(download_dir)
+                if uc.need_liked_fetch():
+                    uc.fetch_liked(download_dir)
 
 
 @app.command()

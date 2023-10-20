@@ -77,7 +77,7 @@ class UserConfig(BaseModel):
     followed_by = ArrayField(field_class=TextField, null=True)
     IP = TextField(null=True)
     folder = TextField(null=True)
-    is_friend = BooleanField()
+    is_friend = BooleanField(default=False)
     bilateral = ArrayField(field_class=TextField, null=True)
     blocked = BooleanField(default=False)
 
@@ -115,6 +115,7 @@ class UserConfig(BaseModel):
         return visible
 
     def fetch_weibo(self, download_dir: Path):
+        fetcher.toggle_art(self.following)
         self.fetch_friends()
         if not self.weibo_fetch:
             return

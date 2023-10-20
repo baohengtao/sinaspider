@@ -342,7 +342,7 @@ class UserParser:
 
     def _fetch_user_cn(self) -> dict:
         """获取来自cn的信息."""
-        r = fetcher.get(f'https://weibo.cn/{self.id}/info')
+        r = fetcher.get(f'https://weibo.cn/{self.id}/info', art_login=True)
 
         with warnings.catch_warnings(
             action='ignore',
@@ -382,7 +382,7 @@ class UserParser:
         """获取来自m.weibo.com的信息."""
         url = ('https://m.weibo.cn/api/container/'
                f'getIndex?containerid=230283{self.id}_-_INFO')
-        js = fetcher.get(url).json()
+        js = fetcher.get(url, art_login=True).json()
         user_card = js['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
         user_card = {card['item_name']: card['item_content']
@@ -397,7 +397,7 @@ class UserParser:
         """获取主信息."""
         url = ('https://m.weibo.cn/api/container/getIndex?'
                f'containerid=100505{self.id}')
-        while not (js := fetcher.get(url).json())['ok']:
+        while not (js := fetcher.get(url, art_login=True).json())['ok']:
             console.log(
                 f'not js[ok] for {url}, sleeping 60 secs...', style='warning')
             time.sleep(60)
@@ -419,9 +419,9 @@ class UserParser:
             list[int] | None: list of users' id
         """
         url = ("https://api.weibo.cn/2/cardlist?"
-               "from=10CB193010&c=iphone&s=BF3838D9"
+               "from=10DA093010&c=iphone&s=ba74941a"
                f"&containerid=231051_-_myfollow_followprofile_-_{self.id}")
-        r = fetcher.get(url)
+        r = fetcher.get(url, art_login=True)
         if not (cards := r.json()['cards']):
             return
         cards = cards[0]['card_group'][1:]

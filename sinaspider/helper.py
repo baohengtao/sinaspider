@@ -46,11 +46,11 @@ sess_main, sess_art = _get_session()
 
 
 class Fetcher:
-    def __init__(self) -> None:
+    def __init__(self, art_login: bool = None) -> None:
         self.sess_main, self.sess_art = _get_session()
         self._visit_count = 0
         self._last_fetch = time.time()
-        self._art_login = False
+        self._art_login = art_login
 
     @property
     def art_login(self):
@@ -58,7 +58,6 @@ class Fetcher:
 
     def toggle_art(self, on: bool = True):
         if self._art_login == on:
-            console.log(f'art login is already {"on" if on else "off"}')
             return
         self._art_login = on
         url = (
@@ -66,13 +65,16 @@ class Fetcher:
         s = '694a9ce0' if self.art_login else '537c037e'
         js = fetcher.get(url, params={'s': s}).json()
         screen_name = js['mineinfo']['screen_name']
-        console.log(f'current logined as {screen_name}')
+        console.log(
+            f'current logined as {screen_name}', style='green on dark_green')
 
     def get(self, url: str, art_login: bool = None,
             mainthread=True, params=None) -> requests.Response:
         # write with session and pause
         if art_login is None:
             art_login = self.art_login
+        if art_login is None:
+            raise ValueError('art_login is not set')
         if not mainthread:
             s = requests
         else:
@@ -118,6 +120,7 @@ class Fetcher:
 
 
 fetcher = Fetcher()
+# fetcher.toggle_art(True)
 
 
 def write_xmp(img: Path, tags: dict):
@@ -228,7 +231,7 @@ def normalize_user_id(user_id: str | int) -> int:
         else:
             raise UserNotFoundError(f'{user_id} not exist')
     else:
-        r = fetcher.get(f'https://weibo.cn/u/{user_id}')
+        r = fetcher.get(f'https://weibo.cn/u/{user_id}', art_login=True)
         if 'User does not exists!' in r.text:
             raise UserNotFoundError(f'{user_id} not exist')
     return user_id

@@ -23,15 +23,19 @@ class SinaBot:
         console.log(f'current logined as {screen_name}')
 
     def set_remark(self, uid, remark):
+        s = '0726b708' if self.art_login else 'c773e7e0'
         url = "https://api.weibo.cn/2/friendships/remark/update"
         data = {
             "uid": uid,
             "remark": remark,
             "c": "weicoabroad",
-            "s": "c773e7e0",
+            "s": s,
         }
         response = self.sess.post(url,  data=data)
         response.raise_for_status()
+        js = response.json()
+        if js.get('errormsg'):
+            raise ValueError(js)
 
     def follow(self, uid):
         url = "https://api.weibo.cn/2/friendships/create"
@@ -174,7 +178,9 @@ class Page:
         """Get status on my timeline."""
         next_cursor = None
         # seed = 'https://m.weibo.cn/feed/friends'
-        seed = 'https://api.weibo.cn/2/statuses/friends_timeline?feature=1&c=weicoabroad&from=12CC293010&i=f185221&s=b59fafff'
+        s = "99312000" if fetcher.art_login else "b59fafff"
+        seed = ('https://api.weibo.cn/2/statuses/friends_timeline?'
+                f'feature=1&c=weicoabroad&from=12CC293010&i=f185221&s={s}')
         while True:
             url = f'{seed}&max_id={next_cursor}' if next_cursor else seed
             while True:
@@ -203,8 +209,9 @@ class Page:
             console.log(f'created_at:{created_at}')
 
     def _liked_card(self) -> Iterator[dict]:
+        s = '0726b708' if fetcher.art_login else 'c773e7e0'
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
-               f'230869{self.id}-_mix-_like-pic&page=%s&s=c773e7e0')
+               f'230869{self.id}-_mix-_like-pic&page=%s&s={s}')
         for page in itertools.count(start=1):
             console.log(f'Fetching liked weibo page {page}...')
             while True:
@@ -260,9 +267,10 @@ class Page:
         pattern = (r'(https://tvax?\d\.sinaimg\.cn)/'
                    r'(?:crop\.\d+\.\d+\.\d+\.\d+\.\d+\/)?(.*?)\?.*$')
         friend_count = 0
+        s = '0726b708' if fetcher.art_login else 'c773e7e0'
         for page in itertools.count(start=1):
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
-                   f"c=weicoabroad&page={page}&s=c773e7e0&uid={self.id}")
+                   f"c=weicoabroad&page={page}&s={s}&uid={self.id}")
             js = fetcher.get(url).json()
             if not (users := js['users']):
                 console.log(
