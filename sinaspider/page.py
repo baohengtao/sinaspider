@@ -1,5 +1,6 @@
 import itertools
 import re
+from pathlib import Path
 from time import sleep
 from typing import Iterator
 
@@ -12,7 +13,7 @@ from sinaspider.parser import WeiboParser
 
 
 class SinaBot:
-    def __init__(self, art_login=False) -> None:
+    def __init__(self, art_login: bool = False) -> None:
         self.art_login = art_login
         self.sess = fetcher.sess_art if self.art_login else fetcher.sess_main
         url = (
@@ -112,7 +113,6 @@ class SinaBot:
                 cnt += 1
 
     def get_friends_list(self):
-
         s = 'c773e7e0'  # if self.art_login is False
         url = ('https://api.weibo.cn/2/friendships/bilateral?c=weicoabroad'
                f'&real_relationships=1&s={s}&trim_status=1&page=%s')
@@ -128,6 +128,24 @@ class SinaBot:
             for user in users:
                 yield {k: user[k] for k in keys}
                 cnt += 1
+
+    def get_timeline(self, download_dir: Path,
+                     since: pendulum.DateTime):
+        from sinaspider.model import UserConfig
+        fetcher.toggle_art(self.art_login)
+        for status in Page.timeline(since=since):
+            uid = status['user']['id']
+            if not (uc := UserConfig.get_or_none(user_id=uid)):
+                continue
+            if not (fetch_at := uc.weibo_fetch_at):
+                continue
+            created_at = pendulum.from_format(
+                status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            if uc.weibo_fetch and fetch_at < created_at:
+                uc = UserConfig.from_id(uid)
+                uc.fetch_weibo(download_dir)
+                if uc.need_liked_fetch():
+                    uc.fetch_liked(download_dir)
 
 
 class Page:

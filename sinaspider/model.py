@@ -181,7 +181,10 @@ class UserConfig(BaseModel):
                     return
             weibo_dict['username'] = self.username
             weibo_id = Weibo.upsert(weibo_dict)
-            weibo = Weibo.get_by_id(weibo_id)
+            weibo: Weibo = Weibo.get_by_id(weibo_id)
+            if weibo.location:
+                assert weibo.latitude
+            # weibo.update_location()
 
             medias = list(weibo.medias(download_dir))
             console.log(weibo)
@@ -554,6 +557,7 @@ class Weibo(BaseModel):
         wid = weibo_dict['id']
         if not (model := cls.get_or_none(id=wid)):
             cls.insert(weibo_dict).execute()
+            Weibo.get_by_id(wid).update_location()
             return wid
         if model.location is None:
             assert 'location' not in weibo_dict
@@ -587,6 +591,7 @@ class Weibo(BaseModel):
             if (ori := model_dict[k]) is not None:
                 console.log(f'-{k}: {ori}')
         cls.update(weibo_dict).where(cls.id == wid).execute()
+        Weibo.get_by_id(wid).update_location()
         return wid
 
     def update_location(self):

@@ -7,7 +7,7 @@ from rich.prompt import Prompt
 from typer import Typer
 
 from sinaspider import console
-from sinaspider.helper import download_files, normalize_wb_id
+from sinaspider.helper import download_files, fetcher, normalize_wb_id
 from sinaspider.model import Artist, User, UserConfig, Weibo
 
 from .helper import default_path, logsaver
@@ -48,6 +48,7 @@ def artist():
 @app.command(help="fetch weibo by weibo_id")
 def weibo(download_dir: Path = default_path):
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
+        fetcher.toggle_art(True)
         if not (weibo_id := normalize_wb_id(weibo_id)):
             continue
         weibo = Weibo.from_id(weibo_id, update=True)
@@ -74,7 +75,11 @@ def update_location():
               .where(Weibo.latitude.is_null()))
     for i, weibo in enumerate(weibos, start=1):
         console.log(f'✨ processing {i} / {len(weibos)}')
-        weibo.update_location()
+        try:
+            weibo.update_location()
+        except AssertionError:
+            console.log(
+                f'failed to get location for {weibo.url}', style='error')
         console.log(weibo, '\n')
 
 

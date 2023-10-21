@@ -9,6 +9,7 @@ from typer import Option, Typer
 from sinaspider import console
 from sinaspider.helper import fetcher
 from sinaspider.model import UserConfig
+from sinaspider.page import SinaBot
 
 from .helper import default_path, logsaver, update_user_config
 
@@ -30,6 +31,8 @@ def timeline(days: float = Option(...),
     """
     from .liked import liked_loop
     from .user import user_loop
+    bot = SinaBot(art_login=False)
+    bot_art = SinaBot(art_login=True)
 
     since = pendulum.now().subtract(days=days)
     fetching_time = pendulum.now()
@@ -64,7 +67,8 @@ def timeline(days: float = Option(...),
         next_since = pendulum.now()
         update_user_config()
 
-        _get_timeline(download_dir, since)
+        _get_timeline(bot_art, download_dir, since)
+        _get_timeline(bot, download_dir, since)
         if fetching_duration > 0:
             fetch_until = time.time() + fetching_duration * 60
             if UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None):
@@ -87,25 +91,10 @@ def timeline(days: float = Option(...),
 
 
 @logsaver
-def _get_timeline(download_dir: Path,
+def _get_timeline(bot: SinaBot, download_dir: Path,
                   since: pendulum.DateTime,
                   ):
-    from sinaspider.page import Page
-    for art in [True, False]:
-        fetcher.toggle_art(art)
-        for status in Page.timeline(since=since):
-            uid = status['user']['id']
-            if not (uc := UserConfig.get_or_none(user_id=uid)):
-                continue
-            created_at = pendulum.from_format(
-                status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            if not (fetch_at := uc.weibo_fetch_at):
-                continue
-            if uc.weibo_fetch and fetch_at < created_at:
-                uc = UserConfig.from_id(uid)
-                uc.fetch_weibo(download_dir)
-                if uc.need_liked_fetch():
-                    uc.fetch_liked(download_dir)
+    bot.get_timeline(download_dir=download_dir, since=since)
 
 
 @app.command()
