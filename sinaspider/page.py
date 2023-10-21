@@ -130,10 +130,12 @@ class SinaBot:
                 cnt += 1
 
     def get_timeline(self, download_dir: Path,
-                     since: pendulum.DateTime):
+                     since: pendulum.DateTime,
+                     friend_circle=False):
         from sinaspider.model import UserConfig
         fetcher.toggle_art(self.art_login)
-        for status in Page.timeline(since=since):
+        for status in Page.timeline(
+                since=since, friend_circle=friend_circle):
             uid = status['user']['id']
             if not (uc := UserConfig.get_or_none(user_id=uid)):
                 continue
@@ -143,6 +145,7 @@ class SinaBot:
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             if uc.weibo_fetch and fetch_at < created_at:
                 uc = UserConfig.from_id(uid)
+                assert uc.following == self.art_login
                 uc.fetch_weibo(download_dir)
                 if uc.need_liked_fetch():
                     uc.fetch_liked(download_dir)
@@ -192,13 +195,20 @@ class Page:
                     f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
     @staticmethod
-    def timeline(since: pendulum.DateTime):
+    def timeline(since: pendulum.DateTime, friend_circle=False):
         """Get status on my timeline."""
         next_cursor = None
         # seed = 'https://m.weibo.cn/feed/friends'
         s = "99312000" if fetcher.art_login else "b59fafff"
-        seed = ('https://api.weibo.cn/2/statuses/friends_timeline?'
-                f'feature=1&c=weicoabroad&from=12CC293010&i=f185221&s={s}')
+        if friend_circle:
+            seed = ("https://api.weibo.cn/2/groups/timeline?"
+                    "&c=weicoabroad&from=12CC293010"
+                    "&list_id=100096619193364"
+                    f"&s={s}"
+                    )
+        else:
+            seed = ('https://api.weibo.cn/2/statuses/friends_timeline?'
+                    f'feature=1&c=weicoabroad&from=12CC293010&i=f185221&s={s}')
         while True:
             url = f'{seed}&max_id={next_cursor}' if next_cursor else seed
             while True:

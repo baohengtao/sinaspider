@@ -7,7 +7,6 @@ import pendulum
 from typer import Option, Typer
 
 from sinaspider import console
-from sinaspider.helper import fetcher
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 
@@ -67,8 +66,8 @@ def timeline(days: float = Option(...),
         next_since = pendulum.now()
         update_user_config()
 
-        _get_timeline(bot_art, download_dir, since)
-        _get_timeline(bot, download_dir, since)
+        _get_timeline(bot_art, download_dir, since, friend_circle=False)
+        _get_timeline(bot, download_dir, since, friend_circle=True)
         if fetching_duration > 0:
             fetch_until = time.time() + fetching_duration * 60
             if UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None):
@@ -93,8 +92,10 @@ def timeline(days: float = Option(...),
 @logsaver
 def _get_timeline(bot: SinaBot, download_dir: Path,
                   since: pendulum.DateTime,
+                  friend_circle=False
                   ):
-    bot.get_timeline(download_dir=download_dir, since=since)
+    bot.get_timeline(download_dir=download_dir, since=since,
+                     friend_circle=friend_circle)
 
 
 @app.command()
