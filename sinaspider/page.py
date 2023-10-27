@@ -38,6 +38,23 @@ class SinaBot:
         if js.get('errormsg'):
             raise ValueError(js)
 
+    def set_special_follow(self, uid, special_follow: bool):
+        s = "4fff7801"  # for art_login
+        cmd = 'create' if special_follow else 'destroy'
+        url = (f"https://api.weibo.cn/2/friendships/special_attention_{cmd}?"
+               f"from=10DA199020&c=iphone&s={s}&uid={uid}"
+               )
+        r = fetcher.get(url, art_login=self.art_login)
+        if r.json().get('errmsg') == 'not followed':
+            console.log(f'{uid} not followed', style='error')
+            return
+        assert r.json()['result'] is True
+        # url = ('https://m.weibo.cn/api/container/getIndex?'
+        #        f'containerid=100505{uid}')
+        # js = fetcher.get(url, art_login=self.art_login).json()
+        # user_info = js['data']['userInfo']
+        # assert user_info['special_follow'] is True
+
     def follow(self, uid):
         url = "https://api.weibo.cn/2/friendships/create"
         data = {
@@ -80,16 +97,23 @@ class SinaBot:
             console.log(
                 f'{js["screen_name"]} (https://weibo.com/u/{uid}) unfollowed')
 
-    def get_following_list(self, pages=None):
+    def get_following_list(self, pages=None,
+                           special_following=False) -> Iterator[dict]:
         s = '0726b708' if self.art_login else 'c773e7e0'
+        if special_following:
+            gid = '4955723680713860' if self.art_login else '4268552720689336'
+            containerid = f'231093_-_selfgroupfollow_-_{gid}'
+        else:
+            containerid = '231093_-_selffollowed'
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad'
-               f'&containerid=231093_-_selffollowed&page=%s&s={s}')
+               f'&containerid={containerid}&page=%s&s={s}')
         cnt = 0
         if pages is None:
             pages = itertools.count(start=1)
         for page in pages:
             r = fetcher.get(url % page, art_login=self.art_login)
-            cards = r.json()['cards']
+            if (cards := r.json()['cards']) is None:
+                return
             if page == 1:
                 if cards[-1].get('name') == '没有更多内容了':
                     cards.pop()
