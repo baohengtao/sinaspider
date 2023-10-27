@@ -13,7 +13,7 @@ from sinaspider.parser import WeiboParser
 
 
 class SinaBot:
-    def __init__(self, art_login: bool = False) -> None:
+    def __init__(self, art_login: bool = True) -> None:
         self.art_login = art_login
         self.sess = fetcher.sess_art if self.art_login else fetcher.sess_main
         url = (
@@ -21,7 +21,7 @@ class SinaBot:
         s = '694a9ce0' if self.art_login else '537c037e'
         js = fetcher.get(url, art_login=self.art_login, params={'s': s}).json()
         screen_name = js['mineinfo']['screen_name']
-        console.log(f'current logined as {screen_name}')
+        console.log(f'init bot logined as {screen_name}')
 
     def set_remark(self, uid, remark):
         s = '0726b708' if self.art_login else 'c773e7e0'
@@ -144,9 +144,13 @@ class SinaBot:
             created_at = pendulum.from_format(
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             if uc.weibo_fetch and fetch_at < created_at:
-                uc = UserConfig.from_id(uid)
-                assert uc.following == self.art_login
-                uc.fetch_weibo(download_dir)
+                for _ in range(3):
+                    uc = UserConfig.from_id(uid)
+                    if uc.following == self.art_login:
+                        uc.fetch_weibo(download_dir)
+                        break
+                else:
+                    raise ValueError(f'{uc.username} not following')
                 if uc.need_liked_fetch():
                     uc.fetch_liked(download_dir)
 

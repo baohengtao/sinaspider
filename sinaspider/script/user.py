@@ -57,12 +57,13 @@ def user_loop(download_dir: Path = default_path,
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null()))
-        if nofo := users.where(~UserConfig.following):
-            for uc in nofo:
-                UserConfig.from_id(uc.user_id)
-        if nofo := users.where(~UserConfig.following):
-            console.log(list(nofo))
-            console.log('some users are not following, skipping them')
+        assert not users.where(~UserConfig.following)
+        # if nofo := users.where(~UserConfig.following):
+        #     for uc in nofo:
+        #         UserConfig.from_id(uc.user_id)
+        # if nofo := users.where(~UserConfig.following):
+        #     console.log(list(nofo))
+        #     console.log('some users are not following, skipping them')
         users = users.where(UserConfig.following)
         console.log(f'{len(users)} users has been found')
         if not fetching_duration:
@@ -71,12 +72,16 @@ def user_loop(download_dir: Path = default_path,
 
     else:
         users = (UserConfig.select()
-                 .where(UserConfig.following == following)
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
-                 .order_by(UserConfig.weibo_fetch_at))
-        users = [uc for uc in users if uc.need_weibo_fetch()
-                 and not uc.blocked]
+                 .where(~UserConfig.blocked)
+                 .order_by(UserConfig.weibo_fetch_at)
+                 )
+        if following:
+            users = users.where(UserConfig.following | UserConfig.is_friend)
+        else:
+            users = users.where(~UserConfig.following & ~UserConfig.is_friend)
+        users = [uc for uc in users if uc.need_weibo_fetch()]
         download_dir /= 'Loop'
         console.log(f'{len(users)} will be fetched...')
     if fetching_duration:

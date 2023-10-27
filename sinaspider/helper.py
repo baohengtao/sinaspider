@@ -66,15 +66,19 @@ class Fetcher:
         js = fetcher.get(url, params={'s': s}).json()
         screen_name = js['mineinfo']['screen_name']
         console.log(
-            f'current logined as {screen_name}', style='green on dark_green')
+            f'fetcher: current logined as {screen_name}',
+            style='green on dark_green')
 
     def get(self, url: str, art_login: bool = None,
             mainthread=True, params=None) -> requests.Response:
         # write with session and pause
         if art_login is None:
+            if self.art_login is None:
+                console.log(
+                    'art_login is not set, set to True', style='warning')
+                self.toggle_art(True)
             art_login = self.art_login
-        if art_login is None:
-            raise ValueError('art_login is not set')
+
         if not mainthread:
             s = requests
         else:
@@ -124,7 +128,7 @@ fetcher = Fetcher()
 
 
 def write_xmp(img: Path, tags: dict):
-    for k, v in tags.items():
+    for k, v in tags.copy().items():
         if isinstance(v, str):
             tags[k] = v.replace('\n', '&#x0a;')
     params = ['-overwrite_original', '-ignoreMinorErrors', '-escapeHTML']
@@ -251,6 +255,15 @@ def normalize_wb_id(wb_id: int | str) -> int:
         id_ = f'{int(num):07d}{id_}'
     id_ = int(id_)
     return id_
+
+
+def encode_wb_id(id_: int) -> str:
+    id_, bid = str(id_), ''
+    while id_:
+        id_, num = id_[:-7], id_[-7:]
+        enc = base62.encode(int(num)).swapcase().zfill(4)
+        bid = enc + bid
+    return bid.lstrip('0')
 
 
 def normalize_str(amount):

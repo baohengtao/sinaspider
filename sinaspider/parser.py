@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError, WeiboNotFoundError
-from sinaspider.helper import fetcher, normalize_str
+from sinaspider.helper import encode_wb_id, fetcher, normalize_str
 
 
 class WeiboParser:
@@ -125,10 +125,10 @@ class WeiboParser:
         self.weibo.update(
             user_id=(user_id := user['id']),
             id=(id_ := int(self.info['id'])),
-            bid=(bid := self.info.get('bid')),
+            bid=(bid := encode_wb_id(id_)),
             username=user.get('remark') or user['screen_name'],
-            url=f'https://weibo.com/{user_id}/{bid or id_}',
-            url_m=f'https://m.weibo.cn/detail/{id_}',
+            url=f'https://weibo.com/{user_id}/{bid}',
+            url_m=f'https://m.weibo.cn/detail/{bid}',
             created_at=created_at,
             source=BeautifulSoup(
                 self.info['source'].strip(), 'html.parser').text,
@@ -309,6 +309,7 @@ class UserParser:
     @staticmethod
     def _normalize(user_info: dict) -> dict:
         user = {k: normalize_str(v) for k, v in user_info.items()}
+        assert user.pop('special_follow') is False
         assert 'homepage' not in user
         assert 'username' not in user
         assert 'age' not in user

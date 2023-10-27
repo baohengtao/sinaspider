@@ -63,7 +63,7 @@ class UserConfig(BaseModel):
     user: "User" = DeferredForeignKey("User", unique=True, backref='config')
     username = CharField()
     age = IntegerField(null=True)
-    weibo_fetch = BooleanField(default=True)
+    weibo_fetch = BooleanField(default=False)
     weibo_fetch_at = DateTimeTZField(null=True)
     liked_fetch = BooleanField(default=False)
     liked_fetch_at = DateTimeTZField(null=True)
@@ -258,7 +258,7 @@ class UserConfig(BaseModel):
         early_stopping = False
         liked_page = self.page.liked()
         for weibo_dict in liked_page:
-            weibo = Weibo(**weibo_dict)
+            weibo: Weibo = Weibo(**weibo_dict)
             if not Friend.get_or_none(
                     friend_id=weibo.user_id,
                     user_id=self.user_id):
@@ -287,9 +287,10 @@ class UserConfig(BaseModel):
             for sn, (url, _) in weibo.photos.items():
                 assert (ext := parse_url_extension(url))
                 xmp_info = weibo.gen_meta(sn, url=url)
-                description = weibo.url
-                if xmp_info.get('XMP:BlogTitle'):
-                    description += f" {xmp_info['XMP:BlogTitle']}"
+                description = '\n'.join([
+                    f'weibo.com/{weibo.user_id}/{weibo.bid}',
+                    f'weibo.com/u/{weibo.user_id}'
+                ])
                 marker_note = model_to_dict(weibo, recurse=False)
                 marker_note['created_at'] = weibo.created_at.timestamp()
                 xmp_info.update({
@@ -429,7 +430,7 @@ class User(BaseModel):
     注册时间 = TextField(null=True)
     阳光信用 = TextField(null=True)
     friendships_relation = IntegerField(null=True)
-    special_follow = BooleanField(null=True)
+    # special_follow = BooleanField(null=True)
 
     def __repr__(self):
         return super().__repr__()
