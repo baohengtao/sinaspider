@@ -8,8 +8,9 @@ from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import fetcher, normalize_user_id
 from sinaspider.model import UserConfig
+from sinaspider.page import SinaBot
 
-from .helper import default_path, logsaver
+from .helper import default_path, logsaver, update_user_config
 
 app = Typer()
 
@@ -44,6 +45,65 @@ def user(download_dir: Path = default_path):
                 console.log('记得取消关注', style='warning')
         elif uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
             uc.fetch_weibo(download_dir)
+
+
+@app.command()
+@logsaver
+def user_add(max_user: int = 20,
+             all_user: bool = Option(False, '--all-user', '-a'),
+             download_dir: Path = default_path):
+    from itertools import islice
+    if all_user:
+        max_user = None
+    update_user_config()
+    bot = SinaBot(art_login=True)
+    uids = {u.user_id for u in UserConfig.select().where(UserConfig.following)}
+    to_add = []
+    for u in islice(bot.get_following_list(), max_user):
+        if u['id'] not in uids:
+            to_add.append(u)
+        else:
+            uids.remove(u['id'])
+    if max_user is None and uids:
+        raise ValueError(f'there are uids {uids} not in following list')
+    console.log(f'{len(to_add)} users will be added')
+    for u in to_add[::-1]:
+        console.log(f'adding {u} to UserConfig...')
+        console.log(UserConfig.from_id(u['id']), '\n')
+
+    special_fol = {u['id']: u['remark'] for u in bot.get_following_list(
+        special_following=True)}
+    for u in UserConfig:
+        if remark := special_fol.get(u.user_id):
+            if u.username != remark:
+                u = UserConfig.from_id(u.user_id)
+        if u.following and not u.photos_num:
+            if u.user_id not in special_fol:
+                console.log(f'adding {u.username}({u.homepage}) '
+                            'to special following list...')
+                bot.set_special_follow(u.user_id, True)
+        elif u.user_id in special_fol:
+            console.log(f'removing {u.username}({u.homepage}) '
+                        'from special following list...')
+            bot.set_special_follow(u.user_id, False)
+
+    fetcher.toggle_art(True)
+    nov = [u for u in UserConfig if u.weibo_fetch_at is None
+           and u.visible is not True and not u.set_visibility()]
+    for u in nov:
+        if u.weibo_fetch is False:
+            if not Confirm.ask(
+                    f'{u.username} only 180 days visible, '
+                    'set weibo_fetch to True?', default=True):
+                continue
+        u.weibo_fetch = True
+        u.save()
+        console.log(u)
+    nov = [u for u in nov if u.weibo_fetch]
+    if nov and Confirm.ask('fetching now ?', default=True):
+        for u in nov:
+            if u.weibo_fetch:
+                u.fetch_weibo(download_dir)
 
 
 @app.command(help="Loop through users in database and fetch weibos")

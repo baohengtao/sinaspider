@@ -103,8 +103,10 @@ class UserConfig(BaseModel):
         return cls.get(user_id=user_id)
 
     def set_visibility(self) -> bool:
+        if self.weibo_fetch_at is None:
+            self.visible = None
         if self.visible is True:
-            return self.visible
+            return True
         visible = self.page.get_visibility()
         if self.visible is None or visible is False:
             self.visible = visible
@@ -112,6 +114,8 @@ class UserConfig(BaseModel):
         else:
             console.log(
                 f"conflict: {self.username}当前微博全部可见，请检查", style="error")
+        if not visible:
+            console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible
 
     def fetch_weibo(self, download_dir: Path):
@@ -131,8 +135,9 @@ class UserConfig(BaseModel):
         console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        if not self.set_visibility():
-            console.log(f"{self.username} 只显示半年内的微博", style="notice")
+        self.set_visibility()
+        # if not self.set_visibility():
+        #     console.log(f"{self.username} 只显示半年内的微博", style="notice")
 
         now = pendulum.now()
         imgs = self._save_weibo(since, download_dir)
