@@ -281,6 +281,8 @@ class Page:
             console.log(f'created_at:{created_at}')
 
     def _liked_card(self) -> Iterator[dict]:
+        if fetcher.art_login is None:
+            fetcher.toggle_art(True)
         s = '0726b708' if fetcher.art_login else 'c773e7e0'
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s={s}')
@@ -329,8 +331,10 @@ class Page:
                 except (KeyError, AttributeError):
                     console.log(
                         "parse weibo_info failed for "
-                        f"https://m.weibo.cn/status/{weibo_info['id']}",
+                        f"https://m.weibo.cn/status/{weibo_info['id']},"
+                        "fetching from weibo page directly...",
                         style='error')
+                    yield WeiboParser(weibo_info['id']).parse(online=False)
             else:
                 yield weibo_info
 

@@ -273,7 +273,9 @@ class UserConfig(BaseModel):
                     continue
                 else:
                     console.log(
-                        f'althoug {config.username} is fetched, but no pic, not skipping...', style='warning')
+                        f'althoug {config.username} is fetched, '
+                        'but no pic, not skipping...',
+                        style='warning')
             if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
                 console.log(
@@ -799,17 +801,23 @@ class Location(BaseModel):
             console.log(
                 f'location has been deleted: {url} {url_m}', style='error')
             return
-        elif not pic:
-            console.log(
-                f"location id {location_id} {url_m, url} cannot  be parsed, "
-                "extra work need been done", style='error')
-            return
-        pattern = r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
-        lng, lat = map(float, re.search(pattern, pic).groups())
-        lat, lng = round_loc(lat, lng)
-        short_name = cards[1]['group'][0]['item_title']
 
-        address = cards[3]['title'] if len(cards) >= 4 else None
+        if pic:
+            pattern = r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)'
+            lng, lat = map(float, re.search(pattern, pic).groups())
+            lat, lng = round_loc(lat, lng)
+            short_name = cards[1]['group'][0]['item_title']
+            address = cards[3]['title'] if len(cards) >= 4 else None
+            version = 'v1.5'
+        else:
+            scheme = cards[0]['scheme']
+            pattern = r'latitude=(-?\d+\.\d+)&longitude=(-?\d+\.\d+)'
+            lat, lng = map(float, re.search(pattern, scheme).groups())
+            lat, lng = round_loc(lat, lng)
+            short_name = js['cardlistInfo']['title_top']
+            version = 'v1.0'
+            address = cards[0]['title'].removeprefix('位于：')
+
         assert lng and lat
         return dict(
             id=location_id,
@@ -819,7 +827,7 @@ class Location(BaseModel):
             address=address or None,
             url=url,
             url_m=url_m,
-            version='v1.5')
+            version=version)
 
 
 class Artist(BaseModel):
