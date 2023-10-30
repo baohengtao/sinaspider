@@ -46,7 +46,9 @@ class SinaBot:
                )
         r = fetcher.get(url, art_login=self.art_login)
         if r.json().get('errmsg') == 'not followed':
-            console.log(f'{uid} not followed', style='error')
+            console.log(
+                f'https://m.weibo.cn/u/{uid} not followed, '
+                'adding to special following failed', style='error')
             return
         assert r.json()['result'] is True
         # url = ('https://m.weibo.cn/api/container/getIndex?'

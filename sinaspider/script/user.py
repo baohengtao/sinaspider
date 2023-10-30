@@ -58,14 +58,12 @@ def user_add(max_user: int = 20,
     update_user_config()
     bot = SinaBot(art_login=True)
     uids = {u.user_id for u in UserConfig.select().where(UserConfig.following)}
-    to_add = []
-    for u in islice(bot.get_following_list(), max_user):
-        if u['id'] not in uids:
-            to_add.append(u)
-        else:
-            uids.remove(u['id'])
-    if max_user is None and uids:
-        raise ValueError(f'there are uids {uids} not in following list')
+    uids_following = [u['id'] for u in islice(bot.get_following_list(),
+                                              max_user)]
+    to_add = [uid for uid in uids_following if uid not in uids]
+    if max_user is None:
+        if uids := uids - set(uids_following):
+            raise ValueError(f'there are uids {uids} not in following list')
     console.log(f'{len(to_add)} users will be added')
     for u in to_add[::-1]:
         console.log(f'adding {u} to UserConfig...')

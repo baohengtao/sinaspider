@@ -17,6 +17,10 @@ class WeiboParser:
     """用于解析原始微博内容."""
 
     def __init__(self, weibo_info: dict | int | str):
+        if isinstance(weibo_info, dict) and 'pic_ids' not in weibo_info:
+            weibo_info = weibo_info['id']
+            console.log(f'pic_ids not found for weibo {weibo_info},'
+                        'fetching online...', style='warning')
         if isinstance(weibo_info, (int, str)):
             self.info = self._fetch_info(weibo_info)
             assert self.pic_match
