@@ -212,14 +212,13 @@ class UserConfig(BaseModel):
 
         msg = f"开始获取 {self.username} 的赞"
         if self.liked_fetch_at:
-            imgs = self._save_liked(download_dir / "Liked")
             msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
         else:
-            imgs = self._save_liked(download_dir / "Liked_New")
             msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
+        imgs = self._save_liked(download_dir)
         download_files(imgs)
 
         if count := len(self._liked_list):
@@ -240,25 +239,40 @@ class UserConfig(BaseModel):
     def fetch_friends(self, update=False):
         if update:
             Friend.delete().where(Friend.user_id == self.user_id).execute()
-        elif Friend.get_or_none(user_id=self.user_id):
-            console.log(f"{self.username}的好友已经获取过了, skip...")
-            return
-        else:
+        if not Friend.get_or_none(user_id=self.user_id):
             console.log(f"开始获取 {self.username} 的好友")
-        friends = list(self.page.friends())
-        for friend in friends:
-            friend['username'] = self.username
-        friends = {f['friend_id']: f for f in friends}.values()
-        console.log(f'{len(friends)} friends found! 🥰 ')
-        Friend.insert_many(friends).execute()
-        Friend.delete().where(Friend.gender == 'm').execute()
-        Friend.update_frequency()
+            friends = list(self.page.friends())
+            for friend in friends:
+                friend['username'] = self.username
+            friends = {f['friend_id']: f for f in friends}.values()
+            console.log(f'{len(friends)} friends found! 🥰 ')
+            Friend.insert_many(friends).execute()
+            Friend.delete().where(Friend.gender == 'm').execute()
+            Friend.update_frequency()
+
+        fids = {f.friend_id for f in Friend.select().where(
+            Friend.user_id == self.user_id)}
+        query = UserConfig.select().where(UserConfig.user_id.in_(fids))
+        bilateral_gold = sorted(u.username for u in query)
+        if (bilateral := self.user.bilateral) != bilateral_gold:
+            if bilateral_gold:
+                console.log(f'+bilateral: {bilateral_gold}',
+                            style='green bold on dark_green')
+            if bilateral:
+                console.log(f'-bilateral: {bilateral}',
+                            style='red bold on dark_red')
+            self.user.bilateral = bilateral_gold
+            self.user.save()
 
     def _save_liked(self,
                     download_dir: Path,
                     update: bool = False) -> Iterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
-        download_dir /= self.username
+        if self.liked_fetch_at:
+            folder = f'{self.username}_{self.liked_fetch_at:%y-%m-%d}'
+            download_dir /= f"Liked/{folder}"
+        else:
+            download_dir /= f"Liked_New/{self.username}"
         bulk = []
         early_stopping = False
         liked_page = self.page.liked()
@@ -269,12 +283,12 @@ class UserConfig(BaseModel):
                     user_id=self.user_id):
                 continue
             if (config := UserConfig.get_or_none(user_id=weibo.user_id)):
-                if config.photos_num:
+                if config.following or config.weibo_fetch:
                     continue
                 else:
                     console.log(
-                        f'althoug {config.username} is fetched, '
-                        'but no pic, not skipping...',
+                        f'{config.username} not fetching and following '
+                        'not skipping...',
                         style='warning')
             if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
@@ -377,7 +391,7 @@ class UserConfig(BaseModel):
             console.log(
                 f'duration is {days} which great than 180 days, '
                 'truncating to 180 days',
-                style='warning')
+                style='info')
             days = 180
         next_fetch = liked_fetch_at.add(days=days)
         console.log(
@@ -453,10 +467,6 @@ class User(BaseModel):
             except cls.DoesNotExist:
                 pass
         user_dict = UserParser(user_id).parse()
-        fids = {f.friend_id for f in Friend.select().where(
-            Friend.user_id == user_id)}
-        if query := cls.select().where(cls.id.in_(fids)):
-            user_dict['bilateral'] = sorted(u.username for u in query)
         if followed_by := user_dict.pop('followed_by', None):
             if query := cls.select().where(cls.id.in_(followed_by)):
                 user_dict['followed_by'] = sorted(u.username for u in query)
