@@ -69,8 +69,9 @@ class Fetcher:
             f'fetcher: current logined as {screen_name}',
             style='green on dark_green')
 
-    def get(self, url: str, art_login: bool = None,
-            mainthread=True, params=None) -> requests.Response:
+    def get(self, url: str,
+            art_login: bool = None,
+            params=None) -> requests.Response:
         # write with session and pause
         if art_login is None:
             if self.art_login is None:
@@ -79,11 +80,8 @@ class Fetcher:
                 self.toggle_art(True)
             art_login = self.art_login
 
-        if not mainthread:
-            s = requests
-        else:
-            self._pause()
-            s = self.sess_art if art_login else self.sess_main
+        self._pause()
+        s = self.sess_art if art_login else self.sess_main
         while True:
             try:
                 return s.get(url, params=params)
@@ -164,16 +162,26 @@ def download_single_file(
             console.log(
                 f"{url} expires at {expires}, skip...", style="warning")
             return
-    for tried_time in itertools.count(start=1):
-        while (r := fetcher.get(url, mainthread=False)).status_code != 200:
-            if r.status_code == 404:
-                console.log(
-                    f"{url}, {xmp_info}, {r.status_code}", style="error")
-                return
-            else:
-                console.log(f"{url}, {r.status_code}", style="error")
+    while True:
+        try:
+            r = requests.get(url)
+        except ConnectionError as e:
+            period = 60
+            console.log(
+                f"{e}: Sleepping {period} seconds and "
+                f"retry [link={url}]{url}[/link]...", style='error')
+            sleep(period)
+            continue
+
+        if r.status_code == 404:
+            console.log(
+                f"{url}, {xmp_info}, {r.status_code}", style="error")
+            return
+        elif r.status_code != 200:
+            console.log(f"{url}, {r.status_code}", style="error")
             time.sleep(15)
             console.log(f'retrying download for {url}...')
+            continue
 
         if urlparse(r.url).path == '/images/default_d_w_large.gif':
             img = img.with_suffix('.gif')
@@ -188,20 +196,7 @@ def download_single_file(
         img.write_bytes(r.content)
 
         if xmp_info:
-            try:
-                write_xmp(img, xmp_info)
-            except ExifToolExecuteException as e:
-                console.log(e.stderr, style='error')
-                if tried_time < 3:
-                    console.log(
-                        f'{img}:write xmp failed, retrying {url}',
-                        style='error')
-                    continue
-                img_failed = img.parent / 'problem' / img.name
-                img_failed.parent.mkdir(parents=True, exist_ok=True)
-                img.rename(img_failed)
-                console.log(f'move {img} to {img_failed}', style='error')
-                raise e
+            write_xmp(img, xmp_info)
         break
 
 

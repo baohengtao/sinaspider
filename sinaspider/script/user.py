@@ -67,7 +67,7 @@ def user_add(max_user: int = 20,
     console.log(f'{len(to_add)} users will be added')
     for u in to_add[::-1]:
         console.log(f'adding {u} to UserConfig...')
-        console.log(UserConfig.from_id(u['id']), '\n')
+        console.log(UserConfig.from_id(u), '\n')
 
     special_fol = {u['id']: u['remark'] for u in bot.get_following_list(
         special_following=True)}

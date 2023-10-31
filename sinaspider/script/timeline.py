@@ -84,8 +84,8 @@ def timeline(days: float = Option(...),
         since = next_since
         # wait for next fetching
         fetching_time = next_since.add(hours=frequency)
-        # always fetch new user for 1 hour after first update
-        fetching_duration = 60
+        # always fetch new user for 20min after first update
+        fetching_duration = 20
         console.log(f'waiting for next fetching at {fetching_time:%H:%M:%S}')
 
 
