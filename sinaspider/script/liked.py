@@ -59,7 +59,17 @@ def liked_loop(download_dir: Path = default_path,
         stop_time = None
     console.log(f'Found {len(configs)} users to fetch liked weibo')
     for config in configs[:max_user]:
-        config.fetch_liked(download_dir)
+        config: UserConfig
+        try:
+            config.fetch_liked(download_dir)
+        except UserNotFoundError:
+            console.log(
+                f'seems {config.username} deleted, disable liked_fetch',
+                style='error')
+            config.liked_fetch = False
+            config.blocked = True
+            config.save()
+            console.log(config)
         if stop_time and stop_time < pendulum.now():
             console.log(f'stop since {fetching_duration} minutes passed')
             break
@@ -69,14 +79,18 @@ def liked_loop(download_dir: Path = default_path,
 @logsaver
 def friends(max_user: int = None):
     uids = {f.user_id for f in Friend}
-    for config in (UserConfig.select().limit(max_user)
-                   .where(UserConfig.following)
+    query = (UserConfig.select()
+             .where(UserConfig.weibo_fetch)
+             .where(UserConfig.weibo_fetch_at.is_null(False)))
+    for config in (query
+                   .limit(max_user)
                    .where(UserConfig.user_id.not_in(uids))
                    ):
-        try:
-            config = UserConfig.from_id(config.user_id)
-        except UserNotFoundError:
-            pass
-        if config.following:
-            console.log(config)
-            config.fetch_friends()
+        # try:
+        #     config = UserConfig.from_id(config.user_id)
+        # except UserNotFoundError:
+        #     pass
+        config.fetch_friends()
+        console.log(config, '\n')
+    for config in query:
+        config.update_friends()

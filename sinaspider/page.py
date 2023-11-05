@@ -8,6 +8,7 @@ import pendulum
 from requests import JSONDecodeError
 
 from sinaspider import console
+from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import fetcher
 from sinaspider.parser import WeiboParser
 
@@ -298,7 +299,8 @@ class Page:
                 elif 'cards' in (js := r.json()):
                     break
                 elif js.get('errmsg') == 'attitude: user status wrong':
-                    raise ValueError(f'attitude: user {self.id} status wrong')
+                    raise UserNotFoundError(
+                        f'attitude: user {self.id} status wrong')
                 else:
                     console.log(f'{r.url} get js error: {js}', style='error')
                 console.log('sleeping 60 seconds')

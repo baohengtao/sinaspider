@@ -249,20 +249,31 @@ class UserConfig(BaseModel):
             Friend.insert_many(friends).execute()
             Friend.delete().where(Friend.gender == 'm').execute()
             Friend.update_frequency()
+        self.update_friends()
 
+    def update_friends(self):
         fids = {f.friend_id for f in Friend.select().where(
             Friend.user_id == self.user_id)}
-        query = UserConfig.select().where(UserConfig.user_id.in_(fids))
+        query = (UserConfig.select()
+                 .where(UserConfig.user_id.in_(fids))
+                 .where(UserConfig.weibo_fetch)
+                 .where(UserConfig.weibo_fetch_at.is_null(False))
+                 )
         bilateral_gold = sorted(u.username for u in query)
-        if (bilateral := self.user.bilateral) != bilateral_gold:
-            if bilateral_gold:
-                console.log(f'+bilateral: {bilateral_gold}',
+        if (bilateral := self.user.bilateral or []) != bilateral_gold:
+            console.log(f'changing {self.username} bilateral')
+            if to_add := (set(bilateral_gold) - set(bilateral)):
+                console.log(f'+bilateral: {to_add}',
                             style='green bold on dark_green')
-            if bilateral:
-                console.log(f'-bilateral: {bilateral}',
+            if to_del := (set(bilateral)-set(bilateral_gold)):
+                console.log(f'-bilateral: {to_del}',
                             style='red bold on dark_red')
+            console.log(f'bilateral={bilateral_gold}')
+            bilateral_gold = bilateral_gold or None
             self.user.bilateral = bilateral_gold
             self.user.save()
+            self.bilateral = bilateral_gold
+            self.save()
 
     def _save_liked(self,
                     download_dir: Path,
@@ -282,14 +293,11 @@ class UserConfig(BaseModel):
                     friend_id=weibo.user_id,
                     user_id=self.user_id):
                 continue
-            if (config := UserConfig.get_or_none(user_id=weibo.user_id)):
-                if config.following or config.weibo_fetch:
-                    continue
-                else:
-                    console.log(
-                        f'{config.username} not fetching and following '
-                        'not skipping...',
-                        style='warning')
+            config = UserConfig.get_or_none(user_id=weibo.user_id)
+            if config and config.weibo_fetch:
+                continue
+            filepath = download_dir / 'saved' if config else download_dir
+
             if liked := LikedWeibo.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
                 console.log(
@@ -327,7 +335,7 @@ class UserConfig(BaseModel):
                     "url": url,
                     "filename": f"{prefix}_{sn}{ext}",
                     "xmp_info": xmp_info,
-                    "filepath": download_dir
+                    "filepath": filepath
                 }
             bulk.append(weibo)
         if early_stopping and not self.liked_fetch_at:

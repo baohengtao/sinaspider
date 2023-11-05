@@ -26,13 +26,10 @@ def artist():
             console.log(f'用户 {username} 不在列表中')
             continue
         console.log(artist)
-        if artist.folder == 'new':
-            console.log('folder is new, skip')
-            continue
         console.print(
             f"which folder ? current is [bold red]{artist.folder}[/bold red]")
         folder = questionary.select("choose folder:", choices=[
-            'recent', 'super', 'no-folder']).unsafe_ask()
+            'recent', 'super', 'no-folder', 'less']).unsafe_ask()
         if folder == 'no-folder':
             folder = None
         if artist.folder == folder:
