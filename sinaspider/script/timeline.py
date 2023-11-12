@@ -34,9 +34,33 @@ def timeline(days: float = Option(...),
     bot_art = SinaBot(art_login=True)
 
     since = pendulum.now().subtract(days=days)
-    fetching_time = pendulum.now()
     fetching_duration = 0
     while True:
+
+        console.log(f'Fetching timeline since {since}...')
+        next_since = pendulum.now()
+        update_user_config()
+
+        _get_timeline(bot_art, download_dir, since, friend_circle=False)
+        _get_timeline(bot, download_dir, since, friend_circle=True)
+        if fetching_duration > 0:
+            fetch_until = time.time() + fetching_duration * 60
+            if UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None):
+                user_loop(download_dir=download_dir,
+                          new_user=True, fetching_duration=fetching_duration)
+                console.log()
+            if (remain := fetch_until - time.time()) > 0:
+                if UserConfig.get_or_none(
+                        liked_fetch=True, liked_fetch_at=None):
+                    liked_loop(download_dir=download_dir,
+                               new_user=True, fetching_duration=remain/60)
+        # update since
+        since = next_since
+        # wait for next fetching
+        fetching_time = next_since.add(hours=frequency)
+        # always fetch new user for 20min after first update
+        fetching_duration = 20
+        console.log(f'waiting for next fetching at {fetching_time:%H:%M:%S}')
         while pendulum.now() < fetching_time:
             # sleeping for  600 seconds while listing for enter key
             if select.select([sys.stdin], [], [], 600)[0]:
@@ -61,32 +85,6 @@ def timeline(days: float = Option(...),
                             "Q to exit,\n"
                             "int number for the time in minutes to fetch new users")
                         continue
-
-        console.log(f'Fetching timeline since {since}...')
-        next_since = pendulum.now()
-        update_user_config()
-
-        _get_timeline(bot_art, download_dir, since, friend_circle=False)
-        _get_timeline(bot, download_dir, since, friend_circle=True)
-        if fetching_duration > 0:
-            fetch_until = time.time() + fetching_duration * 60
-            if UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None):
-                user_loop(download_dir=download_dir,
-                          new_user=True, fetching_duration=fetching_duration)
-                console.log()
-            if (remain := fetch_until - time.time()) > 0:
-                if UserConfig.get_or_none(
-                        liked_fetch=True, liked_fetch_at=None):
-                    liked_loop(download_dir=download_dir,
-                               new_user=True, fetching_duration=remain/60)
-
-        # update since
-        since = next_since
-        # wait for next fetching
-        fetching_time = next_since.add(hours=frequency)
-        # always fetch new user for 20min after first update
-        fetching_duration = 20
-        console.log(f'waiting for next fetching at {fetching_time:%H:%M:%S}')
 
 
 @logsaver
