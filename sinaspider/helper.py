@@ -5,7 +5,6 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from time import sleep
 from typing import Iterable
 from urllib.parse import unquote, urlparse
 
@@ -14,7 +13,6 @@ import requests
 from baseconv import base62
 from dotenv import load_dotenv
 from exiftool import ExifToolHelper
-from exiftool.exceptions import ExifToolExecuteException
 from geopy.distance import geodesic
 from requests.exceptions import ConnectionError
 
@@ -90,14 +88,9 @@ class Fetcher:
                 console.log(
                     f"{e}: Sleepping {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
-                sleep(period)
+                time.sleep(period)
 
     def _pause(self):
-
-        if time.time()-self._last_fetch > 1024:
-            self._visit_count = 0
-            console.log('reset visit count to zero', style='info')
-
         if self._visit_count == 0:
             self._visit_count = 1
             self._last_fetch = time.time()
@@ -112,12 +105,25 @@ class Fetcher:
         else:
             sleep_time = 1
         sleep_time *= random.uniform(0.5, 1.5)
-        console.log(
-            f'sleep {sleep_time:.1f} seconds...(count: {self._visit_count})',
-            style='info')
-        self._last_fetch = time.time() + sleep_time
+        self._last_fetch += sleep_time
+        if (wait_time := (self._last_fetch-time.time())) > 0:
+            console.log(
+                f'sleep {wait_time:.1f} seconds...'
+                f'(count: {self._visit_count})',
+                style='info')
+        elif wait_time < -3600:
+            self._visit_count = 0
+            console.log(
+                f'reset visit count to {self._visit_count} since have '
+                f'no activity for {wait_time} seconds, '
+                'which means more than 1 hour passed')
+        else:
+            console.log(
+                f'no sleeping since more than {sleep_time:.1f} seconds passed'
+                f'(count: {self._visit_count})')
         while time.time() < self._last_fetch:
-            sleep(0.1)
+            time.sleep(0.1)
+        self._last_fetch = time.time()
         self._visit_count += 1
 
 
@@ -170,7 +176,7 @@ def download_single_file(
             console.log(
                 f"{e}: Sleepping {period} seconds and "
                 f"retry [link={url}]{url}[/link]...", style='error')
-            sleep(period)
+            time.sleep(period)
             continue
 
         if r.status_code == 404:

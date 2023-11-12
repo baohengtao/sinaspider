@@ -116,12 +116,6 @@ def user_loop(download_dir: Path = default_path,
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null()))
         assert not users.where(~UserConfig.following)
-        # if nofo := users.where(~UserConfig.following):
-        #     for uc in nofo:
-        #         UserConfig.from_id(uc.user_id)
-        # if nofo := users.where(~UserConfig.following):
-        #     console.log(list(nofo))
-        #     console.log('some users are not following, skipping them')
         users = users.where(UserConfig.following)
         console.log(f'{len(users)} users has been found')
         if not fetching_duration:

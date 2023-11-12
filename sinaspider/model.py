@@ -69,9 +69,9 @@ class UserConfig(BaseModel):
     liked_fetch_at = DateTimeTZField(null=True)
     post_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
-    description = CharField(index=True, null=True)
+    description = CharField(null=True)
     education = ArrayField(field_class=TextField, null=True)
-    homepage = CharField(index=True)
+    homepage = CharField()
     visible = BooleanField(null=True)
     photos_num = IntegerField(null=True)
     followed_by = ArrayField(field_class=TextField, null=True)
@@ -142,7 +142,7 @@ class UserConfig(BaseModel):
         now = pendulum.now()
         imgs = self._save_weibo(since, download_dir)
         download_files(imgs)
-        console.log(f"{self.user.username}微博获取完毕\n")
+        console.log(f"{self.username}微博获取完毕\n")
 
         self.weibo_fetch_at = now
         for weibo_info in self.page.homepage(parse=False):
@@ -163,7 +163,7 @@ class UserConfig(BaseModel):
 
         if since < pendulum.now().subtract(years=1):
             user_root = 'User'
-        elif self.photos_num == 0:
+        elif not self.photos_num:
             console.log(
                 f'seems {self.username} not processed, using User folder',
                 style='green on dark_green')
@@ -469,16 +469,13 @@ class User(BaseModel):
 
     @classmethod
     def from_id(cls, user_id: int, update=False) -> Self:
-        if not update:
-            try:
-                return cls.get_by_id(user_id)
-            except cls.DoesNotExist:
-                pass
-        user_dict = UserParser(user_id).parse()
-        if followed_by := user_dict.pop('followed_by', None):
-            if query := cls.select().where(cls.id.in_(followed_by)):
-                user_dict['followed_by'] = sorted(u.username for u in query)
-        cls.upsert(user_dict)
+        if update or not cls.get_or_none(id=user_id):
+            user_dict = UserParser(user_id).parse()
+            if followed_by := user_dict.pop('followed_by', None):
+                if query := cls.select().where(cls.id.in_(followed_by)):
+                    user_dict['followed_by'] = sorted(
+                        u.username for u in query)
+            cls.upsert(user_dict)
         return cls.get_by_id(user_id)
 
     @classmethod
@@ -558,21 +555,17 @@ class Weibo(BaseModel):
     @classmethod
     def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
         wb_id = normalize_wb_id(wb_id)
-        if not update:
+        if update or not cls.get_or_none(id=wb_id):
             try:
-                return Weibo.get_by_id(wb_id)
-            except Weibo.DoesNotExist:
-                pass
-        try:
-            weibo_dict = WeiboParser(wb_id).parse()
-        except WeiboNotFoundError:
-            console.log(
-                f'Weibo {wb_id} is not accessible, loading from database...',
-                style="error")
-        else:
-            weibo_dict['username'] = User.get_by_id(
-                weibo_dict['user_id']).username
-            Weibo.upsert(weibo_dict)
+                weibo_dict = WeiboParser(wb_id).parse()
+            except WeiboNotFoundError:
+                console.log(
+                    f'Weibo {wb_id} is not accessible, loading from database...',
+                    style="error")
+            else:
+                weibo_dict['username'] = User.get_by_id(
+                    weibo_dict['user_id']).username
+                Weibo.upsert(weibo_dict)
         return cls.get_by_id(wb_id)
 
     @classmethod
@@ -710,8 +703,12 @@ class Weibo(BaseModel):
                 }
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
-        if sn and self.pic_num > 9:
+        if (pic_num := len(self.photos)) == 1:
+            assert not sn or int(sn) == 1
+            sn = ""
+        elif sn and pic_num > 9:
             sn = f"{int(sn):02d}"
+
         title = (self.text or "").strip()
         if self.region_name:
             title += f" 发布于{self.region_name}"
