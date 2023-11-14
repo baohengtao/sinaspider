@@ -20,8 +20,9 @@ app = Typer()
 
 
 class LogSaver:
-    def __init__(self, download_dir: Path):
+    def __init__(self, command: str, download_dir: Path):
         self.download_dir = download_dir
+        self.command = command
         self.save_log_at = pendulum.now()
         self.total_work_time = 0
         self.SAVE_LOG_INTERVAL = 12  # hours
@@ -42,7 +43,7 @@ class LogSaver:
             console.log('Saving log manually...')
         else:
             return
-        save_log('timeline', self.download_dir)
+        save_log(self.command, self.download_dir)
         self.save_log_at = pendulum.now()
         self.total_work_time = 0
 
@@ -73,7 +74,7 @@ def timeline(days: float = Option(...),
     since = pendulum.now().subtract(days=days)
 
     WORKING_TIME = 0  # minutes
-    logsaver = LogSaver(download_dir)
+    logsaver = LogSaver('timeline', download_dir)
     while True:
         print_command()
         update_user_config()
