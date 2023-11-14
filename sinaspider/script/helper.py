@@ -21,12 +21,10 @@ def print_command():
     console.log(' '.join(argv))
 
 
-def logsaver(func):
+def logsaver_decorator(func):
     """Decorator to save console log to html file"""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        print_command()
-
         try:
             return func(*args, **kwargs)
         except Exception:

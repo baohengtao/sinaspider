@@ -12,4 +12,4 @@ custom_theme = Theme({
     "error": "bold bright_red on dark_red",
     "notice": "bold magenta"
 })
-console = Console(theme=custom_theme, record=True)
+console = Console(theme=custom_theme, record=True, width=120)

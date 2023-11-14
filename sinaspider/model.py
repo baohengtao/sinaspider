@@ -411,7 +411,7 @@ class UserConfig(BaseModel):
 
         if self.post_at:
             interval = (self.weibo_fetch_at - self.post_at).days
-            interval = min(max(15, interval), 60)
+            interval = min(max(7, interval), 60)
         else:
             interval = 60
         interval *= (1 + self.following)

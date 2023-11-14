@@ -10,7 +10,7 @@ from sinaspider import console
 from sinaspider.helper import download_files, fetcher, normalize_wb_id
 from sinaspider.model import Artist, User, UserConfig, Weibo
 
-from .helper import default_path, logsaver
+from .helper import default_path, logsaver_decorator
 
 app = Typer()
 
@@ -57,7 +57,7 @@ def weibo(download_dir: Path = default_path):
 
 
 @app.command()
-@logsaver
+@logsaver_decorator
 def update_location():
     photos = (Photo.select()
               .where(Photo.image_supplier_name == "Weibo")
@@ -81,7 +81,7 @@ def update_location():
 
 
 @app.command()
-@logsaver
+@logsaver_decorator
 def update_weibo():
     from playhouse.shortcuts import update_model_from_dict
 

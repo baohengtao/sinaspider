@@ -10,13 +10,13 @@ from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import normalize_user_id
 from sinaspider.model import Friend, UserConfig
 
-from .helper import default_path, logsaver
+from .helper import default_path, logsaver_decorator
 
 app = Typer()
 
 
 @app.command(help="Config whether fetch user's liked weibo")
-@logsaver
+@logsaver_decorator
 def liked(download_dir: Path = default_path):
     while user_id := Prompt.ask('请输入用户名:smile:'):
         if config := UserConfig.get_or_none(username=user_id):
@@ -35,7 +35,7 @@ def liked(download_dir: Path = default_path):
 
 
 @app.command(help="Fetch users' liked weibo")
-@logsaver
+@logsaver_decorator
 def liked_loop(download_dir: Path = default_path,
                max_user: int = 1,
                fetching_duration: int = None,
@@ -76,7 +76,7 @@ def liked_loop(download_dir: Path = default_path,
 
 
 @app.command()
-@logsaver
+@logsaver_decorator
 def friends(max_user: int = None):
     uids = {f.user_id for f in Friend}
     query = (UserConfig.select()

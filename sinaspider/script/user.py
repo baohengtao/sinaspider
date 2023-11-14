@@ -10,13 +10,13 @@ from sinaspider.helper import fetcher, normalize_user_id
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 
-from .helper import default_path, logsaver, update_user_config
+from .helper import default_path, logsaver_decorator, update_user_config
 
 app = Typer()
 
 
 @app.command(help='Add user to database of users whom we want to fetch from')
-@logsaver
+@logsaver_decorator
 def user(download_dir: Path = default_path):
     """Add user to database of users whom we want to fetch from"""
     while user_id := Prompt.ask('请输入用户名:smile:').strip():
@@ -48,7 +48,7 @@ def user(download_dir: Path = default_path):
 
 
 @app.command()
-@logsaver
+@logsaver_decorator
 def user_add(max_user: int = 20,
              all_user: bool = Option(False, '--all-user', '-a'),
              download_dir: Path = default_path):
@@ -105,7 +105,7 @@ def user_add(max_user: int = 20,
 
 
 @app.command(help="Loop through users in database and fetch weibos")
-@logsaver
+@logsaver_decorator
 def user_loop(download_dir: Path = default_path,
               max_user: int = 1,
               fetching_duration: int = None,
