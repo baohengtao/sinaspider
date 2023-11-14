@@ -395,7 +395,13 @@ class UserConfig(BaseModel):
         days = min(duration.in_days(), 180)
         return liked_fetch_at.add(days=days)
 
-    def need_weibo_fetch(self) -> bool:
+    @property
+    def next_weibo_fetch(self) -> pendulum.DateTime:
+        if not self.weibo_fetch:
+            return
+        if not self.weibo_fetch_at:
+            return
+        weibo_fetch_at = pendulum.instance(self.weibo_fetch_at)
 
         if self.post_at:
             interval = (self.weibo_fetch_at - self.post_at).days
@@ -403,7 +409,7 @@ class UserConfig(BaseModel):
         else:
             interval = 60
         interval *= (1 + self.following)
-        return pendulum.now().diff(self.weibo_fetch_at).in_days() > interval
+        return weibo_fetch_at.add(days=interval)
 
 
 class User(BaseModel):

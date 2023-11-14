@@ -166,6 +166,7 @@ class SinaBot:
             uid = status['user']['id']
             if not (uc := UserConfig.get_or_none(user_id=uid)):
                 continue
+            uc: UserConfig
             if not (fetch_at := uc.weibo_fetch_at):
                 continue
             created_at = pendulum.from_format(
@@ -182,8 +183,8 @@ class SinaBot:
                 if uc.next_liked_fetch:
                     console.log(
                         f'latest liked fetch at {uc.liked_fetch_at:%y-%m-%d}, '
-                        f'next fetching time is {uc.next_fetch:%y-%m-%d}')
-                    if pendulum.now() > uc.next_fetch:
+                        f'next fetching time is {uc.next_liked_fetch:%y-%m-%d}')
+                    if pendulum.now() > uc.next_liked_fetch:
                         uc.fetch_liked(download_dir)
 
 

@@ -61,6 +61,12 @@ def timeline(days: float = Option(...),
 
     download_dir: image saving directory
     """
+    query = (UserConfig.select()
+             .where(UserConfig.weibo_fetch)
+             .where(UserConfig.weibo_fetch_at.is_null(False))
+             .where(~UserConfig.blocked)
+             .order_by(UserConfig.weibo_fetch_at)
+             )
     bot = SinaBot(art_login=False)
     bot_art = SinaBot(art_login=True)
 
@@ -73,10 +79,19 @@ def timeline(days: float = Option(...),
         update_user_config()
         start_time = pendulum.now()
         console.log(f'Fetching timeline since {since}...')
+
         bot_art.get_timeline(download_dir=download_dir, since=since,
                              friend_circle=False)
+        console.log('Looping following user')
+        for config in query.where(UserConfig.following)[:2]:
+            config.fetch_weibo(download_dir/'Loop')
+
         bot.get_timeline(download_dir=download_dir,
                          since=since, friend_circle=True)
+        console.log('Looping no following user')
+        for config in query.where(~UserConfig.following)[:1]:
+            config.fetch_weibo(download_dir/'Loop')
+
         since = start_time
 
         while start_time.diff().in_minutes() < WORKING_TIME:
@@ -101,7 +116,8 @@ def timeline(days: float = Option(...),
             "Press S to fetching immediately,\n"
             "L to fetch log manually,\n"
             "Q to exit,\n"
-            "int number for the time in minutes to fetch new users")
+            "int number for the time in minutes to fetch new users",
+            style='info')
         while pendulum.now() < next_start_time:
             # sleeping for  600 seconds while listing for enter key
             if select.select([sys.stdin], [], [], 600)[0]:
