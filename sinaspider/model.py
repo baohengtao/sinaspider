@@ -371,11 +371,13 @@ class UserConfig(BaseModel):
                 'order_num': i
             })
 
-    def need_liked_fetch(self) -> bool:
+    @property
+    def next_liked_fetch(self) -> pendulum.DateTime | None:
         if not self.liked_fetch:
-            return False
+            return
         if self.liked_fetch_at is None:
-            return False
+            return
+        liked_fetch_at = pendulum.instance(self.liked_fetch_at)
         query = (LikedWeibo.select()
                  .where(LikedWeibo.user == self.user)
                  .order_by(LikedWeibo.created_at.desc())
@@ -383,29 +385,15 @@ class UserConfig(BaseModel):
         if not query:
             console.log(
                 f"no liked weibo found for {self.username}", style="warning")
-            return self.liked_fetch_at < pendulum.now().subtract(months=6)
+            return liked_fetch_at.add(months=6)
         count = 0
         for liked in query:
             count += liked.pic_num
             if count > 200:
                 break
-        else:
-            console.log(
-                f'{self.username} only has {count} liked pics',
-                style='warning')
-        liked_fetch_at = pendulum.instance(self.liked_fetch_at)
         duration = (liked_fetch_at - liked.created_at) * 200 / count
-        if (days := duration.in_days()) > 180:
-            console.log(
-                f'duration is {days} which great than 180 days, '
-                'truncating to 180 days',
-                style='info')
-            days = 180
-        next_fetch = liked_fetch_at.add(days=days)
-        console.log(
-            f'latest liked fetch at {liked_fetch_at:%y-%m-%d}, '
-            f'next fetching time should be {next_fetch:%y-%m-%d}')
-        return pendulum.now() > next_fetch
+        days = min(duration.in_days(), 180)
+        return liked_fetch_at.add(days=days)
 
     def need_weibo_fetch(self) -> bool:
 

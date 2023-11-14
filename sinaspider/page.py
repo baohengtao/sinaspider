@@ -171,6 +171,7 @@ class SinaBot:
             created_at = pendulum.from_format(
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             if uc.weibo_fetch and fetch_at < created_at:
+                uc: UserConfig
                 for _ in range(3):
                     uc = UserConfig.from_id(uid)
                     if uc.following == self.art_login:
@@ -178,8 +179,12 @@ class SinaBot:
                         break
                 else:
                     raise ValueError(f'{uc.username} not following')
-                if uc.need_liked_fetch():
-                    uc.fetch_liked(download_dir)
+                if uc.next_liked_fetch:
+                    console.log(
+                        f'latest liked fetch at {uc.liked_fetch_at:%y-%m-%d}, '
+                        f'next fetching time is {uc.next_fetch:%y-%m-%d}')
+                    if pendulum.now() > uc.next_fetch:
+                        uc.fetch_liked(download_dir)
 
 
 class Page:
