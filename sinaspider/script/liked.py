@@ -50,9 +50,9 @@ def liked_loop(download_dir: Path = default_path,
         configs = (UserConfig.select()
                    .where(UserConfig.liked_fetch)
                    .where(UserConfig.liked_fetch_at.is_null(False))
+                   .where(UserConfig.liked_next_fetch < pendulum.now())
                    .order_by(UserConfig.liked_fetch_at.asc())
                    )
-        configs = [c for c in configs if c.next_liked_fetch < pendulum.now()]
     if fetching_duration:
         max_user = None
         stop_time = pendulum.now().add(minutes=fetching_duration)
@@ -64,7 +64,7 @@ def liked_loop(download_dir: Path = default_path,
         try:
             console.log(
                 f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
-                f'next fetching time is {config.next_liked_fetch:%y-%m-%d}')
+                f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
             config.fetch_liked(download_dir)
         except UserNotFoundError:
             console.log(

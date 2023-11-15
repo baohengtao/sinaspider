@@ -126,6 +126,7 @@ def user_loop(download_dir: Path = default_path,
         users = (UserConfig.select()
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
+                 .where(UserConfig.weibo_next_fetch < pendulum.now())
                  .where(~UserConfig.blocked)
                  .order_by(UserConfig.following, UserConfig.weibo_fetch_at)
                  )
@@ -133,7 +134,6 @@ def user_loop(download_dir: Path = default_path,
             users = users.where(UserConfig.following | UserConfig.is_friend)
         else:
             users = users.where(~UserConfig.following & ~UserConfig.is_friend)
-        users = [uc for uc in users if pendulum.now() > uc.next_weibo_fetch]
         download_dir /= 'Loop'
         console.log(f'{len(users)} will be fetched...')
     if fetching_duration:

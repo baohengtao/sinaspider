@@ -52,7 +52,10 @@ def update_user_config():
     """
     from sinaspider.model import Artist, UserConfig
     for uc in UserConfig:
+        uc: UserConfig
         if artist := Artist.get_or_none(user=uc.user):
             uc.photos_num = artist.photos_num
             uc.folder = artist.folder
-            uc.save()
+        uc.weibo_next_fetch = uc.get_weibo_next_fetch()
+        uc.liked_next_fetch = uc.get_liked_next_fetch()
+        uc.save()

@@ -65,8 +65,10 @@ class UserConfig(BaseModel):
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=False)
     weibo_fetch_at = DateTimeTZField(null=True)
+    weibo_next_fetch = DateTimeTZField(null=True)
     liked_fetch = BooleanField(default=False)
     liked_fetch_at = DateTimeTZField(null=True)
+    liked_next_fetch = DateTimeTZField(null=True)
     post_at = DateTimeTZField(null=True)
     following = BooleanField(null=True)
     description = CharField(null=True)
@@ -145,6 +147,7 @@ class UserConfig(BaseModel):
         console.log(f"{self.username}微博获取完毕\n")
 
         self.weibo_fetch_at = now
+        self.weibo_next_fetch = self.get_weibo_next_fetch()
         for weibo_info in self.page.homepage(parse=False):
             weibo_dict = WeiboParser(weibo_info).parse(online=False)
             if not weibo_dict.get('is_pinned'):
@@ -234,6 +237,7 @@ class UserConfig(BaseModel):
 
         console.log(f"{self.user.username}的赞获取完毕\n")
         self.liked_fetch_at = pendulum.now()
+        self.liked_next_fetch = self.get_liked_next_fetch()
         self.save()
 
     def fetch_friends(self, update=False):
@@ -371,8 +375,7 @@ class UserConfig(BaseModel):
                 'order_num': i
             })
 
-    @property
-    def next_liked_fetch(self) -> pendulum.DateTime | None:
+    def get_liked_next_fetch(self) -> pendulum.DateTime | None:
         if not self.liked_fetch:
             return
         if self.liked_fetch_at is None:
@@ -395,8 +398,7 @@ class UserConfig(BaseModel):
         days = min(duration.in_days(), 180)
         return liked_fetch_at.add(days=days)
 
-    @property
-    def next_weibo_fetch(self) -> pendulum.DateTime:
+    def get_weibo_next_fetch(self) -> pendulum.DateTime:
         if not self.weibo_fetch:
             return
         if not self.weibo_fetch_at:

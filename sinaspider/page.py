@@ -180,11 +180,11 @@ class SinaBot:
                         break
                 else:
                     raise ValueError(f'{uc.username} not following')
-                if uc.next_liked_fetch:
+                if uc.liked_next_fetch:
                     console.log(
                         f'latest liked fetch at {uc.liked_fetch_at:%y-%m-%d}, '
-                        f'next fetching time is {uc.next_liked_fetch:%y-%m-%d}')
-                    if pendulum.now() > uc.next_liked_fetch:
+                        f'next fetching time is {uc.liked_next_fetch:%y-%m-%d}')
+                    if pendulum.now() > uc.liked_next_fetch:
                         uc.fetch_liked(download_dir)
 
 
