@@ -6,6 +6,7 @@ import pendulum
 from typer import Option, Typer
 
 from sinaspider import console
+from sinaspider.helper import fetcher
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 
@@ -21,31 +22,31 @@ app = Typer()
 
 class LogSaver:
     def __init__(self, command: str, download_dir: Path):
-        self.download_dir = download_dir
         self.command = command
+        self.download_dir = download_dir
         self.save_log_at = pendulum.now()
-        self.total_work_time = 0
+        self.total_fetch_count = 0
         self.SAVE_LOG_INTERVAL = 12  # hours
-        self.SAVE_LOG_FOR_WORKING = 15  # minutes
+        self.SAVE_LOG_FOR_COUNT = 100
 
-    def save_log(self, work_time=0):
-        self.total_work_time += work_time
+    def save_log(self, fetch_count=0):
+        self.total_fetch_count += fetch_count
         log_hours = self.save_log_at.diff().in_hours()
         console.log(
-            f'total work time: {self.total_work_time}, '
-            f'threshold: {self.SAVE_LOG_FOR_WORKING}m')
+            f'total fetch count: {self.total_fetch_count}, '
+            f'threshold: {self.SAVE_LOG_FOR_COUNT}')
         console.log(
             f'log hours: {log_hours}, threshold: {self.SAVE_LOG_INTERVAL}h')
         if (log_hours > self.SAVE_LOG_INTERVAL or
-                self.total_work_time > self.SAVE_LOG_FOR_WORKING):
+                self.total_fetch_count > self.SAVE_LOG_FOR_COUNT):
             console.log('Threshold reached, saving log automatically...')
-        elif work_time == 0:
+        elif fetch_count == 0:
             console.log('Saving log manually...')
         else:
             return
         save_log(self.command, self.download_dir)
         self.save_log_at = pendulum.now()
-        self.total_work_time = 0
+        self.total_fetch_count = 0
 
 
 @app.command()
@@ -79,6 +80,7 @@ def timeline(days: float = Option(...),
         print_command()
         update_user_config()
         start_time = pendulum.now()
+        start_count = fetcher.visits
         console.log(f'Fetching timeline since {since}...')
 
         bot_art.get_timeline(download_dir=download_dir, since=since,
@@ -107,7 +109,7 @@ def timeline(days: float = Option(...),
             else:
                 break
         WORKING_TIME = 10
-        logsaver.save_log(start_time.diff().in_minutes()+1)
+        logsaver.save_log(fetcher.visits - start_count)
         next_start_time = start_time.add(hours=frequency)
         console.rule(
             f'waiting for next fetching at {next_start_time:%H:%M:%S}',
