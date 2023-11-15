@@ -231,7 +231,9 @@ class UserConfig(BaseModel):
                 w.order_num += count
                 w.save()
             LikedWeibo.insert_many(self._liked_list).execute()
-            console.log(f"🎀 插入 {count} 条新赞", style="bold green on dark_green")
+            pic_counts = sum(p['pic_num'] for p in self._liked_list)
+            console.log(f"🎀 插入 {count} 条新赞, 共 {pic_counts} 张图片",
+                        style="bold green on dark_green")
             LikedWeibo.delete().where(LikedWeibo.order_num > 1000).execute()
             self._liked_list.clear()
 
@@ -241,6 +243,7 @@ class UserConfig(BaseModel):
         self.save()
 
     def fetch_friends(self, update=False):
+        fids = {f.friend_id for f in self.user.friends}
         if update:
             Friend.delete().where(Friend.user_id == self.user_id).execute()
         if not Friend.get_or_none(user_id=self.user_id):
@@ -253,11 +256,20 @@ class UserConfig(BaseModel):
             Friend.insert_many(friends).execute()
             Friend.delete().where(Friend.gender == 'm').execute()
             Friend.update_frequency()
+        fids_updated = {f.friend_id for f in self.user.friends}
+        if deleted := (fids-fids_updated):
+            console.log('following user be deleted')
+            for fid in deleted:
+                console.log(f'https://weibo.com/u/{fid}')
+        if added := (fids_updated-fids):
+            console.log('following user be deleted')
+            for fid in added:
+                console.log(f'https://weibo.com/u/{fid}')
+
         self.update_friends()
 
     def update_friends(self):
-        fids = {f.friend_id for f in Friend.select().where(
-            Friend.user_id == self.user_id)}
+        fids = {f.friend_id for f in self.user.friends}
         query = (UserConfig.select()
                  .where(UserConfig.user_id.in_(fids))
                  .where(UserConfig.weibo_fetch)
