@@ -398,8 +398,6 @@ class UserConfig(BaseModel):
                  .order_by(LikedWeibo.created_at.desc())
                  )
         if not query:
-            console.log(
-                f"no liked weibo found for {self.username}", style="warning")
             return liked_fetch_at.add(months=6)
         count = 0
         for liked in query:
@@ -415,14 +413,17 @@ class UserConfig(BaseModel):
             return
         if not self.weibo_fetch_at:
             return
+        if self.blocked:
+            return
         weibo_fetch_at = pendulum.instance(self.weibo_fetch_at)
 
         if self.post_at:
             interval = (self.weibo_fetch_at - self.post_at).days
-            interval = min(max(7, interval), 60)
+            interval = min(max(7, interval), 30)
         else:
-            interval = 60
-        interval *= (1 + self.following)
+            interval = 30
+        if not self.is_friend and not self.following:
+            interval = min(interval, 2)
         return weibo_fetch_at.add(days=interval)
 
 

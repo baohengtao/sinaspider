@@ -56,16 +56,14 @@ def timeline(days: float = Option(...),
              download_dir: Path = default_path):
     """
     Fetch timeline for users in database
-
     days: days to fetch
-
     frequency: hours between each fetching
-
     download_dir: image saving directory
     """
     query = (UserConfig.select()
              .where(UserConfig.weibo_fetch)
              .where(UserConfig.weibo_fetch_at.is_null(False))
+             .where(UserConfig.weibo_next_fetch < pendulum.now())
              .where(~UserConfig.blocked)
              .order_by(UserConfig.weibo_fetch_at)
              )
@@ -85,29 +83,28 @@ def timeline(days: float = Option(...),
 
         bot_art.get_timeline(download_dir=download_dir, since=since,
                              friend_circle=False)
-        console.log('Looping following user')
-        for config in query.where(UserConfig.following)[:2]:
-            config.fetch_weibo(download_dir/'Loop')
-
         bot.get_timeline(download_dir=download_dir,
                          since=since, friend_circle=True)
-        console.log('Looping no following user')
-        for config in query.where(~UserConfig.following)[:1]:
-            config.fetch_weibo(download_dir/'Loop')
-
-        console.log('Looping liked user')
-        for config in (UserConfig.select()
-                       .where(UserConfig.liked_fetch)
-                       .where(UserConfig.liked_fetch_at.is_null(False))
-                       .where(UserConfig.liked_next_fetch < pendulum.now())
-                       .order_by(UserConfig.liked_fetch_at.asc())
-                       )[:2]:
-            console.log(
-                f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
-                f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
-            config.fetch_liked(download_dir)
-
         since = start_time
+
+        if start_time.diff().in_minutes() < WORKING_TIME:
+            console.log('Looping user', style='red bold')
+            for config in query.where(UserConfig.following)[:2]:
+                config.fetch_weibo(download_dir/'Loop')
+            for config in query.where(~UserConfig.following)[:1]:
+                config.fetch_weibo(download_dir/'Loop')
+
+            console.log('Looping liked user', style='red bold')
+            for config in (UserConfig.select()
+                           .where(UserConfig.liked_fetch)
+                           .where(UserConfig.liked_fetch_at.is_null(False))
+                           .where(UserConfig.liked_next_fetch < pendulum.now())
+                           .order_by(UserConfig.liked_fetch_at.asc())
+                           )[:2]:
+                console.log(
+                    f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
+                    f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
+                config.fetch_liked(download_dir)
 
         while start_time.diff().in_minutes() < WORKING_TIME:
             if config := UserConfig.get_or_none(weibo_fetch=True,
@@ -158,7 +155,9 @@ def timeline(days: float = Option(...),
                             "Press S to fetching immediately,\n"
                             "L to fetch log manually,\n"
                             "Q to exit,\n"
-                            "int number for the time in minutes to fetch new users")
+                            "int number for the time in minutes to fetch new users",
+                            style='info'
+                        )
                         continue
 
 
