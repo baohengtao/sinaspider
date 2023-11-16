@@ -83,13 +83,18 @@ class Fetcher:
         s = self.sess_art if art_login else self.sess_main
         while True:
             try:
-                return s.get(url, params=params)
-            except ConnectionError as e:
+                r = s.get(url, params=params)
+                r.raise_for_status()
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.HTTPError) as e:
                 period = 3600 if '/feed/friends' in url else 60
                 console.log(
                     f"{e}: Sleepping {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
                 time.sleep(period)
+            else:
+                assert r.status_code == 200
+                return r
 
     def _pause(self):
         self.visits += 1

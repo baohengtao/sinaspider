@@ -94,13 +94,13 @@ def timeline(days: float = Option(...),
             for config in query.where(~UserConfig.following)[:1]:
                 config.fetch_weibo(download_dir/'Loop')
 
-            console.log('Looping liked user', style='red bold')
             for config in (UserConfig.select()
                            .where(UserConfig.liked_fetch)
                            .where(UserConfig.liked_fetch_at.is_null(False))
                            .where(UserConfig.liked_next_fetch < pendulum.now())
                            .order_by(UserConfig.liked_fetch_at.asc())
-                           )[:2]:
+                           )[:1]:
+                console.log('Looping liked user', style='red bold')
                 console.log(
                     f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
                     f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
@@ -144,6 +144,14 @@ def timeline(days: float = Option(...),
                         return
                     case "l":
                         logsaver.save_log()
+                        console.log(
+                            f'latest start_time: {start_time:%y-%m-%d %H:%M:%S}')
+                        console.log(
+                            f'next_start_time: {next_start_time:%y-%m-%d %H:%M:%S}')
+                        console.rule(
+                            f'waiting for next fetching at {next_start_time:%H:%M:%S}',
+                            style='magenta on dark_magenta'
+                        )
                     case t if t.isdigit():
                         console.log(
                             "number detected,"

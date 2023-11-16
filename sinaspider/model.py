@@ -62,6 +62,7 @@ class BaseModel(Model):
 class UserConfig(BaseModel):
     user: "User" = DeferredForeignKey("User", unique=True, backref='config')
     username = CharField()
+    screen_name = CharField(null=True)
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=False)
     weibo_fetch_at = DateTimeTZField(null=True)
@@ -712,11 +713,12 @@ class Weibo(BaseModel):
                 }
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
-        if (pic_num := len(self.photos)) == 1:
-            assert not sn or int(sn) == 1
-            sn = ""
-        elif sn and pic_num > 9:
-            sn = f"{int(sn):02d}"
+        if self.photos:
+            if (pic_num := len(self.photos)) == 1:
+                assert not sn or int(sn) == 1
+                sn = ""
+            elif sn and pic_num > 9:
+                sn = f"{int(sn):02d}"
 
         title = (self.text or "").strip()
         if self.region_name:
