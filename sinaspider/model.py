@@ -62,7 +62,7 @@ class BaseModel(Model):
 class UserConfig(BaseModel):
     user: "User" = DeferredForeignKey("User", unique=True, backref='config')
     username = CharField()
-    screen_name = CharField(null=True)
+    nickname = CharField(null=True)
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(default=False)
     weibo_fetch_at = DateTimeTZField(null=True)
@@ -431,7 +431,7 @@ class UserConfig(BaseModel):
 class User(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
     username = TextField()
-    screen_name = TextField()
+    nickname = TextField()
     following = BooleanField()
     birthday = TextField(null=True)
     age = IntegerField(null=True)
@@ -463,13 +463,11 @@ class User(BaseModel):
     svip = IntegerField(null=True)
     公司 = TextField(null=True)
     工作经历 = ArrayField(field_class=TextField, null=True)
-    性取向 = TextField(null=True)
     感情状况 = TextField(null=True)
-    标签 = TextField(null=True)
     注册时间 = TextField(null=True)
     阳光信用 = TextField(null=True)
     friendships_relation = IntegerField(null=True)
-    # special_follow = BooleanField(null=True)
+    redirect = BigIntegerField(null=True)
 
     def __repr__(self):
         return super().__repr__()
@@ -493,7 +491,8 @@ class User(BaseModel):
         user_id = user_dict['id']
         if not (model := cls.get_or_none(id=user_id)):
             if 'username' not in user_dict:
-                user_dict['username'] = user_dict['screen_name']
+                user_dict['username'] = user_dict['nickname'].strip('-_ ')
+                assert user_dict['username']
             if birth := user_dict.get('birthday'):
                 user_dict['age'] = pendulum.parse(birth).diff().in_years()
             return cls.insert(user_dict).execute()

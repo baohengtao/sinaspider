@@ -186,7 +186,7 @@ def download_single_file(
             time.sleep(period)
             continue
 
-        if r.status_code == 404:
+        if r.status_code in [404, 302]:
             console.log(
                 f"{url}, {xmp_info}, {r.status_code}", style="error")
             return

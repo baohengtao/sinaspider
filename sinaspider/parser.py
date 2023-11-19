@@ -308,6 +308,9 @@ class UserParser:
             user_info['followed_by'] = followed_by
         self._user = self._normalize(user_info)
 
+        assert 'nickname' not in self._user
+        self._user['nickname'] = self._user.pop('screen_name')
+
         return self._user.copy()
 
     @staticmethod
