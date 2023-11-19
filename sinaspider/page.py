@@ -201,38 +201,22 @@ class Page:
                 start_page: the start page to fetch
                 parse: whether to parse weibo, default True
         """
-        # url = ('https://m.weibo.cn/api/container/getIndex'
-        #    f'?containerid=107603{self.id}&page=%s')
-
-        s = "99312000" if fetcher.art_login else "b59fafff"
-        # fetch original weibo only
-        url = ('https://api.weibo.cn/2/profile/statuses/tab?c=weicoabroad&'
-               f'containerid=230413{self.id}_-_WEIBO_SECOND_PROFILE_WEIBO_ORI&'
-               f'from=12CC293010&page=%s&s={s}'
-               )
-
+        url = ('https://m.weibo.cn/api/container/getIndex'
+               f'?containerid=107603{self.id}&page=%s')
         for page in itertools.count(start=max(start_page, 1)):
-            # for try_time in itertools.count(start=1):
-            #     if (js := fetcher.get(url % page).json())['ok']:
-            #         break
-            #     if js['msg'] == '请求过于频繁，歇歇吧':
-            #         raise ConnectionError(js['msg'])
-            #     if try_time > 3:
-            #         console.log(
-            #             "not js['ok'], seems reached end, no wb return for "
-            #             f"page {page}", style='warning')
-            #         return
-            cards = fetcher.get(url % page).json()['cards']
-            mblogs = [card['mblog'] for card in cards
+            for try_time in itertools.count(start=1):
+                if (js := fetcher.get(url % page).json())['ok']:
+                    break
+                if js['msg'] == '请求过于频繁，歇歇吧':
+                    raise ConnectionError(js['msg'])
+                if try_time > 3:
+                    console.log(
+                        "not js['ok'], seems reached end, no wb return for "
+                        f"page {page}", style='warning')
+                    return
+
+            mblogs = [card['mblog'] for card in js['data']['cards']
                       if card['card_type'] == 9]
-            if not mblogs:
-                assert len(cards) == 1
-                assert cards[0]['name'] == '暂无微博'
-                console.log(
-                    f"seems reached end at page {page} for {url % page}",
-                    style='warning'
-                )
-                return
 
             for weibo_info in mblogs:
                 if weibo_info['user']['id'] != self.id:
