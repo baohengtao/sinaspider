@@ -317,24 +317,23 @@ def parse_loc_src(loc_src: str) -> dict:
     >> parse_loc_src(loc_src)
         {
             'id': '8008646020000000000',
-            'name': '三亚',
-            'latitude': 18.247872,
-            'longitude': 109.508268
+            'short_name': '三亚',
             }
     """
     containerid = re.search(r'containerid=([\w-]+)', loc_src).group(1)
     api = ('https://m.weibo.cn/api/container/getIndex?'
            f'containerid={containerid}')
     js = fetcher.get(api).json()
-    cards = js['data']['cards'][0]['card_group'][:2]
-    name = cards[1]['group'][0]['item_title']
-    lng, lat = re.search(r'longitude=(-?\d+\.\d+)&latitude=(-?\d+\.\d+)',
-                         cards[0]['pic']).groups()
-    fid = cards[0]['actionlog']['fid']
-    location_id = re.match(r'2306570042(\w+)', fid).group(1)
+    cards = js['data']['cards'][0]['card_group']
+    name = cards[0]['group'][0]['item_title']
+    params = cards[1]['scheme'].split('?')[-1].split('&')
+    params = dict(p.split('=') for p in params)
+    if not (location_id := params.get('extparam')):
+        containerid = params['containerid']
+        location_id = re.match(
+            '2310360016([\w-]+)_pic', containerid).group(1)
+
     return dict(
         id=location_id,
         short_name=name,
-        latitude=float(lat),
-        longitude=float(lng),
     )

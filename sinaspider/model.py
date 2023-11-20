@@ -193,8 +193,6 @@ class UserConfig(BaseModel):
             weibo: Weibo = Weibo.get_by_id(weibo_id)
             if weibo.location:
                 assert weibo.latitude
-            # weibo.update_location()
-
             medias = list(weibo.medias(download_dir))
             console.log(weibo)
             for target in ['ins', 'ig']:
@@ -556,7 +554,6 @@ class Weibo(BaseModel):
     update_status = TextField(null=True)
     latitude = DoubleField()
     longitude = DoubleField()
-    location_src = TextField(null=True)
 
     class Meta:
         table_name = "weibo"
@@ -583,6 +580,10 @@ class Weibo(BaseModel):
         return upserted weibo id
         """
         wid = weibo_dict['id']
+        if location_src := weibo_dict.pop('location_src', None):
+            assert 'location_id' not in weibo_dict
+            lid = cls._get_location_id_from_src(location_src)
+            weibo_dict['location_id'] = lid
         if not (model := cls.get_or_none(id=wid)):
             cls.insert(weibo_dict).execute()
             Weibo.get_by_id(wid).update_location()
@@ -590,17 +591,7 @@ class Weibo(BaseModel):
         if model.location is None:
             assert 'location' not in weibo_dict
         elif model.update_status == 'updated':
-            if model.location_src:
-                assert model.location_src == weibo_dict['location_src']
-            else:
-                if 'location_id' not in weibo_dict:
-                    _info = parse_loc_src(weibo_dict.pop('location_src'))
-                    _loc = model_to_dict(Location.from_id(_info['id']))
-                    for k, v in _info.items():
-                        assert _loc[k] == v
-                    weibo_dict['location_id'] = _info['id']
-                assert model.location_id == weibo_dict['location_id']
-
+            assert model.location_id == weibo_dict['location_id']
         else:
             if not Confirm.ask(f'an invisible weibo {wid} '
                                'with location found, continue?'):
@@ -623,9 +614,6 @@ class Weibo(BaseModel):
         return wid
 
     def update_location(self):
-        if self.location_src:
-            assert not self.location_id
-            self._update_location_from_src()
         if not self.location_id or self.latitude:
             return
         coord = self.get_coordinate()
@@ -651,15 +639,14 @@ class Weibo(BaseModel):
         self.latitude, self.longitude = coord or location.coordinate
         self.save()
 
-    def _update_location_from_src(self):
-        info = parse_loc_src(self.location_src)
+    @staticmethod
+    def _get_location_id_from_src(location_src: str) -> str:
+        info = parse_loc_src(location_src)
         location = Location.from_id(info['id'])
         loc_dict = model_to_dict(location)
         for k, v in info.items():
             assert loc_dict[k] == v
-        self.location_id = location.id
-        self.location_src = None
-        self.save()
+        return info['id']
 
     def get_coordinate(self) -> tuple[float, float] | None:
         if art_login := self.user.following:
@@ -739,7 +726,7 @@ class Weibo(BaseModel):
         xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
             "%Y:%m:%d %H:%M:%S.%f").strip('0').strip('.')
         res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
-        if self.location_id or self.location_src:
+        if self.location_id:
             res['WeiboLocation'] = (self.latitude, self.longitude)
         return res
 
