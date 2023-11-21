@@ -376,14 +376,14 @@ class Page:
                 continue
             if parse:
                 try:
-                    yield WeiboParser(weibo_info).parse(online=False)
+                    yield WeiboParser(weibo_info, online=False).parse()
                 except (KeyError, AttributeError):
                     console.log(
                         "parse weibo_info failed for "
                         f"https://m.weibo.cn/status/{weibo_info['id']},"
                         "fetching from weibo page directly...",
                         style='error')
-                    yield WeiboParser(weibo_info['id']).parse(online=False)
+                    yield WeiboParser(weibo_info['id']).parse()
             else:
                 yield weibo_info
 
@@ -436,7 +436,7 @@ class Page:
                 continue
             if mblog['source'] == '生日动态':
                 continue
-            return WeiboParser(mblog).parse(online=False)['created_at']
+            return WeiboParser(mblog, online=False).parse()['created_at']
 
     def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""

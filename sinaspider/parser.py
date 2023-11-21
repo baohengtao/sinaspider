@@ -16,7 +16,8 @@ from sinaspider.helper import encode_wb_id, fetcher, normalize_str
 class WeiboParser:
     """用于解析原始微博内容."""
 
-    def __init__(self, weibo_info: dict | int | str):
+    def __init__(self, weibo_info: dict | int | str, online=True):
+        self.online = online
         if isinstance(weibo_info, dict) and 'pic_ids' not in weibo_info:
             weibo_info = weibo_info['id']
             console.log(f'pic_ids not found for weibo {weibo_info},'
@@ -69,15 +70,15 @@ class WeiboParser:
 
         return weibo_info
 
-    def parse(self, online=True):
-        if online and not self.pic_match:
+    def parse(self):
+        if self.online and not self.pic_match:
             assert self.info['pic_num'] > 9
             self.info = self._fetch_info(self.info['id'])
             assert self.pic_match
         self.basic_info()
         self.video_info()
 
-        if photos := self.photos_info_with_hist(online=online):
+        if photos := self.photos_info_with_hist():
             photos = {
                 str(i+1): list(p) for i, p in enumerate(photos)}
             self.weibo['photos'] = photos
@@ -89,11 +90,11 @@ class WeiboParser:
             self.weibo['update_status'] = 'updated'
         return self.weibo
 
-    def photos_info_with_hist(self, online=True):
+    def photos_info_with_hist(self):
         self.weibo['pic_num'] = self.info['pic_num']
         photos = self.photos_info(self.info)
 
-        if not online:
+        if not self.online:
             return photos
         if (edit_count := self.info.get('edit_count')) is None:
             return photos

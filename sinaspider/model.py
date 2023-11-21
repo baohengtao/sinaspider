@@ -150,7 +150,7 @@ class UserConfig(BaseModel):
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
         for weibo_info in self.page.homepage(parse=False):
-            weibo_dict = WeiboParser(weibo_info).parse(online=False)
+            weibo_dict = WeiboParser(weibo_info, online=False).parse()
             if not weibo_dict.get('is_pinned'):
                 self.post_at = weibo_dict['created_at']
                 break
