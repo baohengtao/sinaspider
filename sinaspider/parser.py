@@ -90,7 +90,9 @@ class WeiboParser:
         return self.weibo
 
     def photos_info_with_hist(self, online=True):
-        photos = self.photos_info()
+        self.weibo['pic_num'] = self.info['pic_num']
+        photos = self.photos_info(self.info)
+
         if not online:
             return photos
         if (edit_count := self.info.get('edit_count')) is None:
@@ -108,7 +110,7 @@ class WeiboParser:
             if card['card_type'] != 9:
                 continue
             mblog = card['mblog']
-            for p in WeiboParser(mblog).photos_info():
+            for p in self.photos_info(mblog):
                 if p not in res:
                     res.append(p)
         for p1, p2 in zip(photos, res):
@@ -126,6 +128,7 @@ class WeiboParser:
         assert created_at.is_local()
         if region_name := self.info.get('region_name'):
             region_name = region_name.removeprefix('发布于').strip()
+        assert 'retweeted_status' not in self.info
         self.weibo.update(
             user_id=(user_id := user['id']),
             id=(id_ := int(self.info['id'])),
@@ -136,7 +139,6 @@ class WeiboParser:
             created_at=created_at,
             source=BeautifulSoup(
                 self.info['source'].strip(), 'html.parser').text,
-            retweeted=self.info.get('retweeted_status', {}).get('bid'),
             region_name=region_name,
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
@@ -144,29 +146,29 @@ class WeiboParser:
                 v = 1000000
             self.weibo[key] = v
 
-    def photos_info(self) -> list[tuple[str, str]]:
-        self.weibo['pic_num'] = self.info['pic_num']
-        if self.weibo['pic_num'] == 0:
+    @staticmethod
+    def photos_info(info: dict) -> list[tuple[str, str]]:
+        if info['pic_num'] == 0:
             return []
-        if 'pic_infos' in self.info:
-            pic_infos = [self.info['pic_infos'][pic_id]
-                         for pic_id in self.info['pic_ids']]
+        if 'pic_infos' in info:
+            pic_infos = [info['pic_infos'][pic_id]
+                         for pic_id in info['pic_ids']]
             photos = [(pic_info['largest']['url'], pic_info.get('video'))
                       for pic_info in pic_infos]
-        elif pics := self.info.get('pics'):
+        elif pics := info.get('pics'):
             pics = pics.values() if isinstance(pics, dict) else pics
             pics = [p for p in pics if 'pid' in p]
             photos = [(pic['large']['url'], pic.get('videoSrc'))
                       for pic in pics]
         else:
-            assert self.weibo['pic_num'] == 1
-            page_info = self.info['page_info']
+            assert info['pic_num'] == 1
+            page_info = info['page_info']
             page_pic = page_info['page_pic']
             url = page_pic if isinstance(
                 page_pic, str) else page_pic['url']
             photos = [(url, None)]
 
-        assert len(photos) == len(self.info['pic_ids'])
+        assert len(photos) == len(info['pic_ids'])
         return photos
 
     def video_info(self):
@@ -188,7 +190,7 @@ class WeiboParser:
 
         self.weibo['video_duration'] = page_info['media_info']['duration']
 
-    def text_info(self):
+    def text_info(self) -> dict:
         hypertext = self.info['text'].replace('\u200b', '').strip()
         topics = []
         at_users = []

@@ -190,7 +190,7 @@ class SinaBot:
 
 class Page:
     def __init__(self, user_id: int) -> None:
-        self.id = user_id
+        self.id = int(user_id)
 
     def homepage(self, start_page: int = 1,
                  parse: bool = True) -> Iterator[dict]:
@@ -230,6 +230,61 @@ class Page:
             else:
                 console.log(
                     f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+
+    # def homepage_api(self, start_page: int = 1,
+    #                  parse: bool = True) -> Iterator[dict]:
+    #     """
+    #     Fetch user's homepage weibo.
+
+    #     Args:
+    #             start_page: the start page to fetch
+    #             parse: whether to parse weibo, default True
+    #     """
+    #     # url = ('https://m.weibo.cn/api/container/getIndex'
+    #     #    f'?containerid=107603{self.id}&page=%s')
+
+    #     s = "99312000" if fetcher.art_login else "b59fafff"
+    #     # fetch original weibo only
+    #     url = ('https://api.weibo.cn/2/profile/statuses/tab?c=weicoabroad&'
+    #            f'containerid=230413{self.id}_-_WEIBO_SECOND_PROFILE_WEIBO_ORI&'
+    #            f'from=12CC293010&page=%s&s={s}'
+    #            )
+
+    #     for page in itertools.count(start=max(start_page, 1)):
+    #         # for try_time in itertools.count(start=1):
+    #         #     if (js := fetcher.get(url % page).json())['ok']:
+    #         #         break
+    #         #     if js['msg'] == '请求过于频繁，歇歇吧':
+    #         #         raise ConnectionError(js['msg'])
+    #         #     if try_time > 3:
+    #         #         console.log(
+    #         #             "not js['ok'], seems reached end, no wb return for "
+    #         #             f"page {page}", style='warning')
+    #         #         return
+    #         cards = fetcher.get(url % page).json()['cards']
+    #         mblogs = [card['mblog'] for card in cards
+    #                   if card['card_type'] == 9]
+    #         if not mblogs:
+    #             assert len(cards) == 1
+    #             assert cards[0]['name'] == '暂无微博'
+    #             console.log(
+    #                 f"seems reached end at page {page} for {url % page}",
+    #                 style='warning'
+    #             )
+    #             return
+
+    #         for weibo_info in mblogs:
+    #             if weibo_info['user']['id'] != self.id:
+    #                 assert '评论过的微博' in weibo_info['title']['text']
+    #                 continue
+    #             if weibo_info['source'] == '生日动态':
+    #                 continue
+    #             if 'retweeted_status' in weibo_info:
+    #                 continue
+    #             yield WeiboParser(weibo_info).parse() if parse else weibo_info
+    #         else:
+    #             console.log(
+    #                 f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
     @staticmethod
     def timeline(since: pendulum.DateTime, friend_circle=False):
