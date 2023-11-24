@@ -436,6 +436,8 @@ class Page:
                 continue
             if mblog['source'] == '生日动态':
                 continue
+            if 'retweeted_status' in mblog:
+                continue
             return WeiboParser(mblog, online=False).parse()['created_at']
 
     def get_visibility(self) -> bool:

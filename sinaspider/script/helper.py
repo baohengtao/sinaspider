@@ -56,6 +56,7 @@ def update_user_config():
         if artist := Artist.get_or_none(user=uc.user):
             uc.photos_num = artist.photos_num
             uc.folder = artist.folder
+        uc.username = uc.user.username
         uc.weibo_next_fetch = uc.get_weibo_next_fetch()
         uc.liked_next_fetch = uc.get_liked_next_fetch()
         uc.save()

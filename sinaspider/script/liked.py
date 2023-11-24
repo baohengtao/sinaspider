@@ -8,9 +8,9 @@ from typer import Option, Typer
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import normalize_user_id
-from sinaspider.model import Friend, UserConfig
+from sinaspider.model import Friend, User, UserConfig
 
-from .helper import default_path, logsaver_decorator
+from .helper import default_path, logsaver_decorator, update_user_config
 
 app = Typer()
 
@@ -18,9 +18,10 @@ app = Typer()
 @app.command(help="Config whether fetch user's liked weibo")
 @logsaver_decorator
 def liked(download_dir: Path = default_path):
+    update_user_config()
     while user_id := Prompt.ask('请输入用户名:smile:'):
-        if config := UserConfig.get_or_none(username=user_id):
-            user_id = config.user_id
+        if user := User.get_or_none(username=user_id):
+            user_id = user.id
         else:
             user_id = normalize_user_id(user_id)
         if not (config := UserConfig.get_or_none(user_id=user_id)):

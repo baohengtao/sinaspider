@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Self
+from urllib.parse import parse_qs, urlparse
 
 import pendulum
 from geopy.distance import geodesic
@@ -15,12 +16,11 @@ from playhouse.postgres_ext import (
     DeferredForeignKey,
     DoubleField,
     ForeignKeyField,
-    IntegerField, JSONField,
+    IntegerField,
     PostgresqlExtDatabase,
     TextField
 )
 from playhouse.shortcuts import model_to_dict
-from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.exceptions import WeiboNotFoundError
@@ -328,7 +328,9 @@ class UserConfig(BaseModel):
             console.log(
                 f"Downloading {len(weibo.photos)} files to {download_dir}..\n")
             prefix = f"{self.username}_{weibo.username}_{weibo.id}"
-            for sn, (url, _) in weibo.photos.items():
+            photos = (weibo.photos or []) + (weibo.photos_edited or [])
+            for sn, url in enumerate(photos, start=1):
+                url = url.split('🎀')[0]
                 assert (ext := parse_url_extension(url))
                 xmp_info = weibo.gen_meta(sn, url=url)
                 description = '\n'.join([
@@ -546,14 +548,22 @@ class Weibo(BaseModel):
     reposts_count = IntegerField(null=True)
     source = TextField(null=True)
     topics = ArrayField(field_class=TextField, null=True)
-    photos = JSONField(null=True)
+    photos = ArrayField(field_class=TextField, null=True)
+    photos_edited = ArrayField(field_class=TextField, null=True)
+    photos_extra = ArrayField(field_class=TextField, null=True)
+    pic_num = IntegerField()
+    edit_count = IntegerField(null=True)
+    edit_at = DateTimeTZField(null=True)
     video_duration = BigIntegerField(null=True)
     video_url = TextField(null=True)
     region_name = TextField(null=True)
-    pic_num = IntegerField()
     update_status = TextField(null=True)
     latitude = DoubleField()
     longitude = DoubleField()
+    added_at = DateTimeTZField(null=True)
+    updated_at = DateTimeTZField(null=True)
+    try_update_at = DateTimeTZField(null=True)
+    try_update_msg = TextField(null=True)
 
     class Meta:
         table_name = "weibo"
@@ -564,13 +574,12 @@ class Weibo(BaseModel):
         if update or not cls.get_or_none(id=wb_id):
             try:
                 weibo_dict = WeiboParser(wb_id).parse()
-            except WeiboNotFoundError:
+            except WeiboNotFoundError as e:
                 console.log(
-                    f'Weibo {wb_id} is not accessible, loading from database...',
+                    f'{e}: Weibo {wb_id} is not accessible, '
+                    'loading from database...',
                     style="error")
             else:
-                weibo_dict['username'] = User.get_by_id(
-                    weibo_dict['user_id']).username
                 Weibo.upsert(weibo_dict)
         return cls.get_by_id(wb_id)
 
@@ -580,41 +589,103 @@ class Weibo(BaseModel):
         return upserted weibo id
         """
         wid = weibo_dict['id']
+        weibo_dict['username'] = User.get_by_id(
+            weibo_dict['user_id']).username
+        if weibo_dict['pic_num'] > 0:
+            assert weibo_dict.get('photos') or weibo_dict.get('photos_edited')
         if location_src := weibo_dict.pop('location_src', None):
             assert 'location_id' not in weibo_dict
             lid = cls._get_location_id_from_src(location_src)
             weibo_dict['location_id'] = lid
+
+        assert 'updated_at' not in weibo_dict
+        assert 'added_at' not in weibo_dict
         if not (model := cls.get_or_none(id=wid)):
+            weibo_dict['added_at'] = pendulum.now()
             cls.insert(weibo_dict).execute()
             Weibo.get_by_id(wid).update_location()
             return wid
-        if model.location is None:
-            assert 'location' not in weibo_dict
-        elif model.update_status == 'updated':
-            assert model.location_id == weibo_dict['location_id']
         else:
-            if not Confirm.ask(f'an invisible weibo {wid} '
-                               'with location found, continue?'):
-                return
-            lat, lng = model.get_coordinate()
-            weibo_dict['latitude'] = lat
-            weibo_dict['longitude'] = lng
-            Location.from_id(weibo_dict['location_id'])
+            weibo_dict['updated_at'] = pendulum.now()
+        if model.location is None:
+            if 'location' in weibo_dict:
+                assert model.update_status == 'updated_v1'
+                assert False
+                console.log(
+                    f'location_fix for {model.username} ({model.created_at})',
+                    style='error')
+        else:
+            assert model.location_id == weibo_dict['location_id']
+            if model.update_status not in ['updated', 'updated_v1']:
+                console.log(
+                    f'an invisible weibo {wid} with location found',
+                    style='red bold')
+                model.update_location(update=True)
+
         model_dict = model_to_dict(model, recurse=False)
         model_dict['user_id'] = model_dict.pop('user')
+
+        # compare photos
+        if model.update_status == 'updated':
+            assert model.photos == weibo_dict.get('photos')
+            edited = model.photos_edited or []
+            edited_update = weibo_dict.get('photos_edited', [])
+            assert edited_update[:len(edited)] == edited
+            extra = edited_update[len(edited):]
+        else:
+            assert not model.photos_edited
+            extra = weibo_dict.get('photos', []) + \
+                weibo_dict.get('photos_edited', [])
+            for p in (model.photos or []):
+                p = p.replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
+                if p not in extra:
+                    assert False
+                    p1, p2 = p.split('🎀')
+                    e, *_ = [e for e in extra if e.startswith(p1)]
+                    assert not _
+                    e1, e2 = e.split('🎀')
+                    assert p1 == e1
+                    p2, e2 = urlparse(p2), urlparse(e2)
+                    assert p2.netloc == e2.netloc
+                    assert p2.path.removesuffix(
+                        '.mp4') == e2.path.removesuffix('.mp4')
+                    assert parse_qs(p2.query).keys(
+                    ) == parse_qs(e2.query).keys()
+                    assert p2.params == e2.params
+                    extra.remove(e)
+                else:
+                    extra.remove(p)
+        if extra:
+            assert not model.photos_extra
+            assert 'photos_extra' not in weibo_dict
+            weibo_dict['photos_extra'] = extra
+        # compare other key
+
         for k, v in weibo_dict.items():
             assert v or v == 0
             if v == model_dict[k]:
                 continue
-            console.log(f'+{k}: {v}')
+            if k in ['photos', 'photos_edited']:
+                continue
+            console.log(f'+{k}: {v}', style='green')
             if (ori := model_dict[k]) is not None:
-                console.log(f'-{k}: {ori}')
+                console.log(f'-{k}: {ori}', style='red')
+        if model.try_update_at:
+            weibo_dict['try_update_at'] = None
+            weibo_dict['try_update_msg'] = None
+            console.log(f'-try_update_at: {model.try_update_at}', style='red')
+            console.log(
+                f'-try_update_msg: {model.try_update_msg}', style='red')
+
         cls.update(weibo_dict).where(cls.id == wid).execute()
         Weibo.get_by_id(wid).update_location()
         return wid
 
-    def update_location(self):
-        if not self.location_id or self.latitude:
+    def update_location(self, update=False):
+        if self.location is None:
+            assert self.location_id is None
+            return
+        if self.latitude and not update:
             return
         coord = self.get_coordinate()
         if location := Location.from_id(self.location_id):
@@ -670,14 +741,20 @@ class Weibo(BaseModel):
             lat, lng = round_loc(lat, lng)
             return lat, lng
 
-    def medias(self, filepath: Path = None) -> Iterator[dict]:
-        photos = self.photos or {}
+    def medias(self, filepath: Path = None, extra=False) -> Iterator[dict]:
+        if self.photos_extra:
+            assert extra is True
+        elif extra:
+            return
+        photos = (self.photos or []) + (self.photos_edited or [])
         prefix = f"{self.created_at:%y-%m-%d}_{self.username}_{self.id}"
-        for sn, [photo_url, video_url] in photos.items():
-            for i, url in enumerate([photo_url, video_url]):
-                if url is None:
-                    continue
+        for sn, urls in enumerate(photos, start=1):
+            if self.photos_extra and (urls not in self.photos_extra):
+                continue
+            for i, url in enumerate(urls.split('🎀')):
                 aux = '_video' if i == 1 else ''
+                if self.photos and sn > len(self.photos):
+                    aux += '_edited'
                 ext = parse_url_extension(url)
                 yield {
                     "url": url,
@@ -686,6 +763,7 @@ class Weibo(BaseModel):
                     "filepath": filepath,
                 }
         if url := self.video_url:
+            assert not self.photos_extra
             assert ";" not in url
             if (duration := self.video_duration) and duration > 600:
                 console.log(f"video_duration is {duration})...skipping...")
@@ -699,8 +777,8 @@ class Weibo(BaseModel):
                 }
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
-        if self.photos:
-            if (pic_num := len(self.photos)) == 1:
+        if photos := ((self.photos or [])+(self.photos_edited or [])):
+            if (pic_num := len(photos)) == 1:
                 assert not sn or int(sn) == 1
                 sn = ""
             elif sn and pic_num > 9:
@@ -736,8 +814,8 @@ class Weibo(BaseModel):
         for k, v in model.items():
             if 'count' in k or v is None:
                 continue
-            if k in ['photos', 'pic_num', 'update_status']:
-                continue
+            # if k in ['photos', 'pic_num', 'update_status']:
+            #     continue
             res[k] = v
         return "\n".join(f'{k}: {v}' for k, v in res.items())
 

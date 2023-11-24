@@ -1,4 +1,5 @@
 import html
+import itertools
 import json
 import re
 import time
@@ -46,7 +47,8 @@ class WeiboParser:
             text = fetcher.get(url).text
             soup = BeautifulSoup(text, 'html.parser')
             if soup.title.text == '微博-出错了':
-                err_msg = soup.body.get_text(' ', strip=True)
+                # err_msg = soup.body.get_text(' ', strip=True)
+                assert (err_msg := soup.body.p.text.strip())
                 if err_msg in ['请求超时', 'Redis执行失败']:
                     console.log(
                         f'{err_msg} for {url}, sleeping 60 secs...',
@@ -77,11 +79,8 @@ class WeiboParser:
             assert self.pic_match
         self.basic_info()
         self.video_info()
+        self.weibo |= self.photos_info_with_hist()
 
-        if photos := self.photos_info_with_hist():
-            photos = {
-                str(i+1): list(p) for i, p in enumerate(photos)}
-            self.weibo['photos'] = photos
         self.weibo |= self.text_info()
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
@@ -91,36 +90,58 @@ class WeiboParser:
         return self.weibo
 
     def photos_info_with_hist(self):
-        self.weibo['pic_num'] = self.info['pic_num']
-        photos = self.photos_info(self.info)
 
-        if not self.online:
-            return photos
-        if (edit_count := self.info.get('edit_count')) is None:
-            return photos
+        photos_data = {
+            'edit_count': (edit_count := self.info.get('edit_count')),
+            'pic_num':   self.info['pic_num'],
+            'photos': (final_photos := self.photos_info(self.info))
+        }
+        if not (self.online and edit_count):
+            return photos_data
         console.log(
             f'{self.id} edited in {edit_count} times, '
             'finding all pics in history')
-        edit_url = f"https://m.weibo.cn/api/container/getIndex?containerid=231440_-_{self.id}"
-        js = fetcher.get(edit_url).json()
+        s = '0726b708' if fetcher.art_login else 'c773e7e0'
+        edit_url = ("https://api.weibo.cn/2/cardlist?c=weicoabroad"
+                    f"&containerid=231440_-_{self.id}"
+                    f"&page=%s&s={s}"
+                    )
+        all_cards = []
+        for page in itertools.count(1):
+            js = fetcher.get(edit_url % page).json()
+            if not (cards := js['cards']):
+                break
+            all_cards += cards
+
         res = []
-        for card in js['data']['cards']:
+        for card in all_cards[::-1]:
             card = card['card_group']
             assert len(card) == 1
             card = card[0]
             if card['card_type'] != 9:
                 continue
             mblog = card['mblog']
-            for p in self.photos_info(mblog):
-                if p not in res:
-                    res.append(p)
-        for p1, p2 in zip(photos, res):
-            assert p1[0] == p2[0]
-        if len(res) > len(photos):
+            res.append(self.photos_info(mblog))
+        photos = []
+        for ps in res:
+            for p in ps:
+                if p not in photos:
+                    photos.append(p)
+        assert set(final_photos).issubset(set(photos))
+        if len(photos) > len(final_photos):
             console.log(
-                f'🎉 the pic num increase from {len(photos)} to {len(res)}',
+                '🎉 the pic num increase from '
+                f'{len(final_photos)} to {len(photos)}',
                 style='bold red')
-        return res
+            edit_at = pendulum.from_format(
+                mblog['edit_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            assert edit_at.is_local()
+            photos_data['edit_at'] = edit_at
+        photos, edited = photos[:len(res[0])], photos[len(res[0]):]
+
+        photos_data['photos'] = photos
+        photos_data['photos_edited'] = edited
+        return photos_data
 
     def basic_info(self):
         user = self.info['user']
@@ -154,12 +175,12 @@ class WeiboParser:
         if 'pic_infos' in info:
             pic_infos = [info['pic_infos'][pic_id]
                          for pic_id in info['pic_ids']]
-            photos = [(pic_info['largest']['url'], pic_info.get('video'))
+            photos = [[pic_info['largest']['url'], pic_info.get('video', '')]
                       for pic_info in pic_infos]
         elif pics := info.get('pics'):
             pics = pics.values() if isinstance(pics, dict) else pics
             pics = [p for p in pics if 'pid' in p]
-            photos = [(pic['large']['url'], pic.get('videoSrc'))
+            photos = [[pic['large']['url'], pic.get('videoSrc', '')]
                       for pic in pics]
         else:
             assert info['pic_num'] == 1
@@ -167,9 +188,11 @@ class WeiboParser:
             page_pic = page_info['page_pic']
             url = page_pic if isinstance(
                 page_pic, str) else page_pic['url']
-            photos = [(url, None)]
-
+            photos = [[url, '']]
+        for p in photos:
+            p[1] = p[1].replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
         assert len(photos) == len(info['pic_ids'])
+        photos = ["🎀".join(p).strip("🎀") for p in photos]
         return photos
 
     def video_info(self):
