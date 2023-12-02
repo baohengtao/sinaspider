@@ -77,11 +77,11 @@ def user_add(max_user: int = 20,
                 u = UserConfig.from_id(u.user_id)
         if u.following and not u.photos_num:
             if u.user_id not in special_fol:
-                console.log(f'adding {u.username}({u.homepage}) '
+                console.log(f'adding {u.username} ({u.homepage}) '
                             'to special following list...')
                 bot.set_special_follow(u.user_id, True)
         elif u.user_id in special_fol:
-            console.log(f'removing {u.username}({u.homepage}) '
+            console.log(f'removing {u.username} ({u.homepage}) '
                         'from special following list...')
             bot.set_special_follow(u.user_id, False)
 

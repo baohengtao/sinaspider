@@ -102,13 +102,10 @@ class Fetcher:
             self._visit_count = 1
             self._last_fetch = time.time()
             return
-
-        if self._visit_count % 256 == 0:
-            sleep_time = 256
-        elif self._visit_count % 64 == 0:
-            sleep_time = 64
-        elif self._visit_count % 16 == 0:
-            sleep_time = 16
+        for flag in [2048, 1024, 256, 64, 16]:
+            if self._visit_count % flag == 0:
+                sleep_time = flag
+                break
         else:
             sleep_time = 1
         sleep_time *= random.uniform(0.5, 1.5)

@@ -115,8 +115,8 @@ class UserConfig(BaseModel):
             self.visible = visible
             self.save()
         else:
-            console.log(
-                f"conflict: {self.username}当前微博全部可见，请检查", style="error")
+            raise ValueError(
+                f"conflict: {self.username}当前微博全部可见，请检查")
         if not visible:
             console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible

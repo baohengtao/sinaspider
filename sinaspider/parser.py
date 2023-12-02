@@ -150,7 +150,7 @@ class WeiboParser:
         assert created_at.is_local()
         if region_name := self.info.get('region_name'):
             region_name = region_name.removeprefix('发布于').strip()
-        assert 'retweeted_status' not in self.info
+        # assert 'retweeted_status' not in self.info
         self.weibo.update(
             user_id=(user_id := user['id']),
             id=(id_ := int(self.info['id'])),
@@ -162,6 +162,7 @@ class WeiboParser:
             source=BeautifulSoup(
                 self.info['source'].strip(), 'html.parser').text,
             region_name=region_name,
+            retweeted_status=self.info.get('retweeted_status')
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
             if (v := self.info[key]) == '100万+':

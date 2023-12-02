@@ -184,8 +184,8 @@ class SinaBot:
                     console.log(
                         f'latest liked fetch at {uc.liked_fetch_at:%y-%m-%d}, '
                         f'next fetching time is {uc.liked_next_fetch:%y-%m-%d}')
-                    if pendulum.now() > uc.liked_next_fetch:
-                        uc.fetch_liked(download_dir)
+                    # if pendulum.now() > uc.liked_next_fetch:
+                    #     uc.fetch_liked(download_dir)
 
 
 class Page:
@@ -426,27 +426,31 @@ class Page:
                 yield info if parse else raw
                 friend_count += 1
 
-    @staticmethod
-    def _get_page_post_on(js: dict):
+    def _get_page_post_on(self, page: int):
+        url = ('https://m.weibo.cn/api/container/getIndex'
+               f'?containerid=107603{self.id}&page=%s')
+        if not (js := fetcher.get(url % page).json())['ok']:
+            return
         mblogs = [card['mblog'] for card in js['data']['cards']
                   if card['card_type'] == 9]
         while mblogs:
             mblog = mblogs.pop()
             if '评论过的微博' in mblog.get('title', {}).get('text', ''):
                 continue
-            if mblog['source'] == '生日动态':
+            if mblog['source'] in ['生日动态', '微博问答']:
                 continue
-            if 'retweeted_status' in mblog:
-                continue
-            return WeiboParser(mblog, online=False).parse()['created_at']
+            # if 'retweeted_status' in mblog:
+            #     continue
+            assert (post_on := WeiboParser(
+                mblog, online=False).parse()['created_at'])
+            return post_on
+        else:
+            assert not fetcher.get(url % (page + 1)).json()['ok']
 
     def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""
-        url = ('https://m.weibo.cn/api/container/getIndex'
-               f'?containerid=107603{self.id}&page=%s')
         start, end = 1, 4
-        while (js := fetcher.get(url % end).json())['ok']:
-            post_on = self._get_page_post_on(js)
+        while post_on := self._get_page_post_on(end):
             if (days := post_on.diff().days) > 186:
                 return True
             start = end + 1
@@ -459,11 +463,8 @@ class Page:
         while start <= end:
             mid = (start + end) // 2
             console.log(f'checking page {mid}...to get visibility')
-            if not (js := fetcher.get(url % mid).json())['ok']:
+            if not (post_on := self._get_page_post_on(mid)):
                 end = mid - 1
-            elif not (post_on := self._get_page_post_on(js)):
-                assert mid == 1
-                return False
             elif post_on < pendulum.now().subtract(months=6, days=5):
                 return True
             else:
