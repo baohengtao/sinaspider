@@ -7,8 +7,10 @@ from rich.prompt import Prompt
 from typer import Typer
 
 from sinaspider import console
+from sinaspider.exceptions import WeiboNotFoundError
 from sinaspider.helper import download_files, fetcher, normalize_wb_id
 from sinaspider.model import Artist, User, UserConfig, Weibo
+from sinaspider.parser import WeiboParser
 
 from .helper import default_path, logsaver_decorator
 
@@ -43,6 +45,7 @@ def artist():
 
 
 @app.command(help="fetch weibo by weibo_id")
+@logsaver_decorator
 def weibo(download_dir: Path = default_path):
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
         fetcher.toggle_art(True)
@@ -82,62 +85,76 @@ def update_location():
 
 @app.command()
 @logsaver_decorator
-def update_weibo():
-    from playhouse.shortcuts import update_model_from_dict
+def update_weibo(download_dir: Path = default_path):
 
-    from sinaspider.exceptions import WeiboNotFoundError
-    from sinaspider.parser import WeiboParser
     for weibo in _get_update():
+        fetcher.toggle_art(weibo.user.following)
         try:
             weibo_dict = WeiboParser(weibo.id).parse()
         except WeiboNotFoundError as e:
-            weibo.username = weibo.user.username
-            weibo.update_status = str(e)
+            weibo.try_update_at = pendulum.now()
+            weibo.try_update_msg = str(e).removesuffix(
+                f' for https://m.weibo.cn/detail/{weibo.id}')
+            weibo.save()
             console.log(
-                f"{weibo.username}({weibo.url}): :disappointed_relieved: {e}")
+                f"{weibo.username} ({weibo.url}): :disappointed_relieved: {e}")
+            continue
+        try:
+            Weibo.upsert(weibo_dict)
+        except AssertionError:
+            console.log('assertion error', style='error')
+            console.log(weibo)
         else:
-            update_model_from_dict(weibo, weibo_dict)
-            weibo.username = weibo.user.username
-            console.log(
-                f"{weibo.username}({weibo.url}): :tada:  updated successfully!"
-            )
+            weibo = Weibo.from_id(weibo.id)
+            download_files(weibo.medias(
+                download_dir/'fix_location'/weibo.username, extra=True))
+            weibo.photos_extra = None
+            weibo.save()
+            console.log(weibo)
+            console.log()
 
-        weibo.save()
+            console.log(
+                f"{weibo.username} ({weibo.url}): :tada:  updated successfully!"
+            )
 
 
 def _get_update():
     from sinaspider.page import Page
-    recent_weibo = (Weibo.select()
-                    .where(Weibo.update_status.is_null())
-                    .where(Weibo.created_at > pendulum.now()
-                           .subtract(months=6))
-                    .order_by(Weibo.user_id.asc())
-                    .order_by(Weibo.id.asc()))
+    assert not Weibo.select().where(Weibo.photos_extra.is_null(False))
+    photos = (Photo.select()
+              .where(Photo.image_supplier_name == "Weibo")
+              .where(Photo.image_unique_id.is_null(False)))
+    bids = {p.image_unique_id for p in photos}
+    query = (Weibo.select()
+             .where(Weibo.bid.in_(bids))
+             .where(Weibo.update_status != 'updated')
+             .where(Weibo.try_update_at.is_null())
+             .order_by(Weibo.user_id.desc(), Weibo.id.desc())
+             )
+    recent_weibo = query.where(
+        Weibo.created_at > pendulum.now().subtract(months=6))
+    other_weibo = query.where(
+        Weibo.created_at <= pendulum.now().subtract(months=6))
     for i, weibo in enumerate(recent_weibo, start=1):
         console.log(f'✨ processing {i} / {len(recent_weibo)}')
         yield weibo
     console.log(':star2: Weibo in half year have been updated!')
-    if not questionary.confirm('Continue?').unsafe_ask():
-        return
     uid2visible: dict[int, bool] = {}
-    for i, weibo in enumerate(process := Weibo.select()
-                              .where(Weibo.update_status.is_null())
-                              .order_by(Weibo.user_id.asc()), start=1):
-        console.log(f'✨ processing {i} / {len(process)}')
-        assert weibo.update_status is None
-        assert weibo.created_at < pendulum.now().subtract(months=6)
+    for i, weibo in enumerate(other_weibo, start=1):
+        console.log(f'✨ processing {i} / {len(query)}')
         if (uid := weibo.user_id) not in uid2visible:
             uid2visible[uid] = (visible := Page(uid).get_visibility())
             if visible:
                 if config := UserConfig.get_or_none(user_id=uid):
                     if not config.visible:
-                        console.log(f'{config.username}({uid}) is visible!',
-                                    style='error')
+                        raise ValueError(
+                            f'{config.username} ({uid}) is visible!')
         if not uid2visible[uid]:
-            weibo.update_status = 'invisible'
+            weibo.try_update_at = pendulum.now()
+            weibo.try_update_msg = 'invisible'
             weibo.username = weibo.user.username
             console.log(
-                f"{weibo.username}({weibo.url}): 😥 invisible")
+                f"{weibo.username} ({weibo.url}): 😥 invisible")
             weibo.save()
         else:
             yield weibo
