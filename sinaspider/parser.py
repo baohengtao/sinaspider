@@ -19,17 +19,24 @@ class WeiboParser:
 
     def __init__(self, weibo_info: dict | int | str, online=True):
         self.online = online
-        if isinstance(weibo_info, dict) and 'pic_ids' not in weibo_info:
-            weibo_info = weibo_info['id']
-            console.log(f'pic_ids not found for weibo {weibo_info},'
-                        'fetching online...', style='warning')
+        if not isinstance(weibo_info, dict):
+            self.is_pinned = False
+        else:
+            self.is_pinned = weibo_info.get('title', {}).get('text') == '置顶'
+            if 'pic_ids' not in weibo_info:
+                weibo_info = weibo_info['id']
+                console.log(f'pic_ids not found for weibo {weibo_info},'
+                            'fetching online...', style='warning')
+            elif self.online and weibo_info['pic_num'] > len(weibo_info['pic_ids']):
+                assert weibo_info['pic_num'] > 9
+                weibo_info = weibo_info['id']
+
         if isinstance(weibo_info, (int, str)):
             self.info = self._fetch_info(weibo_info)
             assert self.pic_match
         else:
             self.info = weibo_info
         self.id = self.info['id']
-        self.is_pinned = self.info.get('title', {}).get('text') == '置顶'
         if self.info['pic_num'] < len(self.info['pic_ids']):
             console.log(
                 f"pic_num < len(pic_ids) for {self.id}",
@@ -73,9 +80,7 @@ class WeiboParser:
         return weibo_info
 
     def parse(self):
-        if self.online and not self.pic_match:
-            assert self.info['pic_num'] > 9
-            self.info = self._fetch_info(self.info['id'])
+        if self.online:
             assert self.pic_match
         self.basic_info()
         self.video_info()
@@ -89,7 +94,7 @@ class WeiboParser:
             self.weibo['update_status'] = 'updated'
         return self.weibo
 
-    def photos_info_with_hist(self):
+    def photos_info_with_hist(self) -> dict:
 
         photos_data = {
             'edit_count': (edit_count := self.info.get('edit_count')),
@@ -121,7 +126,12 @@ class WeiboParser:
             if card['card_type'] != 9:
                 continue
             mblog = card['mblog']
-            res.append(self.photos_info(mblog))
+            try:
+                ps = self.photos_info(mblog)
+            except KeyError:
+                assert '抱歉，此微博已被删除。查看帮助：' in mblog['text']
+            else:
+                res.append(ps)
         photos = []
         for ps in res:
             for p in ps:
@@ -243,8 +253,9 @@ class WeiboParser:
                 if _icn in url_icon.img.attrs['src']:
 
                     assert surl_text.attrs['class'] == ['surl-text']
-                    location_collector.append(
-                        [surl_text.text, child.attrs['href']])
+                    if ((loc := [surl_text.text, child.attrs['href']])
+                            not in location_collector):
+                        location_collector.append(loc)
                     child.decompose()
                 elif _icn_video in url_icon.img.attrs['src']:
                     child.decompose()
@@ -455,7 +466,7 @@ class UserParser:
         """
         url = ("https://api.weibo.cn/2/cardlist?"
                "from=10DA093010&c=iphone&s=ba74941a"
-               f"&containerid=231051_-_myfollow_followprofile_-_{self.id}")
+               f"&containerid=231051_-_myfollow_followprofile_list_-_{self.id}")
         r = fetcher.get(url, art_login=True)
         if not (cards := r.json()['cards']):
             return
