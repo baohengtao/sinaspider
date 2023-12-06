@@ -610,17 +610,23 @@ class Weibo(BaseModel):
         if model.location is None:
             if 'location' in weibo_dict:
                 assert model.update_status == 'updated_v1'
-                assert False
+                raise ValueError("location in weibo_dict but not in model")
                 console.log(
                     f'location_fix for {model.username} ({model.created_at})',
                     style='error')
-        else:
-            assert model.location_id == weibo_dict['location_id']
-            if model.update_status not in ['updated', 'updated_v1']:
+        elif 'location' in weibo_dict:
+            # assert model.location == weibo_dict['location']
+            if model.update_status in ['updated', 'updated_v1']:
+                if model.location_id != weibo_dict['location_id']:
+                    raise ValueError('location_id changed')
+            else:
                 console.log(
                     f'an invisible weibo {wid} with location found',
                     style='red bold')
                 model.update_location(update=True)
+        else:
+            raise ValueError(
+                f'{model.url}:seems location is deleted')
 
         model_dict = model_to_dict(model, recurse=False)
         model_dict['user_id'] = model_dict.pop('user')
@@ -637,21 +643,31 @@ class Weibo(BaseModel):
             extra = weibo_dict.get('photos', []) + \
                 weibo_dict.get('photos_edited', [])
             for p in (model.photos or []):
-                p = p.replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
+                p = (p.replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
+                     .replace('livephoto=//us.sinaimg.cn/',
+                              'livephoto=https%3A%2F%2Fus.sinaimg.cn%2F'))
                 if p not in extra:
-                    assert False
+                    # p: model_dict
+                    # e: weibo_dict
                     p1, p2 = p.split('🎀')
                     e, *_ = [e for e in extra if e.startswith(p1)]
                     assert not _
                     e1, e2 = e.split('🎀')
                     assert p1 == e1
                     p2, e2 = urlparse(p2), urlparse(e2)
-                    assert p2.netloc == e2.netloc
+                    assert p2.netloc == e2.netloc == 'g.us.sinaimg.cn'
                     assert p2.path.removesuffix(
                         '.mp4') == e2.path.removesuffix('.mp4')
-                    assert parse_qs(p2.query).keys(
-                    ) == parse_qs(e2.query).keys()
-                    assert p2.params == e2.params
+                    qs1 = parse_qs(p2.query)
+                    qs2 = parse_qs(e2.query)
+                    for k in ['ssig', 'Expires']:
+                        qs1.pop(k)
+                        qs2.pop(k)
+                    assert set(qs1.keys()) == set(qs2.keys())
+                    assert set(qs1.keys()).issubset(
+                        {'label', 'template', 'KID'})
+                    assert qs1 == qs2
+                    assert p2.params == e2.params == ''
                     extra.remove(e)
                 else:
                     extra.remove(p)
@@ -707,7 +723,15 @@ class Weibo(BaseModel):
                     f'the distance between coord and location is {err}m',
                     style='notice')
         console.log()
-        self.latitude, self.longitude = coord or location.coordinate
+        lat, lng = coord or location.coordinate
+        if self.latitude == lat and self.longitude == lng:
+            return
+        if self.latitude:
+            console.log(f'-latitude: {self.latitude}', style='red')
+            console.log(f'-longitude: {self.longitude}', style='red')
+        console.log(f'+latitude: {lat}', style='green')
+        console.log(f'+longitude: {lng}', style='green')
+        self.latitude, self.longitude = lat, lng
         self.save()
 
     @staticmethod

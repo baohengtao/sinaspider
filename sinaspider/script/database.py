@@ -74,8 +74,8 @@ def update_weibo(download_dir: Path = default_path):
             continue
         try:
             Weibo.upsert(weibo_dict)
-        except AssertionError:
-            console.log('assertion error', style='error')
+        except ValueError as e:
+            console.log(f'value error: {e}', style='error')
             console.log(weibo)
         else:
             weibo = Weibo.from_id(weibo.id)

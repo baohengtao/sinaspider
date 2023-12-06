@@ -263,11 +263,11 @@ class WeiboParser:
         if location_collector:
             assert len(location_collector) <= 2
             location, href = location_collector[-1]
-            pattern1 = r'http://weibo\.com/p/100101(\w+)'
-            pattern2 = (r'https://m\.weibo\.cn/p/index\?containerid='
-                        r'2306570042(\w+)')
-            if match := (re.search(pattern1, href)
-                         or re.search(pattern2, href)):
+            pattern1 = r'^http://weibo\.com/p/100101([\w\.\_]+)$'
+            pattern2 = (r'^https://m\.weibo\.cn/p/index\?containerid='
+                        r'2306570042(\w+)$')
+            if match := (re.match(pattern1, href)
+                         or re.match(pattern2, href)):
                 location_id = match.group(1)
             else:
                 console.log(
