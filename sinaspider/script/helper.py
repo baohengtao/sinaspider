@@ -50,13 +50,15 @@ def update_user_config():
     """
     Update photos num for user_config
     """
-    from sinaspider.model import Artist, UserConfig
+    from photosinfo.model import Girl
+
+    from sinaspider.model import UserConfig
     for uc in UserConfig:
         uc: UserConfig
-        if artist := Artist.get_or_none(user=uc.user):
-            uc.photos_num = artist.photos_num
-            uc.folder = artist.folder
         uc.username = uc.user.username
+        if girl := Girl.get_or_none(sina_id=uc.user_id):
+            uc.photos_num = girl.total_num
+            uc.folder = girl.folder
         uc.weibo_next_fetch = uc.get_weibo_next_fetch()
         uc.liked_next_fetch = uc.get_liked_next_fetch()
         uc.save()

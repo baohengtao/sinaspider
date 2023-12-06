@@ -17,33 +17,6 @@ from .helper import default_path, logsaver_decorator
 app = Typer()
 
 
-@app.command()
-def artist():
-    while username := Prompt.ask('请输入用户名:smile:'):
-        if username.isdigit():
-            artist = Artist.get_or_none(user_id=int(username))
-        else:
-            artist = Artist.get_or_none(username=username)
-        if not artist:
-            console.log(f'用户 {username} 不在列表中')
-            continue
-        console.log(artist)
-        console.print(
-            f"which folder ? current is [bold red]{artist.folder}[/bold red]")
-        folder = questionary.select("choose folder:", choices=[
-            'recent', 'super', 'no-folder', 'less']).unsafe_ask()
-        if folder == 'no-folder':
-            folder = None
-        if artist.folder == folder:
-            continue
-        ques = f'change folder from {artist.folder} to {folder} ?'
-        if questionary.confirm(ques).unsafe_ask():
-            artist.folder = folder
-            artist.save()
-            console.print(f'{artist.username}: '
-                          f'folder changed to [bold red]{folder}[/bold red]')
-
-
 @app.command(help="fetch weibo by weibo_id")
 @logsaver_decorator
 def weibo(download_dir: Path = default_path):
