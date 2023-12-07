@@ -324,11 +324,11 @@ class UserConfig(BaseModel):
             if len(weibo.photos) < weibo.pic_num:
                 weibo_full = WeiboParser(weibo.id).parse()
                 weibo = Weibo(**weibo_full)
-            console.log(weibo)
-            console.log(
-                f"Downloading {len(weibo.photos)} files to {download_dir}..\n")
             prefix = f"{self.username}_{weibo.username}_{weibo.id}"
             photos = (weibo.photos or []) + (weibo.photos_edited or [])
+            console.log(weibo)
+            console.log(
+                f"Downloading {len(photos)} files to {download_dir}..\n")
             for sn, url in enumerate(photos, start=1):
                 url = url.split('🎀')[0]
                 assert (ext := parse_url_extension(url))

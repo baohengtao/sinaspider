@@ -320,6 +320,8 @@ class Page:
                 assert 'retweeted_status' not in status
                 created_at = pendulum.parse(status['created_at'], strict=False)
                 if created_at < since:
+                    console.log(
+                        f'🎉 created_at:{created_at: %y-%m-%d} < since:{since: %y-%m-%d}, finished')
                     return
 
                 if status.get('pic_ids'):

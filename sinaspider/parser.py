@@ -470,9 +470,6 @@ class UserParser:
         r = fetcher.get(url, art_login=True)
         if not (cards := r.json()['cards']):
             return
-        cards = cards[0]['card_group'][1:]
-        if len(cards) == 1 and (pics := cards[0].get('pics')):
-            uids = [pic['author']['id'] for pic in pics]
-        else:
-            uids = [card['user']['id'] for card in cards]
+        cards = cards[0]['card_group']
+        uids = [card['user']['id'] for card in cards]
         return uids

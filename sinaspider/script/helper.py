@@ -59,6 +59,8 @@ def update_user_config():
         if girl := Girl.get_or_none(sina_id=uc.user_id):
             uc.photos_num = girl.total_num
             uc.folder = girl.folder
+        else:
+            uc.photos_num = 0
         uc.weibo_next_fetch = uc.get_weibo_next_fetch()
         uc.liked_next_fetch = uc.get_liked_next_fetch()
         uc.save()
