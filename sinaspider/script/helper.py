@@ -7,10 +7,13 @@ import pendulum
 from rich.terminal_theme import MONOKAI
 
 from sinaspider import console
+from sinaspider.model import PG_BACK
 
 if not (d := Path('/Volumes/Art')).exists():
     d = Path.home()/'Pictures'
 default_path = d / 'Sinaspider'
+
+pg_back = PG_BACK(default_path/'_pg_backup')
 
 
 def print_command():
@@ -42,6 +45,7 @@ def logsaver_decorator(func):
 def save_log(func_name, download_dir):
     time_format = pendulum.now().format('YY-MM-DD_HHmmss')
     log_file = f"{func_name}_{time_format}.html"
+    pg_back.backup()
     console.log(f'Saving log to {download_dir / log_file}')
     console.save_html(download_dir / log_file, theme=MONOKAI)
 
@@ -56,8 +60,8 @@ def update_user_config():
     for uc in UserConfig:
         uc: UserConfig
         uc.username = uc.user.username
-        if girl := Girl.get_or_none(sina_id=uc.user_id):
-            uc.photos_num = girl.total_num
+        if girl := Girl.get_or_none(username=uc.username):
+            uc.photos_num = girl.sina_num
             uc.folder = girl.folder
         else:
             uc.photos_num = 0

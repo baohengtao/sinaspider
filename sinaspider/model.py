@@ -1,3 +1,4 @@
+import pickle
 import re
 from collections import Counter
 from datetime import datetime
@@ -558,8 +559,8 @@ class Weibo(BaseModel):
     video_url = TextField(null=True)
     region_name = TextField(null=True)
     update_status = TextField(null=True)
-    latitude = DoubleField()
-    longitude = DoubleField()
+    latitude = DoubleField(null=True)
+    longitude = DoubleField(null=True)
     added_at = DateTimeTZField(null=True)
     updated_at = DateTimeTZField(null=True)
     try_update_at = DateTimeTZField(null=True)
@@ -1045,5 +1046,30 @@ class Friend(BaseModel):
                 friend.save()
 
 
-database.create_tables(
-    [User, UserConfig, Artist, Weibo, LikedWeibo, Location, Friend])
+tables = [User, UserConfig, Artist, Weibo, LikedWeibo, Location, Friend]
+database.create_tables(tables)
+
+
+class PG_BACK:
+    def __init__(self, backpath: Path) -> None:
+        self.backpath = backpath
+        self.backpath.mkdir(exist_ok=True)
+        self.backfile = self.backpath / 'pg_backup_latest.pkl'
+
+    def backup(self):
+        filename = f"pg_back_{pendulum.now().format('YYYYMMDD')}.pkl"
+        backfile = self.backpath / filename
+        databse_backup = {table._meta.table_name: list(
+            table) for table in tables}
+        with backfile.open('wb') as f:
+            pickle.dump(databse_backup, f)
+        if self.backfile.exists():
+            self.backfile.unlink()
+        self.backfile.hardlink_to(backfile)
+
+    def restore(self):
+        if not self.backfile.exists():
+            console.log('No backup file found.', style='error')
+            return
+        with self.backfile.open('rb') as f:
+            return pickle.load(f)
