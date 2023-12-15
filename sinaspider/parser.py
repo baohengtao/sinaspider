@@ -115,7 +115,7 @@ class WeiboParser:
         if video := self.video_info():
             weibo |= video
         weibo |= self.photos_info_with_hist()
-
+        weibo |= self.location_info_with_hist() or {}
         weibo |= self.text_info(self.info['text'])
         weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
@@ -164,6 +164,66 @@ class WeiboParser:
 
         return dict(
             photos=photos, photos_edited=edited,)
+
+    def location_info_with_hist(self) -> dict | None:
+        if not self.hist_mblogs:
+            return
+        regions = []
+        for mblog in self.hist_mblogs:
+            if region_name := mblog.get('region_name'):
+                region_name = region_name.removeprefix('发布于').strip()
+            regions.append(region_name)
+
+        locations_from_url = []
+        for mblog in self.hist_mblogs:
+            url_struct = mblog.get('url_struct', [])
+            pos = [u for u in url_struct if u.get('object_type') == 'place']
+            if not pos:
+                locations_from_url.append(None)
+                continue
+            assert len(pos) == 1
+            pos = pos[0]
+            page_id = pos['page_id']
+            assert page_id.startswith('100101')
+            location_id = page_id.removeprefix('100101')
+            location = pos['url_title']
+            locations_from_url.append({
+                'location': location,
+                'location_id': location_id,
+            })
+
+        locations = []
+        for mblog in self.hist_mblogs:
+            tag_struct = [s for s in mblog.get(
+                'tag_struct', []) if s.get('otype') == 'place']
+            geo = mblog.get('geo')
+            assert bool(geo) == bool(tag_struct)
+            if not geo:
+                locations.append(None)
+                continue
+            assert geo['type'] == 'Point'
+            lat, lng = geo['coordinates']
+            assert list(geo.keys()) == ['type', 'coordinates']
+            assert len(tag_struct) == 1
+            tag_struct = tag_struct[0]
+            location_id = tag_struct['oid']
+            assert location_id.startswith('1022:100101')
+            location_id = location_id.removeprefix('1022:100101')
+            locations.append({
+                'location': tag_struct['tag_name'],
+                'location_id': location_id,
+                'latitude': lat,
+                'longitude': lng,
+            })
+
+        assert len(locations) == len(
+            locations_from_url) == len(self.hist_mblogs)
+        if locations == [None] * len(locations):
+            locations = locations_from_url
+        else:
+            assert locations_from_url == [None] * len(locations)
+
+        return dict(locations=locations, regions=regions)
 
     def basic_info(self) -> dict:
         user = self.info['user']
