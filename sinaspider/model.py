@@ -59,6 +59,10 @@ class BaseModel(Model):
     def get(cls, *query, **filters) -> Self:
         return super().get(*query, **filters)
 
+    @classmethod
+    def get_by_id(cls, *query, **filters) -> Self:
+        return super().get_by_id(*query, **filters)
+
 
 class UserConfig(BaseModel):
     user: "User" = DeferredForeignKey("User", unique=True, backref='config')
@@ -225,16 +229,16 @@ class UserConfig(BaseModel):
         download_files(imgs)
 
         if count := len(self._liked_list):
-            for w in LikedWeibo.select().where(
-                    LikedWeibo.user == self.user).order_by(
-                    LikedWeibo.order_num.desc()):
+            for w in WeiboLiked.select().where(
+                    WeiboLiked.user == self.user).order_by(
+                    WeiboLiked.order_num.desc()):
                 w.order_num += count
                 w.save()
-            LikedWeibo.insert_many(self._liked_list).execute()
+            WeiboLiked.insert_many(self._liked_list).execute()
             pic_counts = sum(p['pic_num'] for p in self._liked_list)
             console.log(f"🎀 插入 {count} 条新赞, 共 {pic_counts} 张图片",
                         style="bold green on dark_green")
-            LikedWeibo.delete().where(LikedWeibo.order_num > 1000).execute()
+            WeiboLiked.delete().where(WeiboLiked.order_num > 1000).execute()
             self._liked_list.clear()
 
         console.log(f"{self.user.username}的赞获取完毕\n")
@@ -314,10 +318,10 @@ class UserConfig(BaseModel):
                 continue
             filepath = download_dir / 'saved' if config else download_dir
 
-            if liked := LikedWeibo.get_or_none(
+            if liked := WeiboLiked.get_or_none(
                     weibo_id=weibo.id, user_id=self.user_id):
                 console.log(
-                    f'{weibo.id}: early stopped by LikedWeibo'
+                    f'{weibo.id}: early stopped by WeiboLiked'
                     f'with order_num {liked.order_num}',
                     style='warning')
                 early_stopping = True
@@ -395,9 +399,9 @@ class UserConfig(BaseModel):
         if self.liked_fetch_at is None:
             return
         liked_fetch_at = pendulum.instance(self.liked_fetch_at)
-        query = (LikedWeibo.select()
-                 .where(LikedWeibo.user == self.user)
-                 .order_by(LikedWeibo.created_at.desc())
+        query = (WeiboLiked.select()
+                 .where(WeiboLiked.user == self.user)
+                 .order_by(WeiboLiked.created_at.desc())
                  )
         if not query:
             return liked_fetch_at.add(months=6)
@@ -993,11 +997,11 @@ class Artist(BaseModel):
         return {"XMP:" + k: v for k, v in xmp.items()}
 
 
-class LikedWeibo(BaseModel):
+class WeiboLiked(BaseModel):
     weibo_id = BigIntegerField()
     weibo_by = BigIntegerField()
     pic_num = IntegerField()
-    user = ForeignKeyField(User, backref='liked_weibos')
+    user = ForeignKeyField(User, backref='weibos_liked')
     order_num = IntegerField()
     added_at = DateTimeTZField(default=pendulum.now)
     username = TextField()
@@ -1046,7 +1050,7 @@ class Friend(BaseModel):
                 friend.save()
 
 
-tables = [User, UserConfig, Artist, Weibo, LikedWeibo, Location, Friend]
+tables = [User, UserConfig, Artist, Weibo, WeiboLiked, Location, Friend]
 database.create_tables(tables)
 
 
