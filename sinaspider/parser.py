@@ -117,17 +117,64 @@ class WeiboParser:
         weibo |= self.photos_info_with_hist()
         weibo |= self.location_info_with_hist() or {}
         weibo |= self.text_info(self.info['text'])
-        weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             weibo['is_pinned'] = self.is_pinned
         weibo['pic_num'] = self.pic_num
         weibo['edit_count'] = self.edit_count
         weibo['edit_at'] = self.edit_at
         weibo['update_status'] = 'updated'
+        weibo = self.post_process(weibo)
+        weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
 
         self.weibo = weibo
 
         return weibo.copy()
+
+    @staticmethod
+    def post_process(weibo: dict) -> dict:
+        # get regions and location which parsed from history
+        regions = weibo.get('regions')
+        locations = weibo.get('locations')
+        assert bool(regions) == bool(locations)
+        if not regions:
+            return weibo
+
+        # compare region
+        assert len({bool(r) for r in regions}) == 1
+        assert weibo.get('region_name') == regions[-1]
+
+        # compare location
+        if not weibo.get('location'):
+            assert locations[-1] is None
+        else:
+            assert 'location_src' not in weibo
+            assert weibo['location'] == locations[-1]['location']
+            assert weibo['location_id'] == locations[-1]['location_id']
+        for region, location in zip(regions, locations):
+            if location is None:
+                continue
+            weibo['region_name'] = region
+            weibo |= location
+            break
+        if loc := weibo.get('location'):
+            text = weibo['text'].removesuffix('📍')
+            assert not text.endswith('📍')
+            text += f' 📍{loc}'
+            weibo['text'] = text.strip()
+
+        rs, ls = [], []
+        for r, l in zip(regions, locations):
+            if r not in rs:
+                rs.append(r)
+            if l not in ls:
+                ls.append(l)
+        if len(rs) > 1:
+            console.log(
+                f'multi region found: {rs},  {region} is chosen', style='warning')
+        if len(ls) > 1:
+            console.log(
+                f'multi location found: {ls},  {location} is chosen', style='warning')
+        return weibo
 
     def photos_info_with_hist(self) -> dict:
 
@@ -334,7 +381,7 @@ class WeiboParser:
                     child.decompose()
                 elif _icn_video in url_icon.img.attrs['src']:
                     child.decompose()
-        location, location_id, location_src = '', '', ''
+        location, location_id, location_src = None, None, None
         if location_collector:
             assert len(location_collector) <= 2
             location, href = location_collector[-1]
@@ -357,12 +404,8 @@ class WeiboParser:
         }
         text = soup.get_text(' ', strip=True)
         assert text == text.strip()
-        if location:
-            text = text.removesuffix('📍')
-            assert not text.endswith('📍')
-            text += f' 📍{location}'
-        res['text'] = text.strip()
-        return res
+        res['text'] = text
+        return {k: v for k, v in res.items() if v is not None}
 
 
 class UserParser:
