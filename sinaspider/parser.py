@@ -40,7 +40,6 @@ class WeiboParser:
             console.log(
                 f"pic_num < len(pic_ids) for {self.id}",
                 style="warning")
-        self.weibo = {}
 
     @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
@@ -75,16 +74,20 @@ class WeiboParser:
         return weibo_info
 
     def parse(self):
-        self.basic_info()
-        self.video_info()
-        self.weibo |= self.photos_info_with_hist()
+        weibo = self.basic_info()
+        if video := self.video_info():
+            weibo |= video
+        weibo |= self.photos_info_with_hist()
 
-        self.weibo |= self.text_info()
-        self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
+        weibo |= self.text_info(self.info['text'])
+        weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
-            self.weibo['is_pinned'] = self.is_pinned
-        self.weibo['update_status'] = 'updated'
-        return self.weibo
+            weibo['is_pinned'] = self.is_pinned
+        weibo['update_status'] = 'updated'
+
+        self.weibo = weibo
+
+        return weibo.copy()
 
     def photos_info_with_hist(self) -> dict:
 
@@ -145,15 +148,15 @@ class WeiboParser:
         photos_data['photos_edited'] = edited
         return photos_data
 
-    def basic_info(self):
+    def basic_info(self) -> dict:
         user = self.info['user']
         created_at = pendulum.from_format(
             self.info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
         assert created_at.is_local()
         if region_name := self.info.get('region_name'):
             region_name = region_name.removeprefix('发布于').strip()
-        # assert 'retweeted_status' not in self.info
-        self.weibo.update(
+        assert 'retweeted_status' not in self.info
+        weibo = dict(
             user_id=(user_id := user['id']),
             id=(id_ := int(self.info['id'])),
             bid=(bid := encode_wb_id(id_)),
@@ -164,15 +167,15 @@ class WeiboParser:
             source=BeautifulSoup(
                 self.info['source'].strip(), 'html.parser').text,
             region_name=region_name,
-            retweeted_status=self.info.get('retweeted_status')
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
             if (v := self.info[key]) == '100万+':
                 v = 1000000
-            self.weibo[key] = v
+            weibo[key] = v
+        return weibo
 
     @staticmethod
-    def photos_info(info: dict) -> list[tuple[str, str]]:
+    def photos_info(info: dict) -> list[str]:
         if info['pic_num'] == 0:
             return []
         if 'pic_infos' in info:
@@ -198,7 +201,8 @@ class WeiboParser:
         photos = ["🎀".join(p).strip("🎀") for p in photos]
         return photos
 
-    def video_info(self):
+    def video_info(self) -> dict | None:
+        weibo = {}
         page_info = self.info.get('page_info', {})
         if not page_info.get('type') == "video":
             return
@@ -209,16 +213,18 @@ class WeiboParser:
                 'mp4_hd_mp4', 'mp4_ld_mp4']
         for key in keys:
             if url := urls.get(key):
-                self.weibo['video_url'] = url
+                weibo['video_url'] = url
                 break
         else:
             console.log(f'no video info:==>{page_info}', style='error')
             raise ValueError('no video info')
 
-        self.weibo['video_duration'] = page_info['media_info']['duration']
+        weibo['video_duration'] = page_info['media_info']['duration']
+        return weibo
 
-    def text_info(self) -> dict:
-        hypertext = self.info['text'].replace('\u200b', '').strip()
+    @staticmethod
+    def text_info(text) -> dict:
+        hypertext = text.replace('\u200b', '').strip()
         topics = []
         at_users = []
         location_collector = []
