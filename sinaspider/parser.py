@@ -62,7 +62,6 @@ class WeiboParser:
             text = fetcher.get(url).text
             soup = BeautifulSoup(text, 'html.parser')
             if soup.title.text == '微博-出错了':
-                # err_msg = soup.body.get_text(' ', strip=True)
                 assert (err_msg := soup.body.p.text.strip())
                 if err_msg in ['请求超时', 'Redis执行失败']:
                     console.log(
@@ -71,7 +70,7 @@ class WeiboParser:
                     time.sleep(60)
                     continue
                 else:
-                    raise WeiboNotFoundError(f"{err_msg} for {url}")
+                    raise WeiboNotFoundError(err_msg, url)
             break
         rec = re.compile(
             r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
