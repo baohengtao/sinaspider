@@ -361,7 +361,7 @@ class Page:
             mblogs = _yield_from_cards(cards)
             yield from mblogs
 
-    def liked(self, parse: bool = True) -> Iterator[dict]:
+    def liked(self) -> Iterator[dict]:
         """
         Fetch user's liked weibo.
 
@@ -373,21 +373,10 @@ class Page:
                 continue
             if weibo_info['pic_num'] == 0:
                 continue
-            user_info = weibo_info['user']
-            if user_info['gender'] == 'm':
+            if weibo_info['user']['gender'] == 'm':
                 continue
-            if parse:
-                try:
-                    yield WeiboParser(weibo_info, online=False).parse()
-                except (KeyError, AttributeError):
-                    console.log(
-                        "parse weibo_info failed for "
-                        f"https://m.weibo.cn/status/{weibo_info['id']},"
-                        "fetching from weibo page directly...",
-                        style='error')
-                    yield WeiboParser(weibo_info['id']).parse()
-            else:
-                yield weibo_info
+
+            yield weibo_info
 
     def friends(self, parse=True):
         """Get user's friends."""
@@ -441,10 +430,9 @@ class Page:
                 continue
             if mblog['source'] in ['生日动态', '微博问答']:
                 continue
-            # if 'retweeted_status' in mblog:
-            #     continue
-            assert (post_on := WeiboParser(
-                mblog, online=False).parse()['created_at'])
+            post_on = pendulum.from_format(
+                mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            assert post_on.is_local()
             return post_on
         else:
             assert not fetcher.get(url % (page + 1)).json()['ok']

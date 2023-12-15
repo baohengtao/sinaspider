@@ -154,11 +154,8 @@ class UserConfig(BaseModel):
 
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
-        for weibo_info in self.page.homepage(parse=False):
-            weibo_dict = WeiboParser(weibo_info, online=False).parse()
-            if not weibo_dict.get('is_pinned'):
-                self.post_at = weibo_dict['created_at']
-                break
+        if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
+            self.post_at = weibos[0].created_at
         self.save()
 
     def _save_weibo(
@@ -297,7 +294,7 @@ class UserConfig(BaseModel):
 
     def _save_liked(self,
                     download_dir: Path,
-                    update: bool = False) -> Iterator[dict]:
+                    ) -> Iterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
         if self.liked_fetch_at:
             folder = f'{self.username}_{self.liked_fetch_at:%y-%m-%d}'
@@ -306,29 +303,27 @@ class UserConfig(BaseModel):
             download_dir /= f"Liked_New/{self.username}"
         bulk = []
         early_stopping = False
-        liked_page = self.page.liked()
-        for weibo_dict in liked_page:
-            weibo: Weibo = Weibo(**weibo_dict)
+        for mblog in self.page.liked():
+            uid, wid = mblog['user']['id'], int(mblog['id'])
             if not Friend.get_or_none(
-                    friend_id=weibo.user_id,
+                    friend_id=uid,
                     user_id=self.user_id):
                 continue
-            config = UserConfig.get_or_none(user_id=weibo.user_id)
+            config = UserConfig.get_or_none(user_id=uid)
             if config and config.weibo_fetch:
                 continue
             filepath = download_dir / 'saved' if config else download_dir
 
             if liked := WeiboLiked.get_or_none(
-                    weibo_id=weibo.id, user_id=self.user_id):
+                    weibo_id=wid, user_id=self.user_id):
                 console.log(
-                    f'{weibo.id}: early stopped by WeiboLiked'
+                    f'{wid}: early stopped by WeiboLiked'
                     f'with order_num {liked.order_num}',
                     style='warning')
                 early_stopping = True
                 break
-            if len(weibo.photos) < weibo.pic_num:
-                weibo_full = WeiboParser(weibo.id).parse()
-                weibo = Weibo(**weibo_full)
+            weibo_dict = WeiboParser(mblog).parse()
+            weibo: Weibo = Weibo(**weibo_dict)
             prefix = f"{self.username}_{weibo.username}_{weibo.id}"
             photos = (weibo.photos or []) + (weibo.photos_edited or [])
             console.log(weibo)
@@ -368,19 +363,6 @@ class UserConfig(BaseModel):
                 'liked_fetch_at is set but not early stopping', style='error')
 
         assert self._liked_list == []
-        if update:
-            console.log(
-                'continue fetching liked since update is True',
-                style='warning')
-            for weibo_dict in liked_page:
-                weibo = Weibo(**weibo_dict)
-                if UserConfig.get_or_none(user_id=weibo.user_id):
-                    continue
-                if not Friend.get_or_none(
-                        friend_id=weibo.user_id,
-                        user_id=self.user_id):
-                    continue
-                bulk.append(weibo)
 
         for i, weibo in enumerate(bulk, start=1):
             self._liked_list.append({
@@ -580,6 +562,8 @@ class Weibo(BaseModel):
             try:
                 weibo_dict = WeiboParser(wb_id).parse()
             except WeiboNotFoundError as e:
+                if not cls.get_or_none(id=wb_id):
+                    raise e
                 console.log(
                     f'{e}: Weibo {wb_id} is not accessible, '
                     'loading from database...',

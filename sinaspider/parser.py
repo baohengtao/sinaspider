@@ -17,8 +17,7 @@ from sinaspider.helper import encode_wb_id, fetcher, normalize_str
 class WeiboParser:
     """用于解析原始微博内容."""
 
-    def __init__(self, weibo_info: dict | int | str, online=True):
-        self.online = online
+    def __init__(self, weibo_info: dict | int | str):
         if not isinstance(weibo_info, dict):
             self.is_pinned = False
         else:
@@ -27,25 +26,21 @@ class WeiboParser:
                 weibo_info = weibo_info['id']
                 console.log(f'pic_ids not found for weibo {weibo_info},'
                             'fetching online...', style='warning')
-            elif self.online and weibo_info['pic_num'] > len(weibo_info['pic_ids']):
+            elif weibo_info['pic_num'] > len(weibo_info['pic_ids']):
                 assert weibo_info['pic_num'] > 9
                 weibo_info = weibo_info['id']
 
         if isinstance(weibo_info, (int, str)):
             self.info = self._fetch_info(weibo_info)
-            assert self.pic_match
         else:
             self.info = weibo_info
         self.id = self.info['id']
+        assert self.info['pic_num'] <= len(self.info['pic_ids'])
         if self.info['pic_num'] < len(self.info['pic_ids']):
             console.log(
                 f"pic_num < len(pic_ids) for {self.id}",
                 style="warning")
         self.weibo = {}
-
-    @property
-    def pic_match(self) -> bool:
-        return self.info['pic_num'] <= len(self.info['pic_ids'])
 
     @staticmethod
     def _fetch_info(weibo_id: str | int) -> dict:
@@ -80,8 +75,6 @@ class WeiboParser:
         return weibo_info
 
     def parse(self):
-        if self.online:
-            assert self.pic_match
         self.basic_info()
         self.video_info()
         self.weibo |= self.photos_info_with_hist()
@@ -90,8 +83,7 @@ class WeiboParser:
         self.weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             self.weibo['is_pinned'] = self.is_pinned
-        if self.pic_match:
-            self.weibo['update_status'] = 'updated'
+        self.weibo['update_status'] = 'updated'
         return self.weibo
 
     def photos_info_with_hist(self) -> dict:
@@ -101,7 +93,7 @@ class WeiboParser:
             'pic_num':   self.info['pic_num'],
             'photos': (final_photos := self.photos_info(self.info))
         }
-        if not (self.online and edit_count):
+        if not edit_count:
             return photos_data
         console.log(
             f'{self.id} edited in {edit_count} times, '
