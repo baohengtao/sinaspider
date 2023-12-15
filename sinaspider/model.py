@@ -580,6 +580,8 @@ class Weibo(BaseModel):
         wid = weibo_dict['id']
         weibo_dict['username'] = User.get_by_id(
             weibo_dict['user_id']).username
+        locations = weibo_dict.pop('locations', None)
+        regions = weibo_dict.pop('regions', None)
         if weibo_dict['pic_num'] > 0:
             assert weibo_dict.get('photos') or weibo_dict.get('photos_edited')
         if location_src := weibo_dict.pop('location_src', None):
@@ -597,25 +599,10 @@ class Weibo(BaseModel):
         else:
             weibo_dict['updated_at'] = pendulum.now()
         if model.location is None:
-            if 'location' in weibo_dict:
-                assert model.update_status == 'updated_v1'
-                raise ValueError("location in weibo_dict but not in model")
-                console.log(
-                    f'location_fix for {model.username} ({model.created_at})',
-                    style='error')
-        elif 'location' in weibo_dict:
-            # assert model.location == weibo_dict['location']
-            if model.update_status in ['updated', 'updated_v1']:
-                if model.location_id != weibo_dict['location_id']:
-                    raise ValueError('location_id changed')
-            else:
-                console.log(
-                    f'an invisible weibo {wid} with location found',
-                    style='red bold')
-                model.update_location(update=True)
+            assert locations[0] is None
         else:
-            raise ValueError(
-                f'{model.url}:seems location is deleted')
+            assert model.location_id == weibo_dict['location_id']
+        assert model.region_name == weibo_dict.get('region_name')
 
         model_dict = model_to_dict(model, recurse=False)
         model_dict['user_id'] = model_dict.pop('user')
@@ -683,14 +670,17 @@ class Weibo(BaseModel):
                 f'-try_update_msg: {model.try_update_msg}', style='red')
 
         cls.update(weibo_dict).where(cls.id == wid).execute()
-        Weibo.get_by_id(wid).update_location()
+        weibo = Weibo.get_by_id(wid)
+        weibo.update_location()
+        loc_info = [weibo.location, weibo.location_id,
+                    weibo.latitude, weibo.longitude]
+        if not all(loc_info):
+            assert loc_info == [None] * 4
         return wid
 
-    def update_location(self, update=False):
+    def update_location(self):
         if self.location is None:
             assert self.location_id is None
-            return
-        if self.latitude and not update:
             return
         coord = self.get_coordinate()
         if location := Location.from_id(self.location_id):
@@ -733,6 +723,8 @@ class Weibo(BaseModel):
         return info['id']
 
     def get_coordinate(self) -> tuple[float, float] | None:
+        if self.latitude:
+            return self.latitude, self.longitude
         if art_login := self.user.following:
             token = 'from=10DA093010&s=ba74941a'
 
