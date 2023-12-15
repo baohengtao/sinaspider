@@ -35,8 +35,22 @@ class WeiboParser:
         else:
             self.info = weibo_info
         self.id = self.info['id']
-        assert self.info['pic_num'] <= len(self.info['pic_ids'])
-        if self.info['pic_num'] < len(self.info['pic_ids']):
+        self.pic_num = self.info['pic_num']
+        self.edit_count = self.info.get('edit_count', 0)
+        self.hist_mblogs = None
+        self.edit_at = None
+        if self.edit_count:
+            console.log(
+                f'{self.id} edited in {self.edit_count} times, finding hist_mblogs...')
+            self.hist_mblogs = self.get_hist_mblogs()
+            if len(self.hist_mblogs) > 1:
+                self.edit_at = pendulum.from_format(
+                    self.hist_mblogs[-1]['edit_at'],
+                    'ddd MMM DD HH:mm:ss ZZ YYYY')
+                assert self.edit_at.is_local()
+
+        assert self.pic_num <= len(self.info['pic_ids'])
+        if self.pic_num < len(self.info['pic_ids']):
             console.log(
                 f"pic_num < len(pic_ids) for {self.id}",
                 style="warning")
@@ -73,6 +87,29 @@ class WeiboParser:
 
         return weibo_info
 
+    def get_hist_mblogs(self) -> list[dict]:
+        s = '0726b708' if fetcher.art_login else 'c773e7e0'
+        edit_url = ("https://api.weibo.cn/2/cardlist?c=weicoabroad"
+                    f"&containerid=231440_-_{self.id}"
+                    f"&page=%s&s={s}"
+                    )
+        all_cards = []
+        for page in itertools.count(1):
+            js = fetcher.get(edit_url % page).json()
+            all_cards += js['cards']
+            if len(all_cards) >= self.edit_count + 1:
+                assert len(all_cards) == self.edit_count + 1
+                break
+        mblogs = []
+        for card in all_cards[::-1]:
+            card = card['card_group']
+            assert len(card) == 1
+            card = card[0]
+            if card['card_type'] != 9:
+                continue
+            mblogs.append(card['mblog'])
+        return mblogs
+
     def parse(self):
         weibo = self.basic_info()
         if video := self.video_info():
@@ -83,6 +120,9 @@ class WeiboParser:
         weibo = {k: v for k, v in self.weibo.items() if v or v == 0}
         if self.is_pinned:
             weibo['is_pinned'] = self.is_pinned
+        weibo['pic_num'] = self.pic_num
+        weibo['edit_count'] = self.edit_count
+        weibo['edit_at'] = self.edit_at
         weibo['update_status'] = 'updated'
 
         self.weibo = weibo
@@ -91,62 +131,39 @@ class WeiboParser:
 
     def photos_info_with_hist(self) -> dict:
 
-        photos_data = {
-            'edit_count': (edit_count := self.info.get('edit_count')),
-            'pic_num':   self.info['pic_num'],
-            'photos': (final_photos := self.photos_info(self.info))
-        }
-        if not edit_count:
-            return photos_data
-        console.log(
-            f'{self.id} edited in {edit_count} times, '
-            'finding all pics in history')
-        s = '0726b708' if fetcher.art_login else 'c773e7e0'
-        edit_url = ("https://api.weibo.cn/2/cardlist?c=weicoabroad"
-                    f"&containerid=231440_-_{self.id}"
-                    f"&page=%s&s={s}"
-                    )
-        all_cards = []
-        for page in itertools.count(1):
-            js = fetcher.get(edit_url % page).json()
-            if not (cards := js['cards']):
-                break
-            all_cards += cards
+        final_photos = self.photos_info(self.info)
+        if not self.hist_mblogs:
+            return {'photos': final_photos}
 
         res = []
-        for card in all_cards[::-1]:
-            card = card['card_group']
-            assert len(card) == 1
-            card = card[0]
-            if card['card_type'] != 9:
-                continue
-            mblog = card['mblog']
+
+        for mblog in self.hist_mblogs:
             try:
                 ps = self.photos_info(mblog)
             except KeyError:
                 assert '抱歉，此微博已被删除。查看帮助：' in mblog['text']
-            else:
-                res.append(ps)
+                continue
+            res.append(ps)
         photos = []
         for ps in res:
             for p in ps:
                 if p not in photos:
                     photos.append(p)
-        assert set(final_photos).issubset(set(photos))
+        if not set(final_photos).issubset(set(photos)):
+            s1, s2 = set(final_photos), set(photos)
+            console.log(
+                f'photo not same: '
+                f'{s1-s2}!={s2-s1}',
+                style='error')
         if len(photos) > len(final_photos):
             console.log(
                 '🎉 the pic num increase from '
                 f'{len(final_photos)} to {len(photos)}',
                 style='bold red')
-            edit_at = pendulum.from_format(
-                mblog['edit_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            assert edit_at.is_local()
-            photos_data['edit_at'] = edit_at
         photos, edited = photos[:len(res[0])], photos[len(res[0]):]
 
-        photos_data['photos'] = photos
-        photos_data['photos_edited'] = edited
-        return photos_data
+        return dict(
+            photos=photos, photos_edited=edited,)
 
     def basic_info(self) -> dict:
         user = self.info['user']
