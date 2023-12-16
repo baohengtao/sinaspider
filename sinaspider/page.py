@@ -226,6 +226,7 @@ class Page:
                     continue
                 if 'retweeted_status' in weibo_info:
                     continue
+                weibo_info['mblog_from'] = 'timeline_web'
                 yield WeiboParser(weibo_info).parse() if parse else weibo_info
             else:
                 console.log(

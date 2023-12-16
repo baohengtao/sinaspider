@@ -83,6 +83,7 @@ class WeiboParser:
                         f'but pic_num is {weibo_info["pic_num"]}',
                         style='error')
             weibo_info['pic_num'] = pic_num
+        weibo_info['mblog_from'] = "page_web"
 
         return weibo_info
 
@@ -292,6 +293,7 @@ class WeiboParser:
             source=BeautifulSoup(
                 self.info['source'].strip(), 'html.parser').text,
             region_name=region_name,
+            mblog_from=self.info.get('mblog_from')
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
             if (v := self.info[key]) == '100万+':

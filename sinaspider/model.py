@@ -548,6 +548,7 @@ class Weibo(BaseModel):
     update_status = TextField(null=True)
     latitude = DoubleField(null=True)
     longitude = DoubleField(null=True)
+    mblog_from = TextField()
     added_at = DateTimeTZField(null=True)
     updated_at = DateTimeTZField(null=True)
     try_update_at = DateTimeTZField(null=True)
