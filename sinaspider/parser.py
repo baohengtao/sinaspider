@@ -142,7 +142,6 @@ class WeiboParser:
             return weibo
 
         # compare region
-        assert all(regions) or not any(regions)
         assert weibo.get('region_name') == regions[-1]
 
         # compare location
@@ -185,7 +184,11 @@ class WeiboParser:
                 console.log(location, style='red')
                 weibo['location'] = location['title']
         else:
-            region, location = regions[0], locations[0]
+            for region in regions:
+                if region:
+                    break
+            location = locations[0]
+            assert location is None
         weibo['region_name'] = region
         if loc := weibo.get('location'):
             text = weibo['text'].removesuffix('📍')
