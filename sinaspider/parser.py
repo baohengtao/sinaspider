@@ -258,30 +258,36 @@ class WeiboParser:
             # parse tag_struct
             tag_struct = [s for s in mblog.get(
                 'tag_struct', []) if s.get('otype') == 'place']
+            assert len(tag_struct) <= 1
+            if tag_struct:
+                tag_struct = tag_struct[0]
+                location_id: str = tag_struct['oid']
+                assert location_id.startswith('1022:100101')
+                location_id = location_id.removeprefix('1022:100101')
+                location = tag_struct['tag_name']
+                tag_struct = {
+                    'location': location,
+                    'location_id': location_id,
+                }
+
+            if geo := mblog.get('geo'):
+                assert geo['type'] == 'Point'
+                lat, lng = geo['coordinates']
+                assert list(geo.keys()) == ['type', 'coordinates']
+                geo = {
+                    'latitude': lat,
+                    'longitude': lng,
+                }
             if not tag_struct:
-                assert not mblog.get('geo')
+                assert not geo
                 locations.append(None)
                 continue
-            assert len(tag_struct) == 1
-            tag_struct = tag_struct[0]
-            location_id: str = tag_struct['oid']
-            assert location_id.startswith('1022:100101')
-            location_id = location_id.removeprefix('1022:100101')
-            location = tag_struct['tag_name']
-            locations.append({
-                'location': location,
-                'location_id': location_id,
-            })
-            if not (geo := mblog.get('geo')):
+
+            if not geo:
                 assert location_id.isdigit()
-                continue
-            assert geo['type'] == 'Point'
-            lat, lng = geo['coordinates']
-            assert list(geo.keys()) == ['type', 'coordinates']
-            locations[-1].update({
-                'latitude': lat,
-                'longitude': lng,
-            })
+                locations.append(tag_struct)
+            else:
+                locations.append(tag_struct | geo)
 
         assert len(locations) == len(
             locations_from_url) == len(self.hist_mblogs)
