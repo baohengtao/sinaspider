@@ -611,45 +611,12 @@ class Weibo(BaseModel):
         model_dict['user_id'] = model_dict.pop('user')
 
         # compare photos
-        if model.update_status == 'updated':
-            assert model.photos == weibo_dict.get('photos')
-            edited = model.photos_edited or []
-            edited_update = weibo_dict.get('photos_edited', [])
-            assert edited_update[:len(edited)] == edited
-            extra = edited_update[len(edited):]
-        else:
-            assert not model.photos_edited
-            extra = weibo_dict.get('photos', []) + \
-                weibo_dict.get('photos_edited', [])
-            for p in (model.photos or []):
-                p = (p.replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
-                     .replace('livephoto=//us.sinaimg.cn/',
-                              'livephoto=https%3A%2F%2Fus.sinaimg.cn%2F'))
-                if p not in extra:
-                    # p: model_dict
-                    # e: weibo_dict
-                    p1, p2 = p.split('🎀')
-                    e, *_ = [e for e in extra if e.startswith(p1)]
-                    assert not _
-                    e1, e2 = e.split('🎀')
-                    assert p1 == e1
-                    p2, e2 = urlparse(p2), urlparse(e2)
-                    assert p2.netloc == e2.netloc == 'g.us.sinaimg.cn'
-                    assert p2.path.removesuffix(
-                        '.mp4') == e2.path.removesuffix('.mp4')
-                    qs1 = parse_qs(p2.query)
-                    qs2 = parse_qs(e2.query)
-                    for k in ['ssig', 'Expires']:
-                        qs1.pop(k)
-                        qs2.pop(k)
-                    assert set(qs1.keys()) == set(qs2.keys())
-                    assert set(qs1.keys()).issubset(
-                        {'label', 'template', 'KID'})
-                    assert qs1 == qs2
-                    assert p2.params == e2.params == ''
-                    extra.remove(e)
-                else:
-                    extra.remove(p)
+        assert model.photos == weibo_dict.get('photos')
+        edited = model.photos_edited or []
+        edited_update = weibo_dict.get('photos_edited', [])
+        assert edited_update[:len(edited)] == edited
+        extra = edited_update[len(edited):]
+
         if extra:
             assert not model.photos_extra
             assert 'photos_extra' not in weibo_dict

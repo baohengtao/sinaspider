@@ -229,12 +229,7 @@ class WeiboParser:
             for p in ps:
                 if p not in photos:
                     photos.append(p)
-        if not set(final_photos).issubset(set(photos)):
-            s1, s2 = set(final_photos), set(photos)
-            console.log(
-                f'photo not same: '
-                f'{s1-s2}!={s2-s1}',
-                style='error')
+        assert set(final_photos).issubset(set(photos))
         if len(photos) > len(final_photos):
             console.log(
                 '🎉 the pic num increase from '
@@ -386,7 +381,12 @@ class WeiboParser:
                 page_pic, str) else page_pic['url']
             photos = [[url, '']]
         for p in photos:
-            p[1] = p[1].replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
+            if p[0].endswith('.gif'):
+                if 'https://video.weibo.com/media/play?fid=' not in p[1]:
+                    assert "://g.us.sinaimg.cn/" in p[1]
+                p[1] = ''
+            else:
+                p[1] = p[1].replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
         assert len(photos) == len(info['pic_ids'])
         photos = ["🎀".join(p).strip("🎀") for p in photos]
         return photos
