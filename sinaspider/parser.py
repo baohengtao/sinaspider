@@ -142,7 +142,7 @@ class WeiboParser:
             return weibo
 
         # compare region
-        assert len({bool(r) for r in regions}) == 1
+        assert all(regions) or not any(regions)
         assert weibo.get('region_name') == regions[-1]
 
         # compare location
@@ -152,12 +152,22 @@ class WeiboParser:
             assert 'location_src' not in weibo
             assert weibo['location'] == locations[-1]['location']
             assert weibo['location_id'] == locations[-1]['location_id']
-        for region, location in zip(regions, locations):
+
+        rl = None
+        for reginon, location in zip(regions, locations):
             if location is None:
                 continue
-            weibo['region_name'] = region
+            if rl is None:
+                rl = (reginon, location)
+            if location.get('latitude'):
+                rl = (reginon, location)
+                break
+        if rl:
+            region, location = rl
             weibo |= location
-            break
+        else:
+            region, location = regions[0], locations[0]
+        weibo['region_name'] = region
         if loc := weibo.get('location'):
             text = weibo['text'].removesuffix('📍')
             assert not text.endswith('📍')
@@ -221,6 +231,8 @@ class WeiboParser:
         for mblog in self.hist_mblogs:
             if region_name := mblog.get('region_name'):
                 region_name = region_name.removeprefix('发布于').strip()
+            if region_name == '其他':
+                region_name = None
             regions.append(region_name)
 
         locations_from_url = []
@@ -243,24 +255,30 @@ class WeiboParser:
 
         locations = []
         for mblog in self.hist_mblogs:
+            # parse tag_struct
             tag_struct = [s for s in mblog.get(
                 'tag_struct', []) if s.get('otype') == 'place']
-            geo = mblog.get('geo')
-            assert bool(geo) == bool(tag_struct)
-            if not geo:
+            if not tag_struct:
+                assert not mblog.get('geo')
                 locations.append(None)
+                continue
+            assert len(tag_struct) == 1
+            tag_struct = tag_struct[0]
+            location_id: str = tag_struct['oid']
+            assert location_id.startswith('1022:100101')
+            location_id = location_id.removeprefix('1022:100101')
+            location = tag_struct['tag_name']
+            locations.append({
+                'location': location,
+                'location_id': location_id,
+            })
+            if not (geo := mblog.get('geo')):
+                assert location_id.isdigit()
                 continue
             assert geo['type'] == 'Point'
             lat, lng = geo['coordinates']
             assert list(geo.keys()) == ['type', 'coordinates']
-            assert len(tag_struct) == 1
-            tag_struct = tag_struct[0]
-            location_id = tag_struct['oid']
-            assert location_id.startswith('1022:100101')
-            location_id = location_id.removeprefix('1022:100101')
-            locations.append({
-                'location': tag_struct['tag_name'],
-                'location_id': location_id,
+            locations[-1].update({
                 'latitude': lat,
                 'longitude': lng,
             })
