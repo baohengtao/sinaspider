@@ -147,24 +147,43 @@ class WeiboParser:
 
         # compare location
         if not weibo.get('location'):
-            assert locations[-1] is None
+            if locations[-1]:
+                assert 'location' not in locations[-1]
+                console.log(
+                    'location not found but geo is in there', style='warning')
+                console.log(locations[-1], style='warning')
+
         else:
             assert 'location_src' not in weibo
             assert weibo['location'] == locations[-1]['location']
             assert weibo['location_id'] == locations[-1]['location_id']
 
         rl = None
+        has_geo = False
         for reginon, location in zip(regions, locations):
             if location is None:
                 continue
             if rl is None:
                 rl = (reginon, location)
             if location.get('latitude'):
-                rl = (reginon, location)
-                break
+                if location.get('location'):
+                    rl = (reginon, location)
+                    break
+                else:
+                    has_geo = True
+
         if rl:
             region, location = rl
+            assert not has_geo or 'latitude' in location
             weibo |= location
+            weibo.pop('title', None)
+            if 'location' not in location:
+                assert all('location' not in loc for loc in locations)
+                assert 'location' not in weibo
+                console.log(
+                    'no location found, using title instead', style='warning')
+                console.log(location, style='red')
+                weibo['location'] = location['title']
         else:
             region, location = regions[0], locations[0]
         weibo['region_name'] = region
@@ -182,10 +201,12 @@ class WeiboParser:
                 ls.append(l)
         if len(rs) > 1:
             console.log(
-                f'multi region found: {rs},  {region} is chosen', style='warning')
+                f'multi region found: {rs},  {region} is chosen',
+                style='warning')
         if len(ls) > 1:
+            console.log(ls, style='warning')
             console.log(
-                f'multi location found: {ls},  {location} is chosen', style='warning')
+                f'multi location found,  {location} is chosen', style='warning')
         return weibo
 
     def photos_info_with_hist(self) -> dict:
@@ -270,6 +291,7 @@ class WeiboParser:
                     'location_id': location_id,
                 }
 
+            # parse geo
             if geo := mblog.get('geo'):
                 assert geo['type'] == 'Point'
                 lat, lng = geo['coordinates']
@@ -278,16 +300,33 @@ class WeiboParser:
                     'latitude': lat,
                     'longitude': lng,
                 }
-            if not tag_struct:
-                assert not geo
-                locations.append(None)
-                continue
 
-            if not geo:
-                assert location_id.isdigit()
+            # parse annotations
+            annotations = [a for a in mblog.get(
+                'annotations', []) if 'place' in a]
+            assert len(annotations) <= 1
+            if annotations:
+                annotations = annotations[0]['place']
+                annotations = {
+                    'title': annotations['title'],
+                    'location_id': annotations['poiid'],
+                }
+
+            # merge geo and annotations
+            assert bool(geo) == bool(annotations)
+            if geo:
+                geo |= annotations
+
+            if not tag_struct and not geo:
+                locations.append(None)
+            elif tag_struct and geo:
+                assert tag_struct['location_id'] == geo['location_id']
+                locations.append(tag_struct | geo)
+            elif not geo:
+                assert tag_struct['location_id'].isdigit()
                 locations.append(tag_struct)
             else:
-                locations.append(tag_struct | geo)
+                locations.append(geo)
 
         assert len(locations) == len(
             locations_from_url) == len(self.hist_mblogs)
