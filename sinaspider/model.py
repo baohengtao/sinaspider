@@ -520,7 +520,7 @@ class User(BaseModel):
 
 class Weibo(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
-    bid = TextField()
+    bid = TextField(unique=True)
     user = ForeignKeyField(User, backref="weibos")
     username = TextField()
     created_at = DateTimeTZField()
@@ -535,14 +535,15 @@ class Weibo(BaseModel):
     reposts_count = IntegerField(null=True)
     source = TextField(null=True)
     topics = ArrayField(field_class=TextField, null=True)
+    video_duration = BigIntegerField(null=True)
+    video_url = TextField(null=True)
     photos = ArrayField(field_class=TextField, null=True)
     photos_edited = ArrayField(field_class=TextField, null=True)
     photos_extra = ArrayField(field_class=TextField, null=True)
     pic_num = IntegerField()
     edit_count = IntegerField(null=True)
     edit_at = DateTimeTZField(null=True)
-    video_duration = BigIntegerField(null=True)
-    video_url = TextField(null=True)
+    has_media = BooleanField()
     region_name = TextField(null=True)
     update_status = TextField(null=True)
     latitude = DoubleField(null=True)
@@ -671,11 +672,16 @@ class Weibo(BaseModel):
 
         cls.update(weibo_dict).where(cls.id == wid).execute()
         weibo = Weibo.get_by_id(wid)
-        weibo.update_location()
-        loc_info = [weibo.location, weibo.location_id,
-                    weibo.latitude, weibo.longitude]
-        if not all(loc_info):
-            assert loc_info == [None] * 4
+        if weibo.has_media:
+            assert list(weibo.medias())
+            weibo.update_location()
+            loc_info = [weibo.location, weibo.location_id,
+                        weibo.latitude, weibo.longitude]
+            if not all(loc_info):
+                assert loc_info == [None] * 4
+        else:
+            assert not list(weibo.medias())
+
         return wid
 
     def update_location(self):

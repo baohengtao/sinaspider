@@ -124,6 +124,8 @@ class WeiboParser:
         weibo['update_status'] = 'updated'
         weibo = self.post_process(weibo)
         weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
+        weibo['has_media'] = bool(weibo.get('video_url') or weibo.get(
+            'photos') or weibo.get('photos_edited'))
 
         self.weibo = weibo
 
