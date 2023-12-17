@@ -146,7 +146,7 @@ class WeiboParser:
 
         # compare location
         if not weibo.get('location'):
-            if locations[-1]:
+            if locations[-1] and ('weico' not in weibo.get('mblog_from', '')):
                 assert 'location' not in locations[-1]
                 console.log(
                     '>>>>>>>>>>>location not found but geo is in there<<<<<<<<<<<<<<',

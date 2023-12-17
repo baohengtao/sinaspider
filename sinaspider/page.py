@@ -376,6 +376,7 @@ class Page:
                 continue
             if weibo_info['user']['gender'] == 'm':
                 continue
+            weibo_info['mblog_from'] = 'liked_weico'
 
             yield weibo_info
 
