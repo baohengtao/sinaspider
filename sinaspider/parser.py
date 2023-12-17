@@ -310,15 +310,19 @@ class WeiboParser:
                     'location_id': annotations['poiid'],
                 }
 
-            # merge geo and annotations
-            assert bool(geo) == bool(annotations)
-            if geo:
+            # merge annotations to tag_struct or geo
+            if tag_struct:
+                assert annotations
+                assert tag_struct['location_id'] == annotations['location_id']
+                tag_struct |= annotations
+            elif geo:
+                assert annotations
                 geo |= annotations
+            else:
+                locations.append(annotations or None)
+                continue
 
-            if not tag_struct and not geo:
-                locations.append(None)
-            elif tag_struct and geo:
-                assert tag_struct['location_id'] == geo['location_id']
+            if tag_struct and geo:
                 locations.append(tag_struct | geo)
             elif not geo:
                 assert tag_struct['location_id'].isdigit()
