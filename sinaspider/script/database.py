@@ -34,6 +34,19 @@ def weibo(download_dir: Path = default_path):
 
 @app.command()
 @logsaver_decorator
+def update_missing():
+    from sinaspider.model import WeiboMissed
+
+    from .timeline import LogSaver
+    logsaver = LogSaver('update_missing', default_path)
+    WeiboMissed.add_missing()
+    while True:
+        WeiboMissed.update_missing()
+        logsaver.save_log()
+
+
+@app.command()
+@logsaver_decorator
 def update_location():
     photos = (Photo.select()
               .where(Photo.image_supplier_name == "Weibo")

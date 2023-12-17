@@ -4,7 +4,6 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Self
-from urllib.parse import parse_qs, urlparse
 
 import pendulum
 from geopy.distance import geodesic
@@ -22,6 +21,7 @@ from playhouse.postgres_ext import (
     TextField
 )
 from playhouse.shortcuts import model_to_dict
+from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.exceptions import WeiboNotFoundError
@@ -966,6 +966,210 @@ class WeiboLiked(BaseModel):
         )
 
 
+class WeiboMissed(BaseModel):
+    bid = TextField(primary_key=True, unique=True)
+    user = ForeignKeyField(User, backref='weibos_missed')
+    username = TextField()
+    created_at = DateTimeTZField()
+    text = TextField(null=True)
+    region_name = TextField(null=True)
+    location = TextField(null=True)
+    latitude = DoubleField(null=True)
+    longitude = DoubleField(null=True)
+    try_update_at = DateTimeTZField(null=True)
+    try_update_msg = TextField(null=True)
+    visible = BooleanField(null=True)
+
+    uid_username = {a.user_id: a.username for a in Artist}
+    uid_visible = {}
+
+    @classmethod
+    def update_missing(cls, num=50):
+        query = (cls.select()
+                 .order_by(cls.user, cls.created_at)
+                 .where(cls.try_update_at.is_null())
+                 )
+        query_recent = query.where(
+            cls.created_at > pendulum.now().subtract(months=6))
+        query_first = query_recent.where(
+            cls.created_at < pendulum.now().subtract(months=5))
+        query = (query_first or query_recent or query).limit(num)
+        if not query:
+            raise ValueError('no missing to update')
+        for missing in query:
+            cls.update_missing_single(missing)
+        console.log(f'updated {len(query)} missing weibos', style='warning')
+
+    @classmethod
+    def update_missing_single(cls, missing: Self):
+        if missing.created_at > pendulum.now().subtract(months=6):
+            missing.visible = True
+            missing.save()
+        else:
+            if missing.user_id not in cls.uid_visible:
+                cls.uid_visible[missing.user_id] = Page(
+                    missing.user_id).get_visibility()
+            missing.visible = cls.uid_visible[missing.user_id]
+            missing.save()
+
+        fetcher.toggle_art(missing.user.following)
+        assert not Weibo.get_or_none(bid=missing.bid)
+        try:
+            weibo = Weibo.from_id(missing.bid)
+        except WeiboNotFoundError as e:
+            missing.try_update_at = pendulum.now()
+            missing.try_update_msg = str(e.err_msg)
+            missing.save()
+            console.log(e, style='error')
+            console.log(missing)
+            console.log()
+            assert not Weibo.get_or_none(bid=missing.bid)
+            return
+        except Exception:
+            console.log(
+                f'error for https://weibo.com/{missing.user_id}/{missing.bid}', style='error')
+            if Weibo.get_or_none(bid=missing.bid):
+                Weibo.delete_instance()
+            raise
+        try:
+            assert missing.visible is True
+            assert missing.bid == weibo.bid
+            assert missing.user == weibo.user
+            assert missing.username == weibo.username
+            assert missing.created_at == weibo.created_at
+            if missing.region_name:
+                assert missing.region_name == weibo.region_name
+            if missing.latitude:
+                assert weibo.location and weibo.location_id
+                assert weibo.latitude and weibo.longitude
+                l1 = (weibo.location, weibo.latitude, weibo.longitude)
+                l2 = (missing.location, missing.latitude,
+                      missing.longitude)
+                if l1 != l2:
+                    console.log(f'location changed from {l2} to {l1}',
+                                style='warning')
+        except Exception:
+            console.log(f'error for {weibo.url}', style='error')
+            weibo.delete_instance()
+            raise
+        else:
+            console.log(f'🎉 sucessfuly updated {weibo.url}')
+            console.log(weibo)
+            missing.delete_instance()
+            console.log()
+
+    @classmethod
+    def add_missing(cls):
+        from photosinfo.model import Photo
+        skip1 = {w.bid for w in Weibo}
+        skip2 = {w.bid for w in cls}
+        assert not (skip1 & skip2)
+        skip = skip1 | skip2
+        photo_query = (Photo.select()
+                       .where(Photo.image_supplier_name == 'Weibo')
+                       .where(Photo.image_unique_id.is_null(False))
+                       )
+        collections = {p.image_unique_id: WeiboMissed.extract_photo(p)
+                       for p in photo_query if p.image_unique_id not in skip}
+        if collections:
+            console.log(
+                f'inserting {len(collections)} weibos', style='warning')
+            raise ValueError('there should be no missing now')
+            WeiboMissed.insert_many(collections.values()).execute()
+        else:
+            console.log('no additional missing weibo found')
+        bids_lib = {p.image_unique_id for p in photo_query}
+        if query := (cls.select()
+                     .where(cls.bid.not_in(bids_lib)).order_by(cls.user)):
+            console.log(
+                f'found {len(query)} weibos to delete', style='warning')
+            console.log(list(query))
+            if Confirm.ask('delete?'):
+                for missing in query:
+                    missing.delete_instance()
+
+    @classmethod
+    def extract_photo(cls, photo: 'Photo') -> dict:
+        """
+        return: {'user_id': 6619193364,
+                    'bid': 'H0SrPwpyF',
+                    'created_at': DateTime(2018, 11, 3, 2, 12, 47, tzinfo=Timezone('Asia/Shanghai')),
+                    'text': '终于熬夜把考题给录进去了 希望不要出错 睡啦 📍北京·清华大学紫荆学生公寓十五号楼',
+                    'regin_name': None,
+                    'location': '北京·清华大学紫荆学生公寓十五号楼',
+                    'username': 'cooper_math'}
+        """
+        photo_dict = model_to_dict(photo)
+        pop_keys = ['uuid', 'row_created', 'hidden',
+                    'filesize', 'date', 'date_added',
+                    'live_photo', 'with_place', 'ismovie',
+                    'favorite', 'album', 'title', 'description', 'filename',
+                    'series_number', 'image_creator_name'
+                    ]
+        for k in pop_keys:
+            photo_dict.pop(k)
+        assert photo_dict.pop('image_supplier_name') == 'Weibo'
+        timestamp = int(photo_dict.pop('date_created').timestamp())
+        text, *region_name = (photo_dict.pop('blog_title') or '').split('发布于')
+        if region_name:
+            assert len(region_name) == 1
+            region_name = region_name[0].strip()
+        else:
+            region_name = None
+        extracted = {
+            'user_id': (user_id := int(photo_dict.pop('image_supplier_id'))),
+            'username': (username := cls.uid_username[user_id]),
+            'bid': (bid := photo_dict.pop('image_unique_id')),
+            'created_at': pendulum.from_timestamp(timestamp, tz='local'),
+            'text': text.strip() or None,
+            'region_name': region_name,
+            'location': photo_dict.pop('location'),
+            'latitude': (lat := photo_dict.pop('latitude')),
+            'longitude': (lng := photo_dict.pop('longitude')),
+        }
+
+        assert photo_dict.pop(
+            'image_creator_id') == f'https://weibo.com/u/{user_id}'
+
+        assert photo_dict.pop('geography') == (f'{lat} {lng}' if lat else None)
+
+        if blog_url := photo_dict.pop('blog_url'):
+            if blog_url != f'https://weibo.com/{user_id}/{bid}':
+                assert bid in ['I9c3l1S6g', 'GeKuU9rA4', 'JB3H6laZ2']
+        assert photo_dict.pop('artist') == username
+        assert not photo_dict
+
+        return extracted
+
+    def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
+        title = (self.text or "").strip()
+        if self.region_name:
+            title += f" 发布于{self.region_name}"
+        xmp_info = {
+            "ImageUniqueID": self.bid,
+            "ImageSupplierID": self.user_id,
+            "ImageSupplierName": "Weibo",
+            "ImageCreatorName": self.username,
+            "BlogTitle": title.strip(),
+            "BlogURL": f'https://weibo.com/{self.user_id}/{self.bid}',
+            "Location": self.location,
+            "DateCreated": (self.created_at +
+                            pendulum.Duration(microseconds=int(sn or 0))),
+            "SeriesNumber": sn,
+            "URLUrl": url
+        }
+        xmp_info["DateCreated"] = xmp_info["DateCreated"].strftime(
+            "%Y:%m:%d %H:%M:%S.%f").strip('0').strip('.')
+        res = {"XMP:" + k: v for k, v in xmp_info.items() if v}
+        if self.location:
+            if self.latitude:
+                res['WeiboLocation'] = (self.latitude, self.longitude)
+            else:
+                location = Location.get(name=self.location)
+                res['WeiboLocation'] = location.coordinate
+        return res
+
+
 class Friend(BaseModel):
     user = ForeignKeyField(User, backref='friends')
     username = TextField()
@@ -1001,7 +1205,8 @@ class Friend(BaseModel):
                 friend.save()
 
 
-tables = [User, UserConfig, Artist, Weibo, WeiboLiked, Location, Friend]
+tables = [User, UserConfig, Artist, Weibo,
+          WeiboLiked, Location, Friend, WeiboMissed]
 database.create_tables(tables)
 
 
