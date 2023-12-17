@@ -1068,9 +1068,16 @@ class WeiboMissed(BaseModel):
         photo_query = (Photo.select()
                        .where(Photo.image_supplier_name == 'Weibo')
                        .where(Photo.image_unique_id.is_null(False))
+                       .order_by(Photo.uuid)
                        )
-        collections = {p.image_unique_id: WeiboMissed.extract_photo(p)
-                       for p in photo_query if p.image_unique_id not in skip}
+        collections = {}
+        for p in photo_query:
+            if (bid := p.image_unique_id) in skip:
+                continue
+            if ((bid not in collections) or (
+                    not collections[bid]['latitude'] and p.latitude)):
+                collections[bid] = cls.extract_photo(p)
+
         if collections:
             console.log(
                 f'inserting {len(collections)} weibos', style='warning')
