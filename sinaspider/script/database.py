@@ -37,7 +37,7 @@ def weibo(download_dir: Path = default_path):
 def update_missing():
     from sinaspider.model import WeiboMissed
 
-    from .timeline import LogSaver
+    from .helper import LogSaver
     logsaver = LogSaver('update_missing', default_path)
     WeiboMissed.add_missing()
     while True:
