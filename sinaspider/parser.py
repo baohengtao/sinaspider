@@ -149,8 +149,10 @@ class WeiboParser:
             if locations[-1]:
                 assert 'location' not in locations[-1]
                 console.log(
-                    'location not found but geo is in there', style='warning')
-                console.log(locations[-1], style='warning')
+                    '>>>>>>>>>>>location not found but geo is in there<<<<<<<<<<<<<<',
+                    style='warning')
+                console.log(locations[-1])
+                console.log('>'*60, style='warning')
 
         else:
             assert 'location_src' not in weibo
@@ -180,8 +182,12 @@ class WeiboParser:
                 assert all('location' not in loc for loc in locations)
                 assert 'location' not in weibo
                 console.log(
-                    'no location found, using title instead', style='warning')
-                console.log(location, style='red')
+                    '>>>>no location found, using title instead<<<<<',
+                    style='warning')
+                console.log(location)
+                console.log(
+                    '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
+                    style='warning')
                 weibo['location'] = location['title']
         else:
             for region in regions:
@@ -204,12 +210,20 @@ class WeiboParser:
                 ls.append(l)
         if len(rs) > 1:
             console.log(
-                f'multi region found: {rs},  {region} is chosen',
+                '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
+                style='warning')
+            console.log(f'multi region found: {rs},  {region} is chosen')
+            console.log(
+                '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
                 style='warning')
         if len(ls) > 1:
-            console.log(ls, style='warning')
+            console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
+                        style='warning')
+            console.log(ls)
             console.log(
-                f'multi location found,  {location} is chosen', style='warning')
+                f'multi location found,  {location} is chosen')
+            console.log('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
+                        style='warning')
         return weibo
 
     def photos_info_with_hist(self) -> dict:
