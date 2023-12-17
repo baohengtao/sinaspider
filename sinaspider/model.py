@@ -997,54 +997,56 @@ class WeiboMissed(BaseModel):
         if not query:
             raise ValueError('no missing to update')
         for missing in query:
-            cls.update_missing_single(missing)
+            missing: cls
+            missing.update_missing_single()
         console.log(f'updated {len(query)} missing weibos', style='warning')
 
-    @classmethod
-    def update_missing_single(cls, missing: Self):
-        if missing.created_at > pendulum.now().subtract(months=6):
-            missing.visible = True
-            missing.save()
+    def update_missing_single(self):
+        if self.created_at > pendulum.now().subtract(months=6):
+            self.visible = True
+            self.save()
         else:
-            if missing.user_id not in cls.uid_visible:
-                cls.uid_visible[missing.user_id] = Page(
-                    missing.user_id).get_visibility()
-            missing.visible = cls.uid_visible[missing.user_id]
-            missing.save()
+            if self.user_id not in self.uid_visible:
+                console.log(f'getting visibility of {self.username}...')
+                self.uid_visible[self.user_id] = Page(
+                    self.user_id).get_visibility()
+            self.visible = self.uid_visible[self.user_id]
+            self.save()
 
-        fetcher.toggle_art(missing.user.following)
-        assert not Weibo.get_or_none(bid=missing.bid)
+        fetcher.toggle_art(self.user.following)
+        assert not Weibo.get_or_none(bid=self.bid)
         try:
-            weibo = Weibo.from_id(missing.bid)
+            weibo = Weibo.from_id(self.bid)
         except WeiboNotFoundError as e:
-            missing.try_update_at = pendulum.now()
-            missing.try_update_msg = str(e.err_msg)
-            missing.save()
+            self.try_update_at = pendulum.now()
+            self.try_update_msg = str(e.err_msg)
+            self.save()
             console.log(e, style='error')
-            console.log(missing)
+            console.log(self)
             console.log()
-            assert not Weibo.get_or_none(bid=missing.bid)
+            assert not Weibo.get_or_none(bid=self.bid)
             return
         except Exception:
             console.log(
-                f'error for https://weibo.com/{missing.user_id}/{missing.bid}', style='error')
-            if Weibo.get_or_none(bid=missing.bid):
+                f'error for https://weibo.com/{self.user_id}/{self.bid}', style='error')
+            if Weibo.get_or_none(bid=self.bid):
                 Weibo.delete_instance()
             raise
         try:
-            assert missing.visible is True
-            assert missing.bid == weibo.bid
-            assert missing.user == weibo.user
-            assert missing.username == weibo.username
-            assert missing.created_at == weibo.created_at
-            if missing.region_name:
-                assert missing.region_name == weibo.region_name
-            if missing.latitude:
+            assert self.visible is True
+            assert self.bid == weibo.bid
+            assert self.user == weibo.user
+            assert self.username == weibo.username
+            assert self.created_at == weibo.created_at
+
+            if self.region_name:
+                assert self.region_name == weibo.region_name
+            if self.latitude:
                 assert weibo.location and weibo.location_id
                 assert weibo.latitude and weibo.longitude
                 l1 = (weibo.location, weibo.latitude, weibo.longitude)
-                l2 = (missing.location, missing.latitude,
-                      missing.longitude)
+                l2 = (self.location, self.latitude,
+                      self.longitude)
                 if l1 != l2:
                     console.log(f'location changed from {l2} to {l1}',
                                 style='warning')
@@ -1055,7 +1057,7 @@ class WeiboMissed(BaseModel):
         else:
             console.log(f'🎉 sucessfuly updated {weibo.url}')
             console.log(weibo)
-            missing.delete_instance()
+            self.delete_instance()
             console.log()
 
     @classmethod
