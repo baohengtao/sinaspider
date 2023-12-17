@@ -1219,6 +1219,7 @@ class PG_BACK:
     def backup(self):
         filename = f"pg_back_{pendulum.now().format('YYYYMMDD-hhmmss')}.pkl"
         backfile = self.backpath / filename
+        console.log(f'backuping database to {backfile}...')
         databse_backup = {table._meta.table_name: list(
             table) for table in tables}
         with backfile.open('wb') as f:

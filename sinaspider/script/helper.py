@@ -38,6 +38,7 @@ def logsaver_decorator(func):
         finally:
             callargs = signature(func).bind(*args, **kwargs).arguments
             download_dir = callargs.get('download_dir', default_path)
+            pg_back.backup()
             save_log(func.__name__, download_dir)
 
     return wrapper
@@ -46,7 +47,6 @@ def logsaver_decorator(func):
 def save_log(func_name, download_dir):
     time_format = pendulum.now().format('YY-MM-DD_HHmmss')
     log_file = f"{func_name}_{time_format}.html"
-    pg_back.backup()
     console.log(f'Saving log to {download_dir / log_file}')
     console.save_html(download_dir / log_file, theme=MONOKAI)
 
@@ -61,6 +61,7 @@ class LogSaver:
         self.SAVE_LOG_FOR_COUNT = 100
 
     def save_log(self, save_manually=False):
+        pg_back.backup()
         fetch_count = fetcher.visits - self.save_visits_at
         log_hours = self.save_log_at.diff().in_hours()
         console.log(
