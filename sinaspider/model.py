@@ -1012,7 +1012,7 @@ class PG_BACK:
         self.backfile = self.backpath / 'pg_backup_latest.pkl'
 
     def backup(self):
-        filename = f"pg_back_{pendulum.now().format('YYYYMMDD')}.pkl"
+        filename = f"pg_back_{pendulum.now().format('YYYYMMDD-hhmmss')}.pkl"
         backfile = self.backpath / filename
         databse_backup = {table._meta.table_name: list(
             table) for table in tables}
