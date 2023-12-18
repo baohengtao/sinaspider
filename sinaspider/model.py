@@ -699,7 +699,7 @@ class Weibo(BaseModel):
 
     def get_coordinate(self) -> tuple[float, float] | None:
         if self.latitude:
-            return self.latitude, self.longitude
+            return round_loc(self.latitude, self.longitude)
         if art_login := self.user.following:
             token = 'from=10DA093010&s=ba74941a'
 
@@ -993,13 +993,16 @@ class WeiboMissed(BaseModel):
             cls.created_at > pendulum.now().subtract(months=6))
         query_first = query_recent.where(
             cls.created_at < pendulum.now().subtract(months=5))
-        query = (query_first or query_recent or query).limit(num)
+        query = (query_first or query_recent or query)
         if not query:
             raise ValueError('no missing to update')
-        for missing in query:
+        usernames = {m.username for m in query[:num]}
+        for i, missing in enumerate(query.where(cls.username.in_(usernames)),
+                                    start=1):
             missing: cls
+            console.log(f'🎠 Working on {i}/{len(query)}', style='bold red')
             missing.update_missing_single()
-        console.log(f'updated {len(query)} missing weibos', style='warning')
+        console.log(f'updated {i} missing weibos', style='warning')
 
     def update_missing_single(self):
         if self.created_at > pendulum.now().subtract(months=6):
@@ -1028,7 +1031,8 @@ class WeiboMissed(BaseModel):
             return
         except Exception:
             console.log(
-                f'error for https://weibo.com/{self.user_id}/{self.bid}', style='error')
+                f'error for https://weibo.com/{self.user_id}/{self.bid}',
+                style='error')
             if Weibo.get_or_none(bid=self.bid):
                 Weibo.delete_instance()
             raise
@@ -1037,7 +1041,15 @@ class WeiboMissed(BaseModel):
             assert self.bid == weibo.bid
             assert self.user == weibo.user
             assert self.username == weibo.username
-            assert self.created_at == weibo.created_at
+            if self.created_at != weibo.created_at:
+                if (self.created_at.timestamp()
+                        - weibo.created_at.timestamp()) == 8*3600:
+                    console.log(
+                        'created_at changed from '
+                        f'{self.created_at} to {weibo.created_at}',
+                        style='error')
+                else:
+                    assert False
 
             if self.region_name:
                 assert self.region_name == weibo.region_name
@@ -1226,7 +1238,7 @@ class PG_BACK:
         self.backfile = self.backpath / 'pg_backup_latest.pkl'
 
     def backup(self):
-        filename = f"pg_back_{pendulum.now().format('YYYYMMDD-hhmmss')}.pkl"
+        filename = f"pg_back_{pendulum.now():%Y%m%d_%H%M%S}.pkl"
         backfile = self.backpath / filename
         console.log(f'backuping database to {backfile}...')
         databse_backup = {table._meta.table_name: list(
