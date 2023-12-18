@@ -307,15 +307,12 @@ def round_loc(lat: float | str, lng: float | str,
     return lat_, lng_
 
 
-def parse_loc_src(loc_src: str) -> dict:
+def parse_loc_src(loc_src: str) -> str:
     """
     >> loc_src = ('https://m.weibo.cn/p/index?containerid='
                   '100808fcf3af2237af9eae5bb1c3f55951b731_-_lbs')
     >> parse_loc_src(loc_src)
-        {
-            'id': '8008646020000000000',
-            'short_name': '三亚',
-            }
+        '8008646020000000000'
     """
     containerid = re.search(r'containerid=([\w-]+)', loc_src).group(1)
     api = ('https://m.weibo.cn/api/container/getIndex?'
@@ -329,8 +326,7 @@ def parse_loc_src(loc_src: str) -> dict:
         containerid = params['containerid']
         location_id = re.match(
             '2310360016([\w-]+)_pic', containerid).group(1)
-
-    return dict(
-        id=location_id,
-        short_name=name,
-    )
+    console.log(f'parsing {loc_src}', style='warning')
+    console.log(
+        f'location_id: {location_id}, short_name: {name}', style='warning')
+    return location_id

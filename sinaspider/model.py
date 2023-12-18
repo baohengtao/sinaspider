@@ -28,7 +28,6 @@ from sinaspider.exceptions import WeiboNotFoundError
 from sinaspider.helper import (
     download_files, fetcher,
     normalize_wb_id,
-    parse_loc_src,
     parse_url_extension,
     round_loc
 )
@@ -586,10 +585,6 @@ class Weibo(BaseModel):
         regions = weibo_dict.pop('regions', None)
         if weibo_dict['pic_num'] > 0:
             assert weibo_dict.get('photos') or weibo_dict.get('photos_edited')
-        if location_src := weibo_dict.pop('location_src', None):
-            assert 'location_id' not in weibo_dict
-            lid = cls._get_location_id_from_src(location_src)
-            weibo_dict['location_id'] = lid
 
         assert 'updated_at' not in weibo_dict
         assert 'added_at' not in weibo_dict
@@ -687,15 +682,6 @@ class Weibo(BaseModel):
         console.log(f'+longitude: {lng}', style='green')
         self.latitude, self.longitude = lat, lng
         self.save()
-
-    @staticmethod
-    def _get_location_id_from_src(location_src: str) -> str:
-        info = parse_loc_src(location_src)
-        location = Location.from_id(info['id'])
-        loc_dict = model_to_dict(location)
-        for k, v in info.items():
-            assert loc_dict[k] == v
-        return info['id']
 
     def get_coordinate(self) -> tuple[float, float] | None:
         if self.latitude:

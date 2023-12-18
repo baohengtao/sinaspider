@@ -11,7 +11,11 @@ from bs4 import BeautifulSoup
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError, WeiboNotFoundError
-from sinaspider.helper import encode_wb_id, fetcher, normalize_str
+from sinaspider.helper import (
+    encode_wb_id, fetcher,
+    normalize_str,
+    parse_loc_src
+)
 
 
 class WeiboParser:
@@ -155,7 +159,6 @@ class WeiboParser:
                 console.log('>'*60, style='warning')
 
         else:
-            assert 'location_src' not in weibo
             assert weibo['location'] == locations[-1]['location']
             assert weibo['location_id'] == locations[-1]['location_id']
 
@@ -468,26 +471,23 @@ class WeiboParser:
                     child.decompose()
                 elif _icn_video in url_icon.img.attrs['src']:
                     child.decompose()
-        location, location_id, location_src = None, None, None
+        location, location_id = None, None
         if location_collector:
-            assert len(location_collector) <= 2
+            assert len(location_collector) == 1
             location, href = location_collector[-1]
             pattern1 = r'^http://weibo\.com/p/100101([\w\.\_]+)$'
             pattern2 = (r'^https://m\.weibo\.cn/p/index\?containerid='
-                        r'2306570042(\w+)$')
+                        r'2306570042(\w+)')
             if match := (re.match(pattern1, href)
                          or re.match(pattern2, href)):
                 location_id = match.group(1)
             else:
-                console.log(
-                    f"cannot parse {location}'s id: {href}", style='error')
-                location_src = href
+                location_id = parse_loc_src(href)
         res = {
             'at_users': at_users,
             'topics': topics,
             'location': location,
             'location_id': location_id,
-            'location_src': location_src
         }
         text = soup.get_text(' ', strip=True)
         assert text == text.strip()

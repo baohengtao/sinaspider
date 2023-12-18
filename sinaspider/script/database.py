@@ -56,8 +56,7 @@ def update_location():
     weibos = (Weibo.select()
               .order_by(Weibo.user_id.desc(), Weibo.id.desc())
               .where(Weibo.bid.in_(bids))
-              .where(Weibo.location_id.is_null(False) |
-                     Weibo.location_src.is_null(False))
+              .where(Weibo.location_id.is_null(False))
               .where(Weibo.latitude.is_null()))
     for i, weibo in enumerate(weibos, start=1):
         console.log(f'✨ processing {i} / {len(weibos)}')
