@@ -146,7 +146,14 @@ class WeiboParser:
             return weibo
 
         # compare region
-        assert weibo.get('region_name') == regions[-1]
+        if weibo.get('region_name') != regions[-1]:
+            console.log(
+                '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
+                style='warning')
+            console.log('region not match: ')
+            console.log(f'regions in hist: {regions}')
+            console.log(f'region in weibo: {weibo.get("region_name")}')
+            console.log('<'*50, style='warning')
 
         # compare location
         if not weibo.get('location'):
