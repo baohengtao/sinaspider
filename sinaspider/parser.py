@@ -403,7 +403,7 @@ class WeiboParser:
             photos = [[url, '']]
         for p in photos:
             if p[0].endswith('.gif'):
-                if 'https://video.weibo.com/media/play?fid=' not in p[1]:
+                if p[1] and ('https://video.weibo.com/media/play?fid=' not in p[1]):
                     assert "://g.us.sinaimg.cn/" in p[1]
                 p[1] = ''
             else:
