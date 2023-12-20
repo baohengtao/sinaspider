@@ -248,8 +248,9 @@ class WeiboParser:
             try:
                 ps = self.photos_info(mblog)
             except KeyError:
-                assert '抱歉，此微博已被删除。查看帮助：' in mblog['text']
-                continue
+                if '抱歉，此微博已被删除。查看帮助：' in mblog['text']:
+                    continue
+                raise
             res.append(ps)
         photos = []
         for ps in res:

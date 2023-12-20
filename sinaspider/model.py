@@ -261,8 +261,8 @@ class UserConfig(BaseModel):
             console.log('following user be deleted')
             for fid in deleted:
                 console.log(f'https://weibo.com/u/{fid}')
-        if added := (fids_updated-fids):
-            console.log('following user be deleted')
+        if fids and (added := (fids_updated-fids)):
+            console.log('following user be added')
             for fid in added:
                 console.log(f'https://weibo.com/u/{fid}')
 
@@ -321,7 +321,14 @@ class UserConfig(BaseModel):
                     style='warning')
                 early_stopping = True
                 break
-            weibo_dict = WeiboParser(mblog).parse()
+            try:
+                weibo_dict = WeiboParser(mblog).parse()
+            except KeyError as e:
+                console.log(
+                    f'{e}: cannot parse https://weibo.com/{uid}/{wid}, '
+                    'skipping...', style='error')
+                continue
+
             weibo: Weibo = Weibo(**weibo_dict)
             prefix = f"{self.username}_{weibo.username}_{weibo.id}"
             photos = (weibo.photos or []) + (weibo.photos_edited or [])
