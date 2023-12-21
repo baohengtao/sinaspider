@@ -131,14 +131,13 @@ class UserConfig(BaseModel):
         if not self.weibo_fetch:
             return
         if self.weibo_fetch_at:
-            since = pendulum.instance(self.weibo_fetch_at)
+            msg = f"weibo_fetch:{self.weibo_fetch_at:%y-%m-%d}"
         else:
-            since = pendulum.from_timestamp(0)
-        msg = f"fetch_at:{since:%y-%m-%d} liked_fetch:"
+            msg = f'weibo_fetch:{self.weibo_fetch}'
         if self.liked_fetch_at:
-            msg += f" {self.liked_fetch_at:%y-%m-%d}"
+            msg += f" liked_fetch: {self.liked_fetch_at:%y-%m-%d}"
         else:
-            msg += f" {self.liked_fetch}"
+            msg += f" liked_fetch: {self.liked_fetch}"
         console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
@@ -147,7 +146,7 @@ class UserConfig(BaseModel):
         #     console.log(f"{self.username} 只显示半年内的微博", style="notice")
 
         now = pendulum.now()
-        imgs = self._save_weibo(since, download_dir)
+        imgs = self._save_weibo(download_dir)
         download_files(imgs)
         console.log(f"{self.username}微博获取完毕\n")
 
@@ -159,14 +158,13 @@ class UserConfig(BaseModel):
 
     def _save_weibo(
             self,
-            since: pendulum.DateTime,
             download_dir: Path) -> Iterator[dict]:
         """
         Save weibo to database and return media info
         :return: generator of medias to downloads
         """
 
-        if since < pendulum.now().subtract(years=1):
+        if self.weibo_fetch_at is None:
             user_root = 'User'
         elif not self.photos_num:
             console.log(
@@ -177,6 +175,7 @@ class UserConfig(BaseModel):
             user_root = 'Timeline'
         download_dir = download_dir / user_root / self.username
 
+        since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         for weibo_dict in self.page.homepage():
             is_pinned = weibo_dict.pop('is_pinned', False)
