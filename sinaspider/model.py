@@ -87,6 +87,7 @@ class UserConfig(BaseModel):
     is_friend = BooleanField(default=False)
     bilateral = ArrayField(field_class=TextField, null=True)
     blocked = BooleanField(default=False)
+    cached_at = DateTimeTZField(default=False, null=True)
 
     class Meta:
         table_name = "userconfig"
@@ -125,10 +126,50 @@ class UserConfig(BaseModel):
             console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible
 
+    def caching_weibo_for_new(self):
+        if self.weibo_fetch or self.weibo_fetch_at:
+            assert self.cached_at is None
+            return
+        since = self.cached_at or pendulum.from_timestamp(0)
+        console.rule(
+            f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
+        console.log(self.user)
+        now = pendulum.now()
+        cnt = 0
+
+        for weibo_dict in self.page.homepage():
+            is_pinned = weibo_dict.pop('is_pinned', False)
+            if (created_at := weibo_dict['created_at']) < since:
+                if is_pinned:
+                    console.log("略过置顶微博...")
+                    continue
+                else:
+                    console.log(
+                        f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
+                        "获取完毕")
+                    break
+            weibo_dict['username'] = self.username
+            weibo = Weibo.upsert(weibo_dict)
+            cnt += 1
+            if weibo.photos_extra:
+                weibo.photos_extra = None
+                weibo.save()
+            console.log(weibo)
+            weibo.highlight_social()
+            console.log()
+        console.log(f'{cnt} weibos cached for {self.username}')
+        media_count = [len(list(weibo.medias())) for weibo in self.user.weibos]
+        console.log(
+            f'{self.username} have {len(media_count)} weibos '
+            f'with {sum(media_count)} media files', style='bold red')
+        self.cached_at = now
+        self.save()
+
     def fetch_weibo(self, download_dir: Path):
         fetcher.toggle_art(self.following)
         self.fetch_friends()
         if not self.weibo_fetch:
+            self.caching_weibo_for_new()
             return
         if self.weibo_fetch_at:
             msg = f"weibo_fetch:{self.weibo_fetch_at:%y-%m-%d}"
@@ -142,16 +183,14 @@ class UserConfig(BaseModel):
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
         self.set_visibility()
-        # if not self.set_visibility():
-        #     console.log(f"{self.username} 只显示半年内的微博", style="notice")
 
         now = pendulum.now()
         imgs = self._save_weibo(download_dir)
         download_files(imgs)
         console.log(f"{self.username}微博获取完毕\n")
-
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
+        self.cached_at = None
         if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
             self.post_at = weibos[0].created_at
         self.save()
@@ -177,6 +216,7 @@ class UserConfig(BaseModel):
 
         since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
+        weibo_ids = []
         for weibo_dict in self.page.homepage():
             is_pinned = weibo_dict.pop('is_pinned', False)
             if (created_at := weibo_dict['created_at']) < since:
@@ -190,17 +230,33 @@ class UserConfig(BaseModel):
                     return
             weibo_dict['username'] = self.username
             weibo = Weibo.upsert(weibo_dict)
-            if weibo.location:
-                assert weibo.latitude
-            medias = list(weibo.medias(download_dir))
+            weibo_ids.append(weibo.id)
+
             console.log(weibo)
             weibo.highlight_social()
 
-            if medias:
+            if medias := list(weibo.medias(download_dir)):
                 console.log(
                     f"Downloading {len(medias)} files to {download_dir}..")
+                yield from medias
             console.log()
-            yield from medias
+        if self.weibo_fetch_at:
+            return
+        if weibos := self.user.weibos.where(Weibo.id.not_in(weibo_ids)):
+            console.log(
+                f'{len(weibos)} weibos not visible now but cached, saving...',
+                style='warning')
+            for weibo in weibos.order_by(Weibo.id.desc()):
+                if weibo.username != self.username:
+                    weibo.username = self.username
+                    weibo.save()
+                console.log(weibo)
+                weibo.highlight_social()
+                if medias := list(weibo.medias(download_dir)):
+                    console.log(
+                        f"Downloading {len(medias)} files to {download_dir}..")
+                    yield from medias
+                console.log()
 
     def fetch_liked(self, download_dir: Path):
         if not self.liked_fetch:
