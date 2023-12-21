@@ -194,15 +194,12 @@ class UserConfig(BaseModel):
                 assert weibo.latitude
             medias = list(weibo.medias(download_dir))
             console.log(weibo)
-            for target in ['ins', 'ig']:
-                if target in (weibo.text or '').replace('night', '').lower():
-                    console.log('🍬 Find Instagram info',
-                                style='bold green on dark_green')
-                    break
+            weibo.highlight_social()
+
             if medias:
                 console.log(
                     f"Downloading {len(medias)} files to {download_dir}..")
-            console.print()
+            console.log()
             yield from medias
 
     def fetch_liked(self, download_dir: Path):
@@ -790,6 +787,21 @@ class Weibo(BaseModel):
             #     continue
             res[k] = v
         return "\n".join(f'{k}: {v}' for k, v in res.items())
+
+    def highlight_social(self):
+        from photosinfo.model import Girl
+        text = (self.text or '').lower().replace('night', '')
+        has_ins = 'ins' in text or 'ig' in text
+        has_red = '小红书' in text or '📕' in text
+        if not (has_ins or has_red):
+            return
+        girl = Girl.get_or_none(sina_id=self.user_id)
+        if has_ins and not (girl and girl.inst_id):
+            console.log('🍬 Find Instagram info',
+                        style='bold green on dark_green')
+        elif has_red and not (girl and girl.red_id):
+            console.log('🍬 Find 小红书 info',
+                        style='bold green on dark_green')
 
 
 class Location(BaseModel):
