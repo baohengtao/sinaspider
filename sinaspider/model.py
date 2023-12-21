@@ -190,8 +190,7 @@ class UserConfig(BaseModel):
                         "获取完毕")
                     return
             weibo_dict['username'] = self.username
-            weibo_id = Weibo.upsert(weibo_dict)
-            weibo: Weibo = Weibo.get_by_id(weibo_id)
+            weibo = Weibo.upsert(weibo_dict)
             if weibo.location:
                 assert weibo.latitude
             medias = list(weibo.medias(download_dir))
@@ -581,7 +580,7 @@ class Weibo(BaseModel):
         return cls.get_by_id(wb_id)
 
     @classmethod
-    def upsert(cls, weibo_dict: dict) -> int:
+    def upsert(cls, weibo_dict: dict) -> Self:
         """
         return upserted weibo id
         """
@@ -589,7 +588,7 @@ class Weibo(BaseModel):
         weibo_dict['username'] = User.get_by_id(
             weibo_dict['user_id']).username
         locations = weibo_dict.pop('locations', None)
-        regions = weibo_dict.pop('regions', None)
+        weibo_dict.pop('regions', None)
         if weibo_dict['pic_num'] > 0:
             assert weibo_dict.get('photos') or weibo_dict.get('photos_edited')
 
@@ -598,8 +597,9 @@ class Weibo(BaseModel):
         if not (model := cls.get_or_none(id=wid)):
             weibo_dict['added_at'] = pendulum.now()
             cls.insert(weibo_dict).execute()
-            Weibo.get_by_id(wid).update_location()
-            return wid
+            weibo = Weibo.get_by_id(wid)
+            weibo.update_location()
+            return weibo
         else:
             weibo_dict['updated_at'] = pendulum.now()
         if model.location is None:
@@ -653,7 +653,7 @@ class Weibo(BaseModel):
         else:
             assert not list(weibo.medias())
 
-        return wid
+        return weibo
 
     def update_location(self):
         if self.location is None:
