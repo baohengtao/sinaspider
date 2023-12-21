@@ -318,7 +318,9 @@ class Page:
             next_cursor = data['next_cursor']
             created_at = None
             for status in data['statuses']:
-                assert 'retweeted_status' not in status
+                if 'retweeted_status' in status:
+                    assert friend_circle
+                    continue
                 created_at = pendulum.parse(status['created_at'], strict=False)
                 if created_at < since:
                     console.log(

@@ -119,7 +119,7 @@ class Fetcher:
             self._visit_count = 0
             console.log(
                 f'reset visit count to {self._visit_count} since have '
-                f'no activity for {wait_time:.1f} seconds, '
+                f'no activity for {-wait_time:.1f} seconds, '
                 'which means more than 1 hour passed')
         else:
             console.log(
