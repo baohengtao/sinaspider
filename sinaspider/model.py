@@ -111,13 +111,18 @@ class UserConfig(BaseModel):
         return cls.get(user_id=user_id)
 
     def set_visibility(self) -> bool:
-        if self.weibo_fetch_at is None:
+        if not (self.weibo_fetch_at or self.weibo_cache_at):
             self.visible = None
         if self.visible is True:
             return True
         visible = self.page.get_visibility()
         if self.visible is None or visible is False:
             self.visible = visible
+            self.save()
+        elif self.weibo_cache_at:
+            console.log(f'{self.username} 当前显示全部微博', style='warning')
+            console.log('reset weibo_cache_at to None', style='warning')
+            self.weibo_cache_at = None
             self.save()
         else:
             raise ValueError(
@@ -155,9 +160,8 @@ class UserConfig(BaseModel):
         console.rule(
             f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
         console.log(self.user)
-        now = pendulum.now()
 
-        i = 0
+        now, i = pendulum.now(), 0
         for i, weibo in enumerate(self.get_homepage(since), start=1):
             if weibo.photos_extra:
                 weibo.photos_extra = None
@@ -178,6 +182,7 @@ class UserConfig(BaseModel):
 
     def fetch_weibo(self, download_dir: Path):
         fetcher.toggle_art(self.following)
+        self.set_visibility()
         self.fetch_friends()
         if not self.weibo_fetch:
             self.caching_weibo_for_new()
@@ -193,7 +198,6 @@ class UserConfig(BaseModel):
         console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        self.set_visibility()
 
         now = pendulum.now()
         imgs = self._save_weibo(download_dir)
