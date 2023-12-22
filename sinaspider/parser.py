@@ -33,6 +33,10 @@ class WeiboParser:
             elif weibo_info['pic_num'] > len(weibo_info['pic_ids']):
                 assert weibo_info['pic_num'] > 9
                 weibo_info = weibo_info['id']
+            elif weibo_info['isLongText']:
+                ends = f'<a href=\"/status/{weibo_info["id"]}\">全文</a>'
+                assert weibo_info['text'].endswith(ends)
+                weibo_info = weibo_info['id']
 
         if isinstance(weibo_info, (int, str)):
             self.info = self._fetch_info(weibo_info)
@@ -248,9 +252,11 @@ class WeiboParser:
             try:
                 ps = self.photos_info(mblog)
             except KeyError:
-                if '抱歉，此微博已被删除。查看帮助：' in mblog['text']:
-                    continue
-                raise
+                if '抱歉，此微博已被删除。查看帮助：' not in mblog['text']:
+                    console.log(
+                        f'parse photo info with hist failed for weibo {self.id}',
+                        style='error')
+                continue
             res.append(ps)
         photos = []
         for ps in res:
@@ -350,7 +356,6 @@ class WeiboParser:
             if tag_struct and geo:
                 locations.append(tag_struct | geo)
             elif not geo:
-                assert tag_struct['location_id'].isdigit()
                 locations.append(tag_struct)
             else:
                 locations.append(geo)

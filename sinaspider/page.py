@@ -321,7 +321,8 @@ class Page:
                 if 'retweeted_status' in status:
                     assert friend_circle
                     continue
-                created_at = pendulum.parse(status['created_at'], strict=False)
+                created_at = pendulum.from_format(
+                    status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 if created_at < since:
                     console.log(
                         f'🎉 created_at:{created_at: %y-%m-%d} < since:{since: %y-%m-%d}, finished')
@@ -415,7 +416,7 @@ class Page:
                     'following': raw['following'],
                 }
                 info['created_at'] = pendulum.from_format(
-                    raw['created_at'], 'ddd MMM DD HH:mm:ss Z YYYY')
+                    raw['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 p1, p2 = re.match(pattern, raw['avatar_hd']).groups()
                 info['avatar_hd'] = f'{p1}/large/{p2}'
                 yield info if parse else raw
