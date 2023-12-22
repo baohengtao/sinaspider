@@ -87,7 +87,7 @@ class UserConfig(BaseModel):
     is_friend = BooleanField(default=False)
     bilateral = ArrayField(field_class=TextField, null=True)
     blocked = BooleanField(default=False)
-    cached_at = DateTimeTZField(default=False, null=True)
+    weibo_cache_at = DateTimeTZField(default=False, null=True)
 
     class Meta:
         table_name = "userconfig"
@@ -149,9 +149,9 @@ class UserConfig(BaseModel):
 
     def caching_weibo_for_new(self):
         if self.weibo_fetch or self.weibo_fetch_at:
-            assert self.cached_at is None
+            assert self.weibo_cache_at is None
             return
-        since = self.cached_at or pendulum.from_timestamp(0)
+        since = self.weibo_cache_at or pendulum.from_timestamp(0)
         console.rule(
             f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
         console.log(self.user)
@@ -170,7 +170,7 @@ class UserConfig(BaseModel):
         console.log(
             f'{self.username} have {len(media_count)} weibos '
             f'with {sum(media_count)} media files', style='bold red')
-        self.cached_at = now
+        self.weibo_cache_at = now
         self.save()
 
     def fetch_weibo(self, download_dir: Path):
@@ -198,7 +198,7 @@ class UserConfig(BaseModel):
         console.log(f"{self.username}微博获取完毕\n")
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
-        self.cached_at = None
+        self.weibo_cache_at = None
         if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
             self.post_at = weibos[0].created_at
         self.save()
