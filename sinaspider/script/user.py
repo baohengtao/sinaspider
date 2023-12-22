@@ -10,7 +10,7 @@ from sinaspider.helper import fetcher, normalize_user_id
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 
-from .helper import default_path, logsaver_decorator, update_user_config
+from .helper import default_path, logsaver_decorator
 
 app = Typer()
 
@@ -55,7 +55,7 @@ def user_add(max_user: int = 20,
     from itertools import islice
     if all_user:
         max_user = None
-    update_user_config()
+    UserConfig.update_table()
     bot = SinaBot(art_login=True)
     uids = {u.user_id for u in UserConfig.select().where(UserConfig.following)}
     uids_following = [u['id'] for u in islice(bot.get_following_list(),

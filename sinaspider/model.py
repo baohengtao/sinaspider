@@ -468,6 +468,22 @@ class UserConfig(BaseModel):
             interval = min(interval, 2)
         return weibo_fetch_at.add(days=interval)
 
+    @classmethod
+    def update_table(cls):
+        from photosinfo.model import Girl
+
+        for uc in cls:
+            uc: cls
+            uc.username = uc.user.username
+            if girl := Girl.get_or_none(username=uc.username):
+                uc.photos_num = girl.sina_num
+                uc.folder = girl.folder
+            else:
+                uc.photos_num = 0
+            uc.weibo_next_fetch = uc.get_weibo_next_fetch()
+            uc.liked_next_fetch = uc.get_liked_next_fetch()
+            uc.save()
+
 
 class User(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
@@ -1044,8 +1060,7 @@ class WeiboMissed(BaseModel):
     def update_missing(cls, num=50):
         query = (cls.select()
                  .order_by(cls.user, cls.created_at)
-                 .where(cls.try_update_at.is_null())
-                 )
+                 .where(cls.try_update_at.is_null()))
         query_recent = query.where(
             cls.created_at > pendulum.now().subtract(months=6))
         query_first = query_recent.where(
@@ -1212,8 +1227,7 @@ class WeiboMissed(BaseModel):
         assert photo_dict.pop('geography') == (f'{lat} {lng}' if lat else None)
 
         if blog_url := photo_dict.pop('blog_url'):
-            if blog_url != f'https://weibo.com/{user_id}/{bid}':
-                assert bid in ['I9c3l1S6g', 'GeKuU9rA4', 'JB3H6laZ2']
+            assert blog_url == f'https://weibo.com/{user_id}/{bid}'
         assert photo_dict.pop('artist') == username
         assert not photo_dict
 

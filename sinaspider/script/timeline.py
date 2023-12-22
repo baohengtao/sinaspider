@@ -9,12 +9,7 @@ from sinaspider import console
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 
-from .helper import (
-    LogSaver, default_path,
-    logsaver_decorator,
-    print_command,
-    update_user_config
-)
+from .helper import LogSaver, default_path, logsaver_decorator, print_command
 
 app = Typer()
 
@@ -46,7 +41,7 @@ def timeline(days: float = Option(...),
     logsaver = LogSaver('timeline', download_dir)
     while True:
         print_command()
-        update_user_config()
+        UserConfig.update_table()
         start_time = pendulum.now()
         console.log(f'Fetching timeline since {since}...')
 

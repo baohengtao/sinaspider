@@ -79,23 +79,3 @@ class LogSaver:
         save_log(self.command, self.download_dir)
         self.save_log_at = pendulum.now()
         self.save_visits_at = fetcher.visits
-
-
-def update_user_config():
-    """
-    Update photos num for user_config
-    """
-    from photosinfo.model import Girl
-
-    from sinaspider.model import UserConfig
-    for uc in UserConfig:
-        uc: UserConfig
-        uc.username = uc.user.username
-        if girl := Girl.get_or_none(username=uc.username):
-            uc.photos_num = girl.sina_num
-            uc.folder = girl.folder
-        else:
-            uc.photos_num = 0
-        uc.weibo_next_fetch = uc.get_weibo_next_fetch()
-        uc.liked_next_fetch = uc.get_liked_next_fetch()
-        uc.save()

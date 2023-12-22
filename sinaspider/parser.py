@@ -484,7 +484,7 @@ class WeiboParser:
         if location_collector:
             assert len(location_collector) == 1
             location, href = location_collector[-1]
-            pattern1 = r'^http://weibo\.com/p/100101([\w\.\_]+)$'
+            pattern1 = r'^http://weibo\.com/p/100101([\w\.\_-]+)$'
             pattern2 = (r'^https://m\.weibo\.cn/p/index\?containerid='
                         r'2306570042(\w+)')
             if match := (re.match(pattern1, href)
