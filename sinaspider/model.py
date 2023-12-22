@@ -171,6 +171,9 @@ class UserConfig(BaseModel):
             f'{self.username} have {len(media_count)} weibos '
             f'with {sum(media_count)} media files', style='bold red')
         self.weibo_cache_at = now
+        self.weibo_next_fetch = self.get_weibo_next_fetch()
+        if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
+            self.post_at = weibos[0].created_at
         self.save()
 
     def fetch_weibo(self, download_dir: Path):
@@ -451,38 +454,38 @@ class UserConfig(BaseModel):
         return liked_fetch_at.add(days=days)
 
     def get_weibo_next_fetch(self) -> pendulum.DateTime:
-        if not self.weibo_fetch:
-            return
-        if not self.weibo_fetch_at:
+        if not (update_at := self.weibo_fetch_at or self.weibo_cache_at):
             return
         if self.blocked:
             return
-        weibo_fetch_at = pendulum.instance(self.weibo_fetch_at)
+        update_at = pendulum.instance(update_at)
+        days = 30
+        posts = len(self.user.weibos
+                    .where(Weibo.created_at > update_at.subtract(days=days))
+                    .where(Weibo.has_media))
+        interval = days / (posts + 1)
 
-        if self.post_at:
-            interval = (self.weibo_fetch_at - self.post_at).days
-            interval = min(max(7, interval), 30)
-        else:
-            interval = 30
         if not self.is_friend and not self.following:
             interval = min(interval, 2)
-        return weibo_fetch_at.add(days=interval)
+        return update_at.add(days=interval)
 
     @classmethod
     def update_table(cls):
         from photosinfo.model import Girl
 
-        for uc in cls:
-            uc: cls
-            uc.username = uc.user.username
-            if girl := Girl.get_or_none(username=uc.username):
-                uc.photos_num = girl.sina_num
-                uc.folder = girl.folder
+        for config in cls:
+            config: cls
+            assert not (config.weibo_cache_at and config.weibo_fetch_at)
+
+            config.username = config.user.username
+            if girl := Girl.get_or_none(username=config.username):
+                config.photos_num = girl.sina_num
+                config.folder = girl.folder
             else:
-                uc.photos_num = 0
-            uc.weibo_next_fetch = uc.get_weibo_next_fetch()
-            uc.liked_next_fetch = uc.get_liked_next_fetch()
-            uc.save()
+                config.photos_num = 0
+            config.weibo_next_fetch = config.get_weibo_next_fetch()
+            config.liked_next_fetch = config.get_liked_next_fetch()
+            config.save()
 
 
 class User(BaseModel):
