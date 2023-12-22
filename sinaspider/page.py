@@ -10,7 +10,6 @@ from requests import JSONDecodeError
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import fetcher
-from sinaspider.parser import WeiboParser
 
 
 class SinaBot:
@@ -192,8 +191,7 @@ class Page:
     def __init__(self, user_id: int) -> None:
         self.id = int(user_id)
 
-    def homepage(self, start_page: int = 1,
-                 parse: bool = True) -> Iterator[dict]:
+    def homepage(self, start_page: int = 1) -> Iterator[dict]:
         """
         Fetch user's homepage weibo.
 
@@ -227,7 +225,9 @@ class Page:
                 if 'retweeted_status' in weibo_info:
                     continue
                 weibo_info['mblog_from'] = 'timeline_web'
-                yield WeiboParser(weibo_info).parse() if parse else weibo_info
+                weibo_info['is_pinned'] = weibo_info.get(
+                    'title', {}).get('text') == '置顶'
+                yield weibo_info
             else:
                 console.log(
                     f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")

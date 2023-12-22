@@ -126,6 +126,27 @@ class UserConfig(BaseModel):
             console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible
 
+    def get_homepage(self,
+                     since: pendulum.DateTime) -> 'Weibo':
+        for mblog in self.page.homepage():
+            is_pinned = mblog.pop('is_pinned')
+            if weibo := Weibo.get_or_none(id=mblog['id']):
+                if weibo.created_at < since:
+                    if is_pinned:
+                        console.log("略过置顶微博...")
+                        continue
+                    else:
+                        console.log(
+                            f"时间 {weibo.created_at:%y-%m-%d} 在 "
+                            f"{since:%y-%m-%d}之前, 获取完毕")
+                        break
+            insert_at = weibo and (weibo.updated_at or weibo.added_at)
+            if not insert_at or insert_at < pendulum.now().subtract(days=1):
+                weibo_dict = WeiboParser(mblog).parse()
+                weibo_dict['username'] = self.username
+                weibo = Weibo.upsert(weibo_dict)
+            yield weibo
+
     def caching_weibo_for_new(self):
         if self.weibo_fetch or self.weibo_fetch_at:
             assert self.cached_at is None
@@ -135,29 +156,16 @@ class UserConfig(BaseModel):
             f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
         console.log(self.user)
         now = pendulum.now()
-        cnt = 0
 
-        for weibo_dict in self.page.homepage():
-            is_pinned = weibo_dict.pop('is_pinned', False)
-            if (created_at := weibo_dict['created_at']) < since:
-                if is_pinned:
-                    console.log("略过置顶微博...")
-                    continue
-                else:
-                    console.log(
-                        f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
-                        "获取完毕")
-                    break
-            weibo_dict['username'] = self.username
-            weibo = Weibo.upsert(weibo_dict)
-            cnt += 1
+        i = 0
+        for i, weibo in enumerate(self.get_homepage(since), start=1):
             if weibo.photos_extra:
                 weibo.photos_extra = None
                 weibo.save()
             console.log(weibo)
             weibo.highlight_social()
             console.log()
-        console.log(f'{cnt} weibos cached for {self.username}')
+        console.log(f'{i} weibos cached for {self.username}')
         media_count = [len(list(weibo.medias())) for weibo in self.user.weibos]
         console.log(
             f'{self.username} have {len(media_count)} weibos '
@@ -217,19 +225,8 @@ class UserConfig(BaseModel):
         since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        for weibo_dict in self.page.homepage():
-            is_pinned = weibo_dict.pop('is_pinned', False)
-            if (created_at := weibo_dict['created_at']) < since:
-                if is_pinned:
-                    console.log("略过置顶微博...")
-                    continue
-                else:
-                    console.log(
-                        f"时间 {created_at:%y-%m-%d} 在 {since:%y-%m-%d}之前, "
-                        "获取完毕")
-                    return
-            weibo_dict['username'] = self.username
-            weibo = Weibo.upsert(weibo_dict)
+        for weibo in self.get_homepage(since):
+
             weibo_ids.append(weibo.id)
 
             console.log(weibo)

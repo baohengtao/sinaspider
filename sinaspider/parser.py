@@ -22,10 +22,7 @@ class WeiboParser:
     """用于解析原始微博内容."""
 
     def __init__(self, weibo_info: dict | int | str):
-        if not isinstance(weibo_info, dict):
-            self.is_pinned = False
-        else:
-            self.is_pinned = weibo_info.get('title', {}).get('text') == '置顶'
+        if isinstance(weibo_info, dict):
             if 'pic_ids' not in weibo_info:
                 weibo_info = weibo_info['id']
                 console.log(f'pic_ids not found for weibo {weibo_info},'
@@ -125,8 +122,7 @@ class WeiboParser:
         weibo |= self.photos_info_with_hist()
         weibo |= self.location_info_with_hist() or {}
         weibo |= self.text_info(self.info['text'])
-        if self.is_pinned:
-            weibo['is_pinned'] = self.is_pinned
+
         weibo['pic_num'] = self.pic_num
         weibo['edit_count'] = self.edit_count
         weibo['edit_at'] = self.edit_at
