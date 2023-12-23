@@ -366,12 +366,6 @@ class Page:
             yield from mblogs
 
     def liked(self) -> Iterator[dict]:
-        """
-        Fetch user's liked weibo.
-
-        Args:
-                parse: whether to parse weibo, default True
-        """
         for weibo_info in self._liked_card():
             if weibo_info.get('deleted') == '1':
                 continue

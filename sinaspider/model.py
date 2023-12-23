@@ -173,7 +173,7 @@ class UserConfig(BaseModel):
         media_count = [len(list(weibo.medias())) for weibo in self.user.weibos]
         console.log(
             f'{self.username} have {len(media_count)} weibos '
-            f'with {sum(media_count)} media files', style='bold red')
+            f'with {sum(media_count)} media files', style='notice')
         self.weibo_cache_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
         if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
@@ -778,7 +778,7 @@ class Weibo(BaseModel):
             'status']
         if 'geo' not in status:
             console.log(
-                f"seems have been deleted: {self.url} ", style='error')
+                f"no coordinates find: {self.url} ", style='error')
         elif not (geo := status['geo']):
             console.log(f'no coord found: {self.url}', style='warning')
         else:
@@ -859,8 +859,8 @@ class Weibo(BaseModel):
         for k, v in model.items():
             if 'count' in k or v is None:
                 continue
-            # if k in ['photos', 'pic_num', 'update_status']:
-            #     continue
+            if k in ['photos']:
+                continue
             res[k] = v
         return "\n".join(f'{k}: {v}' for k, v in res.items())
 
@@ -1079,7 +1079,7 @@ class WeiboMissed(BaseModel):
         for i, missing in enumerate(query.where(cls.username.in_(usernames)),
                                     start=1):
             missing: cls
-            console.log(f'🎠 Working on {i}/{len(query)}', style='bold red')
+            console.log(f'🎠 Working on {i}/{len(query)}', style='notice')
             missing.update_missing_single()
         console.log(f'updated {i} missing weibos', style='warning')
 

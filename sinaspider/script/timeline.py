@@ -52,7 +52,7 @@ def timeline(days: float = Option(...),
         since = start_time
 
         if start_time.diff().in_minutes() < WORKING_TIME:
-            console.log('Looping user', style='red bold')
+            console.log('Looping user', style='notice')
             for config in query.where(UserConfig.following)[:2]:
                 config.fetch_weibo(download_dir/'Loop')
             for config in query.where(~UserConfig.following)[:1]:
@@ -64,7 +64,7 @@ def timeline(days: float = Option(...),
                            .where(UserConfig.liked_next_fetch < pendulum.now())
                            .order_by(UserConfig.liked_fetch_at.asc())
                            )[:1]:
-                console.log('Looping liked user', style='red bold')
+                console.log('Looping liked user', style='notice')
                 console.log(
                     f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
                     f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')

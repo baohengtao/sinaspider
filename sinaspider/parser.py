@@ -30,7 +30,8 @@ class WeiboParser:
             elif weibo_info['pic_num'] > len(weibo_info['pic_ids']):
                 assert weibo_info['pic_num'] > 9
                 weibo_info = weibo_info['id']
-            elif weibo_info['isLongText']:
+            elif weibo_info['isLongText'] and (
+                    weibo_info['mblog_from'] != 'liked_weico'):
                 ends = f'<a href=\"/status/{weibo_info["id"]}\">全文</a>'
                 assert weibo_info['text'].endswith(ends)
                 weibo_info = weibo_info['id']
@@ -259,12 +260,19 @@ class WeiboParser:
             for p in ps:
                 if p not in photos:
                     photos.append(p)
-        assert set(final_photos).issubset(set(photos))
+        if not set(final_photos).issubset(set(photos)):
+            console.log(
+                '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
+                style='warning')
+            console.log('photos not match: ')
+            console.log(f'photos in hist which is used is: {photos}')
+            console.log(f'photos in weibo: {final_photos}')
+            console.log('<'*50, style='warning')
         if len(photos) > len(final_photos):
             console.log(
                 '🎉 the pic num increase from '
                 f'{len(final_photos)} to {len(photos)}',
-                style='bold red')
+                style='notice')
         photos, edited = photos[:len(res[0])], photos[len(res[0]):]
 
         return dict(
