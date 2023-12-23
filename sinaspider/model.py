@@ -132,24 +132,30 @@ class UserConfig(BaseModel):
         return visible
 
     def get_homepage(self,
-                     since: pendulum.DateTime) -> 'Weibo':
+                     since: pendulum.DateTime,
+                     skip_exist: bool = False,
+                     ) -> 'Weibo':
         for mblog in self.page.homepage():
             is_pinned = mblog.pop('is_pinned')
-            if weibo := Weibo.get_or_none(id=mblog['id']):
-                if weibo.created_at < since:
-                    if is_pinned:
-                        console.log("略过置顶微博...")
-                        continue
-                    else:
-                        console.log(
-                            f"时间 {weibo.created_at:%y-%m-%d} 在 "
-                            f"{since:%y-%m-%d}之前, 获取完毕")
-                        break
+            created_at = pendulum.from_format(
+                mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            if created_at < since:
+                if is_pinned:
+                    console.log("略过置顶微博...")
+                    continue
+                else:
+                    console.log(
+                        f"时间 {created_at:%y-%m-%d} 在 "
+                        f"{since:%y-%m-%d}之前, 获取完毕")
+                    break
+            weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             if not insert_at or insert_at < pendulum.now().subtract(days=1):
                 weibo_dict = WeiboParser(mblog).parse()
                 weibo_dict['username'] = self.username
                 weibo = Weibo.upsert(weibo_dict)
+            elif skip_exist:
+                continue
             yield weibo
 
     def caching_weibo_for_new(self):
@@ -162,7 +168,8 @@ class UserConfig(BaseModel):
         console.log(self.user)
 
         now, i = pendulum.now(), 0
-        for i, weibo in enumerate(self.get_homepage(since), start=1):
+        for i, weibo in enumerate(
+                self.get_homepage(since, skip_exist=True), start=1):
             if weibo.photos_extra:
                 weibo.photos_extra = None
                 weibo.save()
