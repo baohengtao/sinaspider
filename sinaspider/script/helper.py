@@ -38,7 +38,6 @@ def logsaver_decorator(func):
         finally:
             callargs = signature(func).bind(*args, **kwargs).arguments
             download_dir = callargs.get('download_dir', default_path)
-            pg_back.backup()
             save_log(func.__name__, download_dir)
 
     return wrapper
