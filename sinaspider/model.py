@@ -881,13 +881,16 @@ class Weibo(BaseModel):
             res[k] = v
         return "\n".join(f'{k}: {v}' for k, v in res.items())
 
-    def highlight_social(self):
+    def highlight_social(self) -> bool:
+        """
+        return True if social info is found
+        """
         from photosinfo.model import Girl
         text = (self.text or '').lower().replace('night', '')
-        has_ins = 'ins' in text or 'ig' in text
-        has_red = '小红书' in text or '📕' in text
+        has_ins = re.findall(r'(?<![a-z])(ins|ig|instagram)(?![a-z])', text)
+        has_red = re.findall(r'小红书|📕', text)
         if not (has_ins or has_red):
-            return
+            return False
         girl = Girl.get_or_none(sina_id=self.user_id)
         if has_ins and not (girl and girl.inst_id):
             console.log('🍬 Find Instagram info',
@@ -895,6 +898,7 @@ class Weibo(BaseModel):
         elif has_red and not (girl and girl.red_id):
             console.log('🍬 Find 小红书 info',
                         style='bold green on dark_green')
+        return True
 
 
 class Location(BaseModel):
