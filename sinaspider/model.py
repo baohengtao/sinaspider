@@ -363,11 +363,19 @@ class UserConfig(BaseModel):
                     download_dir: Path,
                     ) -> Iterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
-        if self.liked_fetch_at:
-            folder = f'{self.username}_{self.liked_fetch_at:%y-%m-%d}'
-            download_dir /= f"Liked/{folder}"
+        download_dir /= 'Liked'
+        dir_saved = download_dir / '_saved'
+        dir_new = download_dir / f'_Liked_New/{self.username}'
+        if not self.liked_fetch_at or dir_new.exists():
+            download_dir = dir_new
         else:
-            download_dir /= f"Liked_New/{self.username}"
+            folders = [f for f in download_dir.iterdir() if f.is_dir()
+                       and f.name.split('_')[0] == self.username]
+            if folders:
+                assert len(folders) == 1
+                download_dir = folders[0]
+            else:
+                download_dir /= f'{self.username}_{self.liked_fetch_at:%y-%m-%d}'
         bulk = []
         early_stopping = False
         for mblog in self.page.liked():
@@ -379,7 +387,7 @@ class UserConfig(BaseModel):
             config = UserConfig.get_or_none(user_id=uid)
             if config and config.weibo_fetch:
                 continue
-            filepath = download_dir / 'saved' if config else download_dir
+            filepath = dir_saved if config else download_dir
 
             if liked := WeiboLiked.get_or_none(
                     weibo_id=wid, user_id=self.user_id):
