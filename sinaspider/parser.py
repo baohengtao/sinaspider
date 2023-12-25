@@ -273,6 +273,7 @@ class WeiboParser:
                 '🎉 the pic num increase from '
                 f'{len(final_photos)} to {len(photos)}',
                 style='notice')
+        assert res
         photos, edited = photos[:len(res[0])], photos[len(res[0]):]
 
         return dict(
@@ -414,13 +415,23 @@ class WeiboParser:
             pics = [p for p in pics if 'pid' in p]
             photos = [[pic['large']['url'], pic.get('videoSrc', '')]
                       for pic in pics]
-        else:
+        elif page_info := info.get('page_info'):
             assert info['pic_num'] == 1
-            page_info = info['page_info']
             page_pic = page_info['page_pic']
             url = page_pic if isinstance(
                 page_pic, str) else page_pic['url']
             photos = [[url, '']]
+        else:
+            assert info['pic_num'] == 1
+            for struct in info['url_struct']:
+                if 'pic_infos' in struct:
+                    break
+            pic_infos = [struct['pic_infos'][pic_id]
+                         for pic_id in struct['pic_ids']]
+            photos = [[pic_info['largest']['url'], pic_info.get('video', '')]
+                      for pic_info in pic_infos]
+            info = struct
+
         for p in photos:
             if p[0].endswith('.gif'):
                 if p[1] and ('https://video.weibo.com/media/play?fid=' not in p[1]):
