@@ -26,11 +26,12 @@ def timeline(days: float = Option(...),
     download_dir: image saving directory
     """
     query = (UserConfig.select()
-             .where(UserConfig.weibo_fetch)
-             .where(UserConfig.weibo_fetch_at.is_null(False))
+             .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
+             .where(UserConfig.weibo_fetch_at.is_null(False)
+                    | UserConfig.weibo_cache_at.is_null(False))
              .where(UserConfig.weibo_next_fetch < pendulum.now())
              .where(~UserConfig.blocked)
-             .order_by(UserConfig.weibo_fetch_at)
+             .order_by(UserConfig.weibo_fetch_at, UserConfig.weibo_cache_at)
              )
     bot = SinaBot(art_login=False)
     bot_art = SinaBot(art_login=True)

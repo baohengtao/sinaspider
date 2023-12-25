@@ -31,19 +31,27 @@ def user(download_dir: Path = default_path):
             console.log(f'用户{uc.username}已在列表中')
         uc = UserConfig.from_id(user_id)
         console.log(uc, '\n')
-        uc.weibo_fetch = Confirm.ask(f"是否获取{uc.username}的微博？", default=True)
+        uc.weibo_fetch = Confirm.ask(
+            f"是否获取{uc.username}的微博？", default=bool(uc.weibo_fetch_at))
+        if not uc.weibo_fetch:
+            if uc.weibo_fetch_at is None:
+                uc.weibo_fetch = None
+                console.log(
+                    f'set {uc.username} weibo_fetch to None '
+                    'since it not fetched yet', style='notice')
         uc.save()
         console.log(f'用户{uc.username}更新完成')
         if uc.weibo_fetch and not uc.following:
             console.log(f'用户{uc.username}未关注，记得关注🌸', style='notice')
-        elif not uc.weibo_fetch and uc.following:
+        elif uc.weibo_fetch is False and uc.following:
             console.log(f'用户{uc.username}已关注，记得取关🔥', style='notice')
-        if not uc.weibo_fetch and Confirm.ask('是否删除该用户？', default=False):
+        if uc.weibo_fetch is False and Confirm.ask('是否删除该用户？', default=False):
             uc.delete_instance()
             console.log('用户已删除')
             if uc.following:
                 console.log('记得取消关注', style='warning')
-        elif uc.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
+        elif uc.weibo_fetch is not False and Confirm.ask(
+                '是否现在抓取', default=(uc.weibo_fetch is None)):
             uc.fetch_weibo(download_dir)
 
 
@@ -111,29 +119,37 @@ def user_loop(download_dir: Path = default_path,
               fetching_duration: int = None,
               new_user: bool = Option(False, "--new-user", "-n"),
               following: bool = Option(False, "--following", "-f")):
+    query = (UserConfig.select()
+             .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
+             .where(UserConfig.weibo_fetch_at.is_null(False)
+                    | UserConfig.weibo_cache_at.is_null(False))
+             .where(UserConfig.weibo_next_fetch < pendulum.now())
+             .where(~UserConfig.blocked)
+             .order_by(UserConfig.following,
+                       UserConfig.weibo_fetch_at,
+                       UserConfig.weibo_cache_at)
+             )
+    query_new = (UserConfig.select()
+                 .where(UserConfig.weibo_fetch
+                        | UserConfig.weibo_fetch.is_null())
+                 .where(UserConfig.weibo_fetch_at.is_null()
+                        & UserConfig.weibo_cache_at.is_null())
+                 .order_by(UserConfig.id)
+                 )
+
+    assert not query_new.where(~UserConfig.following)
     if new_user:
-        users = (UserConfig.select()
-                 .where(UserConfig.weibo_fetch)
-                 .where(UserConfig.weibo_fetch_at.is_null()))
-        assert not users.where(~UserConfig.following)
-        users = users.where(UserConfig.following)
+        users = query_new.where(UserConfig.following)
         console.log(f'{len(users)} users has been found')
         if not fetching_duration:
             users = users[:max_user]
             console.log(f'{len(users)} users will be fetched')
 
     else:
-        users = (UserConfig.select()
-                 .where(UserConfig.weibo_fetch)
-                 .where(UserConfig.weibo_fetch_at.is_null(False))
-                 .where(UserConfig.weibo_next_fetch < pendulum.now())
-                 .where(~UserConfig.blocked)
-                 .order_by(UserConfig.following, UserConfig.weibo_fetch_at)
-                 )
         if following:
-            users = users.where(UserConfig.following | UserConfig.is_friend)
+            users = query.where(UserConfig.following | UserConfig.is_friend)
         else:
-            users = users.where(~UserConfig.following & ~UserConfig.is_friend)
+            users = query.where(~UserConfig.following & ~UserConfig.is_friend)
         download_dir /= 'Loop'
         console.log(f'{len(users)} will be fetched...')
     if fetching_duration:

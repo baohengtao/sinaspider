@@ -68,7 +68,7 @@ class UserConfig(BaseModel):
     username = CharField()
     nickname = CharField(null=True)
     age = IntegerField(null=True)
-    weibo_fetch = BooleanField(default=False)
+    weibo_fetch = BooleanField(null=True)
     weibo_fetch_at = DateTimeTZField(null=True)
     weibo_next_fetch = DateTimeTZField(null=True)
     liked_fetch = BooleanField(default=False)
@@ -159,9 +159,13 @@ class UserConfig(BaseModel):
             yield weibo
 
     def caching_weibo_for_new(self):
-        if self.weibo_fetch or self.weibo_fetch_at:
+        if self.weibo_fetch is not None:
             assert self.weibo_cache_at is None
+            assert self.weibo_fetch or self.weibo_fetch_at
             return
+        else:
+            assert self.weibo_fetch_at is None
+
         since = self.weibo_cache_at or pendulum.from_timestamp(0)
         console.rule(
             f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
@@ -188,10 +192,12 @@ class UserConfig(BaseModel):
         self.save()
 
     def fetch_weibo(self, download_dir: Path):
+        if self.weibo_fetch is False:
+            return
         fetcher.toggle_art(self.following)
         self.set_visibility()
         self.fetch_friends()
-        if not self.weibo_fetch:
+        if self.weibo_fetch is None:
             self.caching_weibo_for_new()
             return
         if self.weibo_fetch_at:
@@ -486,7 +492,11 @@ class UserConfig(BaseModel):
 
         for config in cls:
             config: cls
-            assert not (config.weibo_cache_at and config.weibo_fetch_at)
+            if config.weibo_fetch is None:
+                assert config.weibo_fetch_at is None
+            else:
+                assert config.weibo_cache_at is None
+                assert config.weibo_fetch or config.weibo_fetch_at
 
             config.username = config.user.username
             if girl := Girl.get_or_none(username=config.username):
