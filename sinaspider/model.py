@@ -87,7 +87,7 @@ class UserConfig(BaseModel):
     is_friend = BooleanField(default=False)
     bilateral = ArrayField(field_class=TextField, null=True)
     blocked = BooleanField(default=False)
-    weibo_cache_at = DateTimeTZField(default=False, null=True)
+    weibo_cache_at = DateTimeTZField(default=None, null=True)
 
     class Meta:
         table_name = "userconfig"
@@ -475,7 +475,7 @@ class UserConfig(BaseModel):
             if count > 200:
                 break
         duration = (liked_fetch_at - liked.created_at) * 200 / count
-        days = min(duration.in_days(), 180)
+        days = max(min(duration.in_days(), 180), 15)
         return liked_fetch_at.add(days=days)
 
     def get_weibo_next_fetch(self) -> pendulum.DateTime:
@@ -502,9 +502,10 @@ class UserConfig(BaseModel):
             config: cls
             if config.weibo_fetch is None:
                 assert config.weibo_fetch_at is None
+            elif config.weibo_fetch is True:
+                assert not (config.weibo_cache_at and config.weibo_fetch_at)
             else:
-                assert config.weibo_cache_at is None
-                assert config.weibo_fetch or config.weibo_fetch_at
+                assert config.weibo_fetch_at and not config.weibo_cache_at
 
             config.username = config.user.username
             if girl := Girl.get_or_none(username=config.username):

@@ -94,22 +94,23 @@ def user_add(max_user: int = 20,
             bot.set_special_follow(u.user_id, False)
 
     fetcher.toggle_art(True)
-    nov = [u for u in UserConfig if u.weibo_fetch_at is None
-           and u.visible is not True and not u.set_visibility()]
+    nov = [u for u in UserConfig.select()
+           .where(UserConfig.weibo_cache_at.is_null())
+           .where(UserConfig.weibo_fetch_at.is_null())
+           if u.visible is not True and not u.set_visibility()]
+
+    to_cache = []
     for u in nov:
-        if u.weibo_fetch is False:
-            if not Confirm.ask(
-                    f'{u.username} only 180 days visible, '
-                    'set weibo_fetch to True?', default=True):
-                continue
-        u.weibo_fetch = True
-        u.save()
-        console.log(u)
-    nov = [u for u in nov if u.weibo_fetch]
-    if nov and Confirm.ask('fetching now ?', default=True):
-        for u in nov:
-            if u.weibo_fetch:
-                u.fetch_weibo(download_dir)
+
+        if not Confirm.ask(
+                f'{u.username} only 180 days visible, '
+                'caching now?', default=True):
+            continue
+        to_cache.append(u)
+        console.log(u, '\n')
+
+    for u in to_cache:
+        u.fetch_weibo(download_dir)
 
 
 @app.command(help="Loop through users in database and fetch weibos")

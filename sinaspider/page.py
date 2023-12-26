@@ -132,6 +132,9 @@ class SinaBot:
             keys = ['id', 'screen_name', 'remark']
             console.log(f'{len(cards)} cards find on page {page}')
             for card in cards:
+                if card['card_type'] == 58:
+                    assert card == cards[0]
+                    continue
                 assert card['card_type'] == 10
                 user = card['user']
                 user = {k: user[k] for k in keys}
