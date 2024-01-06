@@ -51,13 +51,14 @@ def save_log(func_name, download_dir):
 
 
 class LogSaver:
+    SAVE_LOG_FOR_COUNT = 100
+    SAVE_LOG_INTERVAL = 12  # hours
+
     def __init__(self, command: str, download_dir: Path):
         self.command = command
         self.download_dir = download_dir
         self.save_log_at = pendulum.now()
         self.save_visits_at = fetcher.visits
-        self.SAVE_LOG_INTERVAL = 12  # hours
-        self.SAVE_LOG_FOR_COUNT = 100
 
     def save_log(self, save_manually=False):
         pg_back.backup()

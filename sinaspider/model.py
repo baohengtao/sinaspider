@@ -588,7 +588,7 @@ class User(BaseModel):
             return cls.insert(user_dict).execute()
         model_dict = model_to_dict(model)
         if edu := user_dict.pop('education', []):
-            for s in model_dict.get('education', []):
+            for s in (model_dict['education'] or []):
                 if s not in edu:
                     edu.append(s)
             user_dict['education'] = edu
@@ -695,7 +695,7 @@ class Weibo(BaseModel):
         if not (model := cls.get_or_none(id=wid)):
             weibo_dict['added_at'] = pendulum.now()
             cls.insert(weibo_dict).execute()
-            weibo = Weibo.get_by_id(wid)
+            weibo = cls.get_by_id(wid)
             weibo.update_location()
             return weibo
         else:
@@ -883,9 +883,10 @@ class Weibo(BaseModel):
         model = model_to_dict(self, recurse=False)
         res = {}
         for k, v in model.items():
-            if 'count' in k or v is None:
+            if v is None:
                 continue
-            if k in ['photos']:
+            if k in ['photos', 'attitudes_count',
+                     'comments_count', 'reposts_count']:
                 continue
             res[k] = v
         return "\n".join(f'{k}: {v}' for k, v in res.items())

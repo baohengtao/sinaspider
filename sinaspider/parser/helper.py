@@ -238,11 +238,10 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
     if rl:
         region, location = rl
         assert not has_geo or 'latitude' in location
-        # weibo |= location
-        # weibo.pop('title', None)
+
         if 'location' not in location:
             assert all('location' not in loc for loc in locations)
-            # assert 'location' not in weibo
+
             console.log(
                 '>>>>no location found, using title instead<<<<<',
                 style='warning')
@@ -250,7 +249,7 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
             console.log(
                 '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
                 style='warning')
-            # weibo['location'] = location['title']
+
     else:
         for region in regions:
             if region:
@@ -320,9 +319,10 @@ def merge_hist_location(weibo: dict) -> dict:
     weibo['region_name'] = weibo.pop('selected_region')
     if location := weibo.pop('selected_location'):
         weibo |= location
-        if title := weibo.pop('title', None):
+        weibo.pop('title', None)
+        if 'location' not in location:
             assert 'location' not in weibo
-            weibo['location'] = title
+            weibo['location'] = location['title']
 
     if loc := weibo.get('location'):
         text = weibo['text'].removesuffix('📍')
