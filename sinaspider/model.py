@@ -842,7 +842,8 @@ class Weibo(BaseModel):
             if (duration := self.video_duration) and duration > 600:
                 console.log(f"video_duration is {duration})...skipping...")
             else:
-                assert (ext := parse_url_extension(url)) == '.mp4'
+                ext = parse_url_extension(url) or '.mp4'
+                assert ext == '.mp4'
                 yield {
                     "url": url,
                     "filename": f"{prefix}{ext}",
@@ -1238,7 +1239,7 @@ class WeiboMissed(BaseModel):
                     'filesize', 'date', 'date_added',
                     'live_photo', 'with_place', 'ismovie',
                     'favorite', 'album', 'title', 'description', 'filename',
-                    'series_number', 'image_creator_name'
+                    'series_number', 'image_creator_name', 'filepath', 'edited'
                     ]
         for k in pop_keys:
             photo_dict.pop(k)

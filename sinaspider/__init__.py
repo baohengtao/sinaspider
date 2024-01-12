@@ -8,7 +8,7 @@ from rich.highlighter import ReprHighlighter
 from rich.theme import Theme
 
 ReprHighlighter.highlights += [
-    r"(?P<social>(?<![a-z])(ins|ig|instagram)(?![a-z]))",
+    r"(?P<social>(?<![a-zA-Z])(ins|ig|instagram|IG|INS|Ins)(?![a-zA-Z]))",
     r"(?P<social>(小红书|📕))",
 ]
 
