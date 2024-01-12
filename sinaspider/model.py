@@ -812,7 +812,8 @@ class Weibo(BaseModel):
             lat, lng = round_loc(lat, lng)
             return lat, lng
 
-    def medias(self, filepath: Path = None, extra=False) -> Iterator[dict]:
+    def medias(self, filepath: Path = None,
+               extra=False, no_watermark=False) -> Iterator[dict]:
         if self.photos_extra:
             assert extra is True
         elif extra:
@@ -824,6 +825,8 @@ class Weibo(BaseModel):
                 continue
             for i, url in enumerate(urls.split('🎀')):
                 aux = '_video' if i == 1 else ''
+                if i == 0 and no_watermark:
+                    url = url.replace('/large/', '/oslarge/')
                 if self.photos and sn > len(self.photos):
                     aux += '_edited'
                 ext = parse_url_extension(url)
