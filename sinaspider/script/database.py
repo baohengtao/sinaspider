@@ -40,6 +40,7 @@ def update_missing():
     from .helper import LogSaver
     logsaver = LogSaver('update_missing', default_path)
     WeiboMissed.add_missing()
+    WeiboMissed.add_missing_from_weiboliked()
     while True:
         WeiboMissed.update_missing()
         logsaver.save_log()

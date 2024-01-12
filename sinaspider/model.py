@@ -1107,7 +1107,8 @@ class WeiboMissed(BaseModel):
             cls.created_at > pendulum.now().subtract(months=6))
         query_first = query_recent.where(
             cls.created_at < pendulum.now().subtract(months=5))
-        query = (query_first or query_recent or query)
+        query = (query_first or query_recent or query.where(
+            cls.visible.is_null()) or query)
         if not query:
             raise ValueError('no missing to update')
         usernames = {m.username for m in query[:num]}
@@ -1189,6 +1190,13 @@ class WeiboMissed(BaseModel):
     @classmethod
     def add_missing(cls):
         from photosinfo.model import Photo
+        query = (WeiboMissed.select()
+                 .where(WeiboMissed.bid.in_([w.bid for w in Weibo]))
+                 .order_by(WeiboMissed.user_id))
+        for missed in query:
+            console.log('find following in weibo, deleting...')
+            console.log(missed, '\n')
+            missed.delete_instance()
         skip1 = {w.bid for w in Weibo}
         skip2 = {w.bid for w in cls}
         assert not (skip1 & skip2)
@@ -1274,6 +1282,72 @@ class WeiboMissed(BaseModel):
         assert not photo_dict
 
         return extracted
+
+    @classmethod
+    def add_missing_from_weiboliked(cls):
+        from photosinfo.model import Photo
+        uids = [u.user_id for u in UserConfig if u.photos_num > 0]
+        query = (Photo.select()
+                 .where(Photo.image_supplier_id.in_(uids))
+                 .where(Photo.image_supplier_name == 'WeiboLiked')
+                 )
+        if not query:
+            return
+        collections = [cls.extract_weiboliked(p) for p in query]
+        collections = {c['bid']: c for c in collections}
+        assert not (set(collections) & {w.bid for w in Weibo})
+        console.log(
+            f'inserting {len(collections)} weiboliked to WeiboMissed', style='warning')
+        collections = collections.values()
+        for c in collections:
+            console.log(c, '\n')
+            c['username'] = cls.uid_username[c['user_id']]
+        cls.insert_many(collections).execute()
+        return collections
+
+    @staticmethod
+    def extract_weiboliked(photo: 'Photo') -> dict:
+        import re
+
+        from sinaspider.helper import encode_wb_id
+        photo_dict = model_to_dict(photo)
+        pop_keys = [
+            'uuid', 'row_created', 'date', 'date_added',  'series_number',
+            'filepath', 'filesize', 'filename', 'image_creator_name', 'artist',
+            'edited', 'live_photo', 'with_place', 'ismovie', 'hidden',
+            'favorite', 'album', 'title', 'description',
+        ]
+        for k in pop_keys:
+            photo_dict.pop(k)
+        assert photo_dict.pop('image_supplier_name') == 'WeiboLiked'
+        for k in ['image_creator_id',
+                  'location', 'latitude', 'longitude', 'geography'
+                  ]:
+            assert photo_dict.pop(k) is None
+        text, *region_name = (photo_dict.pop('blog_title') or '').split('发布于')
+        if region_name:
+            assert len(region_name) == 1
+            region_name = region_name[0].strip()
+        else:
+            region_name = None
+        pattern = r'https://weibo\.com/(\d+)/([\w\d]+)'
+        user_id, weibo_id = re.match(
+            pattern, photo_dict.pop('blog_url')).groups()
+        if image_unique_id := photo_dict.pop('image_unique_id'):
+            assert image_unique_id == weibo_id
+        timestamp = int(photo_dict.pop('date_created').timestamp())
+
+        assert int(photo_dict.pop('image_supplier_id')) == int(user_id)
+        assert not photo_dict
+        if weibo_id.isdigit():
+            weibo_id = encode_wb_id(weibo_id)
+        return {
+            'user_id': int(user_id),
+            'bid': weibo_id,
+            'created_at': pendulum.from_timestamp(timestamp, tz='local'),
+            'text': text.replace('\u200b', '').strip(),
+            'region_name': region_name,
+        }
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
         title = (self.text or "").strip()
