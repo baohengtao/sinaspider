@@ -1,9 +1,10 @@
+import itertools
 from pathlib import Path
 
 import pendulum
 import questionary
 from photosinfo.model import Photo
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from typer import Typer
 
 from sinaspider import console
@@ -147,7 +148,22 @@ def _get_update():
 
 
 @app.command()
-def database_clean(dry_run: bool = False):
+def database_clean():
+    for u in User:
+        if (u.artist and u.artist[0].photos_num) or u.config:
+            continue
+        console.log(u)
+        for n in itertools.chain(u.weibos, u.config, u.artist):
+            console.log(n, '\n')
+        if Confirm.ask(f'是否删除{u.username}({u.id})？', default=False):
+            for n in itertools.chain(u.weibos, u.config, u.artist, u.friends):
+                n.delete_instance()
+            u.delete_instance()
+            console.log(f'用户{u.username}已删除')
+
+
+@app.command()
+def database_clean_old(dry_run: bool = False):
 
     if not dry_run:
         if not questionary.confirm('Have you backup database to rpi?').ask():
