@@ -33,8 +33,8 @@ class UserParser:
         user_info = self.get_user_info()
 
         assert user_cn.pop('昵称') == user_info['screen_name']
-        assert user_cn.pop('备注') == user_info.get('remark', '')
-        assert user_cn.pop('简介') == user_info['description']
+        assert user_cn.pop('备注', '') == user_info.get('remark', '')
+        assert user_cn.pop('简介', '') == user_info.get('description', '')
         assert user_cn.pop('认证', None) == user_info.get('verified_reason')
 
         cn2en = [('生日', 'birthday'), ('学习经历', 'education'),
@@ -57,8 +57,8 @@ class UserParser:
         for k, v in user_cn.items():
             assert user_info.setdefault(k, v) == v
 
-        if not (descrip := user_info['description']):
-            user_info.pop('description')
+        if not (descrip := user_info.get('description')):
+            assert 'description' not in user_info
         else:
             user_info['description'] = html.unescape(descrip)
 
@@ -102,9 +102,11 @@ class UserParser:
         for key in ['大学', '海外', '高中', '初中', '中专技校', '小学']:
             assert user_card.pop(key, '') in edu_str
         for k, v in user_card.items():
+            v = v.strip()
             assert user_cn.setdefault(k, v) == v
         if user_cn['简介'] == '暂无简介':
             user_cn['简介'] = ''
+        user_cn = {k: v for k, v in user_cn.items() if v != ''}
         return user_cn
 
     def _fetch_user_cn(self) -> dict:
@@ -137,9 +139,10 @@ class UserParser:
                     key, value = re.split('[:：]', line, maxsplit=1)
                     info[key] = value
             elif tip.text in ['学习经历', '工作经历']:
-                info[tip.text] = (c.text
-                                  .strip('·').replace('\xa0', ' ')
-                                  .strip().split('·'))
+                if text := (c.text
+                            .strip('·').replace('\xa0', ' ')
+                            .strip()):
+                    info[tip.text] = text.split('·')
             else:
                 assert tip.text == '其他信息'
         assert info.get('认证') == info.pop('认证信息', None)
@@ -176,6 +179,12 @@ class UserParser:
         assert user_info['followers_count'] == user_info.pop(
             'followers_count_str')
         assert user_info.pop('close_blue_v') is False
+        for k, v in user_info.copy().items():
+            if isinstance(v, str):
+                if not (v := v.strip()):
+                    user_info.pop(k)
+                else:
+                    user_info[k] = v
         return user_info
 
     def followed_by(self) -> list[int] | None:
