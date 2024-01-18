@@ -10,8 +10,7 @@ from typer import Typer
 from sinaspider import console
 from sinaspider.exceptions import WeiboNotFoundError
 from sinaspider.helper import download_files, fetcher, normalize_wb_id
-from sinaspider.model import Artist, User, UserConfig, Weibo
-from sinaspider.parser import WeiboParser
+from sinaspider.model import Artist, User, UserConfig, Weibo, WeiboCache
 
 from .helper import default_path, logsaver_decorator
 
@@ -77,7 +76,7 @@ def update_weibo(download_dir: Path = default_path):
     for weibo in _get_update():
         fetcher.toggle_art(weibo.user.following)
         try:
-            weibo_dict = WeiboParser(weibo.id).parse()
+            weibo_dict = WeiboCache(weibo.id).parse()
         except WeiboNotFoundError as e:
             weibo.try_update_at = pendulum.now()
             weibo.try_update_msg = str(e).removesuffix(

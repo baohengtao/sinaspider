@@ -9,8 +9,6 @@ from sinaspider import console
 from sinaspider.helper import encode_wb_id, parse_loc_src
 
 from .helper import (
-    get_hist_mblogs,
-    get_mblog_from_web,
     merge_hist_location,
     parse_location_info_from_hist,
     parse_photos_info,
@@ -21,39 +19,19 @@ from .helper import (
 class WeiboParser:
     """用于解析原始微博内容."""
 
-    def __init__(self, weibo_info: dict | int | str):
-        if isinstance(weibo_info, dict):
-            if 'pic_ids' not in weibo_info:
-                weibo_info = weibo_info['id']
-                console.log(f'pic_ids not found for weibo {weibo_info},'
-                            'fetching online...', style='warning')
-            elif weibo_info['pic_num'] > len(weibo_info['pic_ids']):
-                assert weibo_info['pic_num'] > 9
-                weibo_info = weibo_info['id']
-            elif weibo_info['isLongText'] and (
-                    weibo_info['mblog_from'] != 'liked_weico'):
-                ends = f'<a href=\"/status/{weibo_info["id"]}\">全文</a>'
-                assert weibo_info['text'].endswith(ends)
-                weibo_info = weibo_info['id']
-
-        if isinstance(weibo_info, (int, str)):
-            self.info = get_mblog_from_web(weibo_info)
-        else:
-            self.info = weibo_info
+    def __init__(self, weibo_info: dict, hist_mblogs=None):
+        self.info = weibo_info
         self.id = self.info['id']
         self.pic_num = self.info['pic_num']
         self.edit_count = self.info.get('edit_count', 0)
-        self.hist_mblogs = None
-        self.edit_at = None
-        if self.edit_count:
-            console.log(
-                f'{self.id} edited in {self.edit_count} times, finding hist_mblogs...')
-            self.hist_mblogs = get_hist_mblogs(self.id, self.edit_count)
-            if len(self.hist_mblogs) > 1:
-                self.edit_at = pendulum.from_format(
-                    self.hist_mblogs[-1]['edit_at'],
-                    'ddd MMM DD HH:mm:ss ZZ YYYY')
-                assert self.edit_at.is_local()
+        self.hist_mblogs = hist_mblogs
+        if self.hist_mblogs:
+            self.edit_at = pendulum.from_format(
+                self.hist_mblogs[-1]['edit_at'],
+                'ddd MMM DD HH:mm:ss ZZ YYYY')
+            assert self.edit_at.is_local()
+        else:
+            self.edit_at = None
 
         assert self.pic_num <= len(self.info['pic_ids'])
         if self.pic_num < len(self.info['pic_ids']):

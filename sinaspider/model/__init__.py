@@ -8,9 +8,9 @@ from sinaspider import console
 from .base import database
 from .config import UserConfig
 from .user import Artist, Friend, User
-from .weibo import Location, Weibo, WeiboLiked, WeiboMissed
+from .weibo import Location, Weibo, WeiboCache, WeiboLiked, WeiboMissed
 
-tables = [User, UserConfig, Artist, Weibo,
+tables = [User, UserConfig, Artist, Weibo, WeiboCache,
           WeiboLiked, Location, Friend, WeiboMissed]
 database.create_tables(tables)
 

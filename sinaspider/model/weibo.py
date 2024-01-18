@@ -1,8 +1,12 @@
+import itertools
+import json
 import re
+import time
 from pathlib import Path
 from typing import Iterator, Self
 
 import pendulum
+from bs4 import BeautifulSoup
 from geopy.distance import geodesic
 from playhouse.postgres_ext import (
     ArrayField,
@@ -11,7 +15,8 @@ from playhouse.postgres_ext import (
     DateTimeTZField,
     DoubleField,
     ForeignKeyField,
-    IntegerField, TextField
+    IntegerField, JSONField,
+    TextField
 )
 from playhouse.shortcuts import model_to_dict
 from rich.prompt import Confirm
@@ -24,7 +29,6 @@ from sinaspider.helper import (
     round_loc
 )
 from sinaspider.page import Page
-from sinaspider.parser import WeiboParser
 
 from .base import BaseModel
 from .user import Artist, User
@@ -74,7 +78,7 @@ class Weibo(BaseModel):
         wb_id = normalize_wb_id(wb_id)
         if update or not cls.get_or_none(id=wb_id):
             try:
-                weibo_dict = WeiboParser(wb_id).parse()
+                weibo_dict = WeiboCache.from_id(wb_id, update=update).parse()
             except WeiboNotFoundError as e:
                 if not cls.get_or_none(id=wb_id):
                     raise e
@@ -424,6 +428,121 @@ class Location(BaseModel):
             version=version)
 
 
+class WeiboCache(BaseModel):
+    id = BigIntegerField(primary_key=True, unique=True)
+    timeline_web = JSONField(null=True)
+    page_web = JSONField(null=True)
+    liked_weico = JSONField(null=True)
+    hist_mblogs = JSONField(null=True)
+    edit_count = IntegerField()
+
+    @classmethod
+    def from_id(cls, weibo_id, update=False) -> Self:
+        weibo_id = normalize_wb_id(weibo_id)
+        if not update and (cache := cls.get_or_none(id=weibo_id)):
+            return cache
+        try:
+            mblog = get_mblog_from_web(weibo_id)
+        except WeiboNotFoundError as e:
+            console.log(e, style='error')
+            raise
+        return cls.upsert(mblog)
+
+    @classmethod
+    def upsert(cls, mblog: dict) -> Self:
+        weibo_id = mblog['id']
+        edit_count = mblog.get('edit_count', 0)
+        mblog_from = mblog['mblog_from']
+        if cache := WeiboCache.get_or_none(id=weibo_id):
+            assert bool(cache.edit_count) == bool(cache.hist_mblogs)
+            if cache.edit_count == edit_count:
+                setattr(cache, mblog_from, mblog)
+                cache.save()
+                return cache
+        row = {
+            'id': weibo_id,
+            mblog_from: mblog,
+            "edit_count": edit_count,
+        }
+        if edit_count > 0:
+            row['hist_mblogs'] = get_hist_mblogs(weibo_id, edit_count)
+
+        if mblog_from != 'page_web':
+            if mblog['pic_num'] > len(mblog['pic_ids']):
+                assert mblog['pic_num'] > 9
+                row['page_web'] = get_mblog_from_web(weibo_id)
+            elif mblog['isLongText']:
+                ends = f'<a href=\"/status/{mblog["id"]}\">全文</a>'
+                assert mblog['text'].endswith(ends)
+                row['page_web'] = get_mblog_from_web(weibo_id)
+        cls.insert(row).execute()
+        return cls.get_by_id(weibo_id)
+
+    def parse(self):
+        from sinaspider.parser.weibo import WeiboParser
+        info = self.page_web or self.timeline_web or self.liked_weico
+        assert bool(self.edit_count) == bool(self.hist_mblogs)
+        if hist_mblogs := self.hist_mblogs:
+            hist_mblogs = self.hist_mblogs['mblogs']
+        return WeiboParser(info, hist_mblogs).parse()
+
+
+def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
+    s = '0726b708' if fetcher.art_login else 'c773e7e0'
+    edit_url = ("https://api.weibo.cn/2/cardlist?c=weicoabroad"
+                f"&containerid=231440_-_{weibo_id}"
+                f"&page=%s&s={s}"
+                )
+    all_cards = []
+    for page in itertools.count(1):
+        js = fetcher.get(edit_url % page).json()
+        all_cards += js['cards']
+        if len(all_cards) >= edit_count + 1:
+            assert len(all_cards) == edit_count + 1
+            break
+    mblogs = []
+    for card in all_cards[::-1]:
+        card = card['card_group']
+        assert len(card) == 1
+        card = card[0]
+        if card['card_type'] != 9:
+            continue
+        mblogs.append(card['mblog'])
+    return dict(mblogs=mblogs, all_cards=all_cards)
+
+
+def get_mblog_from_web(weibo_id: str | int) -> dict:
+    url = f'https://m.weibo.cn/detail/{weibo_id}'
+    while True:
+        text = fetcher.get(url).text
+        soup = BeautifulSoup(text, 'html.parser')
+        if soup.title.text == '微博-出错了':
+            assert (err_msg := soup.body.p.text.strip())
+            if err_msg in ['请求超时', 'Redis执行失败']:
+                console.log(
+                    f'{err_msg} for {url}, sleeping 60 secs...',
+                    style='error')
+                time.sleep(60)
+                continue
+            else:
+                raise WeiboNotFoundError(err_msg, url)
+        break
+    rec = re.compile(
+        r'.*var \$render_data = \[(.*)]\[0] \|\| \{};', re.DOTALL)
+    html = rec.match(text).groups(1)[0]
+    weibo_info = json.loads(html, strict=False)['status']
+    console.log(f"{weibo_id} fetched in online.")
+    pic_num = len(weibo_info['pic_ids'])
+    if not weibo_info['pic_num'] == pic_num:
+        console.log(f'actually there are {pic_num} pictures for {url} '
+                    f'but pic_num is {weibo_info["pic_num"]}',
+                    style='error')
+        weibo_info['pic_num'] = pic_num
+    weibo_info['mblog_from'] = "page_web"
+
+    return weibo_info
+
+
 class WeiboLiked(BaseModel):
     weibo_id = BigIntegerField()
     weibo_by = BigIntegerField()
@@ -647,6 +766,8 @@ class WeiboMissed(BaseModel):
     @classmethod
     def add_missing_from_weiboliked(cls):
         from photosinfo.model import Photo
+
+        from .config import UserConfig
         uids = [u.user_id for u in UserConfig if u.photos_num > 0]
         query = (Photo.select()
                  .where(Photo.image_supplier_id.in_(uids))

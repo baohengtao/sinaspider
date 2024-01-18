@@ -14,11 +14,10 @@ from playhouse.shortcuts import model_to_dict
 from sinaspider import console
 from sinaspider.helper import download_files, fetcher, parse_url_extension
 from sinaspider.page import Page
-from sinaspider.parser import WeiboParser
 
 from .base import BaseModel
 from .user import Friend, User
-from .weibo import Weibo, WeiboLiked
+from .weibo import Weibo, WeiboCache, WeiboLiked
 
 
 class UserConfig(BaseModel):
@@ -109,7 +108,7 @@ class UserConfig(BaseModel):
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             if not insert_at or insert_at < pendulum.now().subtract(days=1):
-                weibo_dict = WeiboParser(mblog).parse()
+                weibo_dict = WeiboCache.upsert(mblog).parse()
                 weibo_dict['username'] = self.username
                 weibo = Weibo.upsert(weibo_dict)
             elif skip_exist:
@@ -356,7 +355,7 @@ class UserConfig(BaseModel):
                 early_stopping = True
                 break
             try:
-                weibo_dict = WeiboParser(mblog).parse()
+                weibo_dict = WeiboCache.upsert(mblog).parse()
             except KeyError as e:
                 console.log(
                     f'{e}: cannot parse https://weibo.com/{uid}/{wid}, '
