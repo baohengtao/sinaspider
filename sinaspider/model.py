@@ -417,16 +417,14 @@ class UserConfig(BaseModel):
                 xmp_info = weibo.gen_meta(sn, url=url)
                 description = '\n'.join([
                     f'weibo.com/{weibo.user_id}/{weibo.bid}',
-                    f'weibo.com/u/{weibo.user_id}'
+                    f'https://weibo.com/u/{weibo.user_id}'
                 ])
-                marker_note = model_to_dict(weibo, recurse=False)
-                marker_note['created_at'] = weibo.created_at.timestamp()
                 xmp_info.update({
                     'XMP:Title': f'{weibo.username}⭐️{self.username}',
                     'XMP:Description': description,
                     'XMP:Artist': weibo.username,
                     'XMP:ImageSupplierName': 'WeiboLiked',
-                    'XMP:MakerNote': marker_note
+                    'XMP:MakerNote': mblog
                 })
                 xmp_info["File:FileCreateDate"] = xmp_info['XMP:DateCreated']
 
