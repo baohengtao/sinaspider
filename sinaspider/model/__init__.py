@@ -5,12 +5,10 @@ import pendulum
 
 from sinaspider import console
 
-from .model import (
-    Artist, Friend, Location,
-    User, UserConfig, Weibo,
-    WeiboLiked, WeiboMissed,
-    database
-)
+from .base import database
+from .config import UserConfig
+from .user import Artist, Friend, User
+from .weibo import Location, Weibo, WeiboLiked, WeiboMissed
 
 tables = [User, UserConfig, Artist, Weibo,
           WeiboLiked, Location, Friend, WeiboMissed]
