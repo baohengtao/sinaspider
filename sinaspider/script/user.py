@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pendulum
+from peewee import fn
 from rich.prompt import Confirm, Prompt
 from typer import Option, Typer
 
@@ -120,6 +121,7 @@ def user_loop(download_dir: Path = default_path,
               fetching_duration: int = None,
               new_user: bool = Option(False, "--new-user", "-n"),
               following: bool = Option(False, "--following", "-f")):
+    UserConfig.update_table()
     query = (UserConfig.select()
              .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
              .where(UserConfig.weibo_fetch_at.is_null(False)
@@ -127,16 +129,15 @@ def user_loop(download_dir: Path = default_path,
              .where(UserConfig.weibo_next_fetch < pendulum.now())
              .where(~UserConfig.blocked)
              .order_by(UserConfig.following,
-                       UserConfig.weibo_fetch_at,
-                       UserConfig.weibo_cache_at)
+                       fn.COALESCE(UserConfig.weibo_fetch_at,
+                                   UserConfig.weibo_cache_at))
              )
+
+    cond1 = (UserConfig.weibo_fetch & UserConfig.weibo_fetch_at.is_null())
+    cond2 = (UserConfig.weibo_fetch.is_null() &
+             UserConfig.weibo_cache_at.is_null())
     query_new = (UserConfig.select()
-                 .where(UserConfig.weibo_fetch
-                        | UserConfig.weibo_fetch.is_null())
-                 .where(UserConfig.weibo_fetch_at.is_null()
-                        & UserConfig.weibo_cache_at.is_null())
-                 .order_by(UserConfig.id)
-                 )
+                 .where(cond1 | cond2))
 
     assert not query_new.where(~UserConfig.following)
     if new_user:

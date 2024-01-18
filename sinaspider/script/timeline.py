@@ -72,8 +72,10 @@ def timeline(days: float = Option(...),
                 config.fetch_liked(download_dir)
 
         while start_time.diff().in_minutes() < WORKING_TIME:
-            if config := UserConfig.get_or_none(weibo_cache_at=None,
-                                                weibo_fetch_at=None):
+            c1 = UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None)
+            c2 = UserConfig.get_or_none(
+                weibo_cache_at=None, weibo_fetch_at=None)
+            if config := (c1 or c2):
                 assert config.following
                 config = config.from_id(config.user_id)
                 config.fetch_weibo(download_dir)
