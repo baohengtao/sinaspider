@@ -18,7 +18,7 @@ from playhouse.postgres_ext import (
     IntegerField, JSONField,
     TextField
 )
-from playhouse.shortcuts import model_to_dict
+from playhouse.shortcuts import model_to_dict, update_model_from_dict
 from rich.prompt import Confirm
 
 from sinaspider import console
@@ -65,7 +65,7 @@ class Weibo(BaseModel):
     latitude = DoubleField(null=True)
     longitude = DoubleField(null=True)
     mblog_from = TextField()
-    added_at = DateTimeTZField(null=True)
+    added_at = DateTimeTZField()
     updated_at = DateTimeTZField(null=True)
     try_update_at = DateTimeTZField(null=True)
     try_update_msg = TextField(null=True)
@@ -103,16 +103,11 @@ class Weibo(BaseModel):
         if weibo_dict['pic_num'] > 0:
             assert weibo_dict.get('photos') or weibo_dict.get('photos_edited')
 
-        assert 'updated_at' not in weibo_dict
-        assert 'added_at' not in weibo_dict
         if not (model := cls.get_or_none(id=wid)):
-            weibo_dict['added_at'] = pendulum.now()
             cls.insert(weibo_dict).execute()
             weibo = cls.get_by_id(wid)
             weibo.update_location()
             return weibo
-        else:
-            weibo_dict['updated_at'] = pendulum.now()
         if model.location is None:
             if 'location' in weibo_dict:
                 assert locations[0] is None
@@ -435,6 +430,8 @@ class WeiboCache(BaseModel):
     liked_weico = JSONField(null=True)
     hist_mblogs = JSONField(null=True)
     edit_count = IntegerField()
+    added_at = DateTimeTZField()
+    updated_at = DateTimeTZField(null=True)
 
     @classmethod
     def from_id(cls, weibo_id, update=False) -> Self:
@@ -454,11 +451,14 @@ class WeiboCache(BaseModel):
         edit_count = mblog.get('edit_count', 0)
         mblog_from = mblog['mblog_from']
         if cache := WeiboCache.get_or_none(id=weibo_id):
+            cache.updated_at = pendulum.now()
             assert bool(cache.edit_count) == bool(cache.hist_mblogs)
             if cache.edit_count == edit_count:
                 setattr(cache, mblog_from, mblog)
                 cache.save()
                 return cache
+            else:
+                assert edit_count > cache.edit_count
         row = {
             'id': weibo_id,
             mblog_from: mblog,
@@ -475,7 +475,12 @@ class WeiboCache(BaseModel):
                 ends = f'<a href=\"/status/{mblog["id"]}\">全文</a>'
                 assert mblog['text'].endswith(ends)
                 row['page_web'] = get_mblog_from_web(weibo_id)
-        cls.insert(row).execute()
+        if cache:
+            update_model_from_dict(cache, row)
+            cache.save()
+        else:
+            row['added_at'] = pendulum.now()
+            cls.insert(row).execute()
         return cls.get_by_id(weibo_id)
 
     def parse(self):
@@ -484,7 +489,12 @@ class WeiboCache(BaseModel):
         assert bool(self.edit_count) == bool(self.hist_mblogs)
         if hist_mblogs := self.hist_mblogs:
             hist_mblogs = self.hist_mblogs['mblogs']
-        return WeiboParser(info, hist_mblogs).parse()
+        weibo_dict = WeiboParser(info, hist_mblogs).parse()
+        assert 'updated_at' not in weibo_dict
+        assert 'added_at' not in weibo_dict
+        weibo_dict['updated_at'] = self.updated_at
+        weibo_dict['added_at'] = self.added_at
+        return weibo_dict
 
 
 def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
