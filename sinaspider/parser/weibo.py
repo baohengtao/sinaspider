@@ -8,12 +8,7 @@ from bs4 import BeautifulSoup
 from sinaspider import console
 from sinaspider.helper import encode_wb_id, parse_loc_src
 
-from .helper import (
-    merge_hist_location,
-    parse_location_info_from_hist,
-    parse_photos_info,
-    parse_photos_info_from_hist
-)
+from .helper import WeiboHist, parse_photos_info
 
 
 class WeiboParser:
@@ -153,52 +148,3 @@ class WeiboParser:
         assert text == text.strip()
         res['text'] = text
         return {k: v for k, v in res.items() if v is not None}
-
-
-class WeiboHist:
-    def __init__(self, weibo_dict: dict,
-                 hist_mblogs: list[dict]) -> None:
-        self.weibo_dict = weibo_dict
-        self.hist_mblogs = hist_mblogs
-
-    def parse(self) -> dict:
-        if edit_at := self.hist_mblogs[-1].get('edit_at'):
-            assert len(self.hist_mblogs) > 1
-            edit_at = pendulum.from_format(
-                edit_at, 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            assert edit_at.is_local()
-            assert 'edit_at' not in self.weibo_dict
-            self.weibo_dict['edit_at'] = edit_at
-        else:
-            assert len(self.hist_mblogs) == 1
-        self.parse_photos_info()
-
-        location_info = parse_location_info_from_hist(self.hist_mblogs) or {}
-        assert self.weibo_dict | location_info == location_info | self.weibo_dict
-        self.weibo_dict |= location_info
-        self.weibo_dict = merge_hist_location(self.weibo_dict)
-        return self.weibo_dict
-
-    def parse_photos_info(self) -> dict:
-        final_photos = self.weibo_dict.pop('photos', [])
-        photos, ori_num = parse_photos_info_from_hist(self.hist_mblogs)
-
-        if not set(final_photos).issubset(set(photos)):
-            console.log(
-                '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
-                style='warning')
-            console.log('photos not match: ')
-            console.log(f'photos in hist which is used is: {photos}')
-            console.log(f'photos in weibo: {final_photos}')
-            console.log('<'*50, style='warning')
-
-        if len(photos) > len(final_photos):
-            console.log(
-                '🎉 the pic num increase from '
-                f'{len(final_photos)} to {len(photos)}',
-                style='notice')
-
-        photos, edited = photos[:ori_num], photos[ori_num:]
-        info = dict(photos=photos, photos_edited=edited)
-        assert self.weibo_dict | info == info | self.weibo_dict
-        self.weibo_dict |= info
