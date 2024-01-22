@@ -1,5 +1,6 @@
 import re
 import warnings
+from copy import deepcopy
 
 import bs4
 import pendulum
@@ -15,7 +16,7 @@ class WeiboParser:
     """用于解析原始微博内容."""
 
     def __init__(self, weibo_info: dict, hist_mblogs=None):
-        self.info = weibo_info
+        self.info = deepcopy(weibo_info)
         self.hist_mblogs = hist_mblogs
         if (pic_num := self.info['pic_num']) < len(self.info['pic_ids']):
             console.log(
@@ -25,7 +26,7 @@ class WeiboParser:
             assert pic_num == len(self.info['pic_ids'])
 
     def parse(self):
-        weibo = self.basic_info()
+        weibo = self.basic_info(self.info)
         if video := self.video_info():
             weibo |= video
         weibo['photos'] = parse_photos_info(self.info)
@@ -45,33 +46,34 @@ class WeiboParser:
         self.weibo = weibo
         return weibo.copy()
 
-    def basic_info(self) -> dict:
-        user = self.info['user']
+    @staticmethod
+    def basic_info(weibo_info) -> dict:
+        user = weibo_info.pop('user')
         created_at = pendulum.from_format(
-            self.info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
+            weibo_info.pop('created_at'), 'ddd MMM DD HH:mm:ss ZZ YYYY')
         assert created_at.is_local()
-        if region_name := self.info.get('region_name'):
+        if region_name := weibo_info.pop('region_name', None):
             region_name = region_name.removeprefix('发布于').strip()
-        assert 'retweeted_status' not in self.info
+        assert 'retweeted_status' not in weibo_info
         weibo = dict(
             user_id=(user_id := user['id']),
-            id=(id_ := int(self.info['id'])),
-            bid=(bid := encode_wb_id(id_)),
             username=user.get('remark') or user['screen_name'],
+            created_at=created_at,
+            region_name=region_name,
+            id=(id_ := int(weibo_info.pop('id'))),
+            bid=(bid := encode_wb_id(id_)),
             url=f'https://weibo.com/{user_id}/{bid}',
             url_m=f'https://m.weibo.cn/detail/{bid}',
-            created_at=created_at,
             source=BeautifulSoup(
-                self.info['source'].strip(), 'html.parser').text,
-            region_name=region_name,
-            mblog_from=self.info.get('mblog_from'),
-            pic_num=self.info['pic_num'],
-            edit_count=self.info.get('edit_count', 0),
+                weibo_info.pop('source').strip(), 'html.parser').text,
+            mblog_from=weibo_info.pop('mblog_from'),
+            pic_num=weibo_info['pic_num'],
+            edit_count=weibo_info.pop('edit_count', 0),
             update_status='updated',
 
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
-            if (v := self.info[key]) == '100万+':
+            if (v := weibo_info.pop(key)) == '100万+':
                 v = 1000000
             weibo[key] = v
         return weibo
