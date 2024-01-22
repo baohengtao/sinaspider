@@ -23,15 +23,7 @@ class WeiboParser:
         self.info = weibo_info
         self.id = self.info['id']
         self.pic_num = self.info['pic_num']
-        self.edit_count = self.info.get('edit_count', 0)
         self.hist_mblogs = hist_mblogs
-        # if self.hist_mblogs:
-        #     self.edit_at = pendulum.from_format(
-        #         self.hist_mblogs[-1]['edit_at'],
-        #         'ddd MMM DD HH:mm:ss ZZ YYYY')
-        #     assert self.edit_at.is_local()
-        # else:
-        #     self.edit_at = None
 
         assert self.pic_num <= len(self.info['pic_ids'])
         if self.pic_num < len(self.info['pic_ids']):
@@ -44,15 +36,10 @@ class WeiboParser:
         if video := self.video_info():
             weibo |= video
         weibo['photos'] = parse_photos_info(self.info)
-        # weibo |= self.photos_info_with_hist()
-        # weibo |= parse_location_info_from_hist(self.hist_mblogs) or {}
         weibo |= self.text_info(self.info['text'])
-
         weibo['pic_num'] = self.pic_num
-        weibo['edit_count'] = self.edit_count
-        # weibo['edit_at'] = self.edit_at
+        weibo['edit_count'] = self.info.get('edit_count', 0)
         weibo['update_status'] = 'updated'
-        # weibo = merge_hist_location(weibo)
         if self.hist_mblogs:
             weibo = WeiboHist(weibo, self.hist_mblogs).parse()
         weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
@@ -87,32 +74,6 @@ class WeiboParser:
                 v = 1000000
             weibo[key] = v
         return weibo
-
-    # def photos_info_with_hist(self) -> dict:
-
-    #     final_photos = parse_photos_info(self.info)
-    #     if not self.hist_mblogs:
-    #         return {'photos': final_photos}
-    #     photos, ori_num = parse_photos_info_from_hist(self.hist_mblogs)
-
-    #     if not set(final_photos).issubset(set(photos)):
-    #         console.log(
-    #             '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
-    #             style='warning')
-    #         console.log('photos not match: ')
-    #         console.log(f'photos in hist which is used is: {photos}')
-    #         console.log(f'photos in weibo: {final_photos}')
-    #         console.log('<'*50, style='warning')
-
-    #     if len(photos) > len(final_photos):
-    #         console.log(
-    #             '🎉 the pic num increase from '
-    #             f'{len(final_photos)} to {len(photos)}',
-    #             style='notice')
-
-    #     photos, edited = photos[:ori_num], photos[ori_num:]
-    #     return dict(
-    #         photos=photos, photos_edited=edited,)
 
     def video_info(self) -> dict | None:
         weibo = {}
