@@ -16,15 +16,13 @@ class WeiboParser:
 
     def __init__(self, weibo_info: dict, hist_mblogs=None):
         self.info = weibo_info
-        self.id = self.info['id']
-        self.pic_num = self.info['pic_num']
         self.hist_mblogs = hist_mblogs
-
-        assert self.pic_num <= len(self.info['pic_ids'])
-        if self.pic_num < len(self.info['pic_ids']):
+        if (pic_num := self.info['pic_num']) < len(self.info['pic_ids']):
             console.log(
-                f"pic_num < len(pic_ids) for {self.id}",
+                f"pic_num < len(pic_ids) for {self.info['id']}",
                 style="warning")
+        else:
+            assert pic_num == len(self.info['pic_ids'])
 
     def parse(self):
         weibo = self.basic_info()
@@ -32,9 +30,6 @@ class WeiboParser:
             weibo |= video
         weibo['photos'] = parse_photos_info(self.info)
         weibo |= self.text_info(self.info['text'])
-        weibo['pic_num'] = self.pic_num
-        weibo['edit_count'] = self.info.get('edit_count', 0)
-        weibo['update_status'] = 'updated'
         if self.hist_mblogs:
             weibo = WeiboHist(weibo, self.hist_mblogs).parse()
         weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
@@ -69,7 +64,11 @@ class WeiboParser:
             source=BeautifulSoup(
                 self.info['source'].strip(), 'html.parser').text,
             region_name=region_name,
-            mblog_from=self.info.get('mblog_from')
+            mblog_from=self.info.get('mblog_from'),
+            pic_num=self.info['pic_num'],
+            edit_count=self.info.get('edit_count', 0),
+            update_status='updated',
+
         )
         for key in ['reposts_count', 'comments_count', 'attitudes_count']:
             if (v := self.info[key]) == '100万+':
