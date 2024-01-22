@@ -492,7 +492,8 @@ class WeiboCache(BaseModel):
         weibo_dict = WeiboParser(info, hist_mblogs).parse()
         assert 'updated_at' not in weibo_dict
         assert 'added_at' not in weibo_dict
-        weibo_dict['updated_at'] = self.updated_at
+        if self.updated_at:
+            weibo_dict['updated_at'] = self.updated_at
         weibo_dict['added_at'] = self.added_at
         return weibo_dict
 
