@@ -311,10 +311,4 @@ def merge_hist_location(weibo: dict) -> dict:
             assert 'location' not in weibo
             weibo['location'] = location['title']
 
-    if loc := weibo.get('location'):
-        text = weibo['text'].removesuffix('📍')
-        assert not text.endswith('📍')
-        text += f' 📍{loc}'
-        weibo['text'] = text.strip()
-
     return weibo

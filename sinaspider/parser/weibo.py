@@ -40,6 +40,13 @@ class WeiboParser:
         weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
         weibo['has_media'] = bool(weibo.get('video_url') or weibo.get(
             'photos') or weibo.get('photos_edited'))
+
+        if loc := weibo.get('location'):
+            text = weibo['text'].removesuffix('📍')
+            assert not text.endswith('📍')
+            text += f' 📍{loc}'
+            weibo['text'] = text.strip()
+
         self.weibo = weibo
         return weibo.copy()
 
