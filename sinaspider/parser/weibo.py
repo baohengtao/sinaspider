@@ -37,7 +37,7 @@ class WeiboParser:
             'photos') or weibo.get('photos_edited'))
 
         if loc := weibo.get('location'):
-            text = weibo['text'].removesuffix('📍')
+            text = weibo.get('text', '').removesuffix('📍')
             assert not text.endswith('📍')
             text += f' 📍{loc}'
             weibo['text'] = text.strip()

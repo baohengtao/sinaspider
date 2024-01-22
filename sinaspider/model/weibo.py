@@ -176,9 +176,16 @@ class Weibo(BaseModel):
                 location.name = self.location
                 location.save()
             console.log(location)
-        else:
-            assert coord
+        elif not coord:
+            console.log(
+                f'no coord and location found: {self.url}', style='error')
             console.log(self)
+            if '_' in self.location_id:
+                lng, lat = tuple(map(float, self.location_id.split('_')))
+                coord = round_loc(lat, lng)
+            else:
+                raise ValueError(f'cannot found coord for {self.url}')
+
         if coord and location:
             if (err := geodesic(coord, location.coordinate).meters) > 1:
                 console.log(
@@ -212,7 +219,7 @@ class Weibo(BaseModel):
             'status']
         if 'geo' not in status:
             console.log(
-                f"no coordinates find: {self.url} ", style='error')
+                f"no coordinates found: {self.url} ", style='error')
         elif not (geo := status['geo']):
             console.log(f'no coord found: {self.url}', style='warning')
         else:
@@ -451,7 +458,9 @@ class WeiboCache(BaseModel):
         edit_count = mblog.get('edit_count', 0)
         mblog_from = mblog['mblog_from']
         if cache := WeiboCache.get_or_none(id=weibo_id):
-            cache.updated_at = pendulum.now()
+            if mblog_from == 'page_web' or (
+                    mblog_from == 'timeline_web' and not cache.page_web):
+                cache.updated_at = pendulum.now()
             assert bool(cache.edit_count) == bool(cache.hist_mblogs)
             if cache.edit_count == edit_count:
                 setattr(cache, mblog_from, mblog)
@@ -477,6 +486,7 @@ class WeiboCache(BaseModel):
                 row['page_web'] = get_mblog_from_web(weibo_id)
         if cache:
             update_model_from_dict(cache, row)
+            cache.updated_at = pendulum.now()
             cache.save()
         else:
             row['added_at'] = pendulum.now()
