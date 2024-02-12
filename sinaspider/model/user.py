@@ -144,7 +144,7 @@ class Artist(BaseModel):
     def from_id(cls, user_id: int, update: bool = False) -> Self:
         if not update and user_id in cls._cache:
             return cls._cache[user_id]
-        user = User.from_id(user_id, update=update)
+        user = User.get_by_id(user_id)
         user_dict = model_to_dict(user)
         user_dict['user_id'] = user_dict.pop('id')
         user_dict = {k: v for k, v in user_dict.items()

@@ -35,7 +35,7 @@ def user(download_dir: Path = default_path):
         uc.weibo_fetch = Confirm.ask(
             f"是否获取{uc.username}的微博？", default=bool(uc.weibo_fetch_at))
         if not uc.weibo_fetch:
-            if uc.weibo_fetch_at is None:
+            if uc.weibo_fetch_at is None and uc.following:
                 uc.weibo_fetch = None
                 console.log(
                     f'set {uc.username} weibo_fetch to None '

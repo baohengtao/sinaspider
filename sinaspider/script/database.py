@@ -155,7 +155,8 @@ def database_clean():
         for n in itertools.chain(u.weibos, u.config, u.artist):
             console.log(n, '\n')
         if Confirm.ask(f'是否删除{u.username}({u.id})？', default=False):
-            for n in itertools.chain(u.weibos, u.config, u.artist, u.friends):
+            for n in itertools.chain(u.weibos, u.config, u.artist,
+                                     u.friends, u.weibos_liked):
                 n.delete_instance()
             u.delete_instance()
             console.log(f'用户{u.username}已删除')
