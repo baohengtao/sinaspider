@@ -10,3 +10,4 @@ docs
 *cache*
 test.*
 .env
+*.pkl

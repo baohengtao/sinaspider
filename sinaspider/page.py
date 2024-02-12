@@ -16,12 +16,9 @@ class SinaBot:
     def __init__(self, art_login: bool = True) -> None:
         self.art_login = art_login
         self.sess = fetcher.sess_art if self.art_login else fetcher.sess_main
-        url = (
-            "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
-        s = '694a9ce0' if self.art_login else '537c037e'
-        js = fetcher.get(url, art_login=self.art_login, params={'s': s}).json()
-        screen_name = js['mineinfo']['screen_name']
-        console.log(f'init bot logined as {screen_name}')
+        screen_name = fetcher.login(self.art_login)
+        console.log(
+            f'init bot logined as {screen_name} (art_login: {art_login})')
 
     def set_remark(self, uid, remark):
         s = '0726b708' if self.art_login else 'c773e7e0'

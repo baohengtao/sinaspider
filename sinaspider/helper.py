@@ -1,5 +1,5 @@
 import itertools
-import os
+import pickle
 import random
 import re
 import time
@@ -11,45 +11,85 @@ from urllib.parse import unquote, urlparse
 import pendulum
 import requests
 from baseconv import base62
-from dotenv import load_dotenv
 from exiftool import ExifToolHelper
 from geopy.distance import geodesic
 from requests.exceptions import ConnectionError
+from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 
 
-def _get_session():
-    env_file = Path(__file__).with_name('.env')
-    load_dotenv(env_file)
-    if not (cookie_main := os.getenv('COOKIE_MAIN')):
-        raise ValueError(f'no main cookie found in {env_file}')
-    if not (cookie_art := os.getenv('COOKIE_ART')):
-        raise ValueError(f'no art cookie found in {env_file}')
-    user_agent = (
-        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/100.0.4896.75 Mobile Safari/537.36')
-    sess_main = requests.Session()
-    sess_main.headers['User-Agent'] = user_agent
-    sess_main.headers['Cookie'] = cookie_main
-    sess_art = requests.Session()
-    sess_art.headers['User-Agent'] = user_agent
-    sess_art.headers['Cookie'] = cookie_art
-    return sess_main, sess_art
-
-
-sess_main, sess_art = _get_session()
-
-
 class Fetcher:
     def __init__(self, art_login: bool = None) -> None:
-        self.sess_main, self.sess_art = _get_session()
+        self.sess_main, self.sess_art = self.get_session()
+        self.load_cookie()
         self._visit_count = 0
         self.visits = 0
         self._last_fetch = time.time()
         self._art_login = art_login
+
+    def get_session(self):
+        user_agent = (
+            'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/100.0.4896.75 Mobile Safari/537.36')
+        sess_main = requests.Session()
+        sess_art = requests.Session()
+        sess_main.headers['User-Agent'] = user_agent
+        sess_art.headers['User-Agent'] = user_agent
+        return sess_main, sess_art
+
+    def login(self, art_login: bool = None):
+
+        if art_login is None:
+            if (art_login := self.art_login) is None:
+                raise ValueError('art_login is not set')
+        sess = self.sess_art if art_login else self.sess_main
+        url = (
+            "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
+        s = '694a9ce0' if art_login else '537c037e'
+        while True:
+            js = sess.get(url, params={'s': s}).json()
+            if not js.get('errmsg'):
+                break
+            console.log(f'fetch {url} error: {js}', style='error')
+            console.log(
+                f'cookie expired, relogin...(art_login={art_login})',
+                style='error')
+            if not Confirm.ask('open browser to login?'):
+                raise ValueError('cookie expired')
+            self._set_cookie(sess)
+        screen_name = js['mineinfo']['screen_name']
+        return screen_name
+
+    def _set_cookie(self, sess: requests.Session):
+        from selenium import webdriver
+        browser = webdriver.Chrome()
+        browser.get('https://m.weibo.cn')
+        input('press enter after login...')
+        for cookie in browser.get_cookies():
+            for k in ['expiry', 'httpOnly', 'sameSite']:
+                cookie.pop(k, None)
+            sess.cookies.set(**cookie)
+        browser.quit()
+        self.save_cookie()
+
+    def save_cookie(self):
+        pkl = Path(__file__).with_name('cookie.pkl')
+        cookies = {'main': self.sess_main.cookies,
+                   'art': self.sess_art.cookies}
+        with pkl.open('wb') as f:
+            pickle.dump(cookies, f)
+
+    def load_cookie(self):
+        pkl = Path(__file__).with_name('cookie.pkl')
+        if not pkl.exists():
+            return
+        with pkl.open('rb') as f:
+            cookies = pickle.load(f)
+        self.sess_main.cookies = cookies['main']
+        self.sess_art.cookies = cookies['art']
 
     @property
     def art_login(self):
@@ -59,13 +99,9 @@ class Fetcher:
         if self._art_login == on:
             return
         self._art_login = on
-        url = (
-            "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
-        s = '694a9ce0' if self.art_login else '537c037e'
-        js = fetcher.get(url, params={'s': s}).json()
-        screen_name = js['mineinfo']['screen_name']
+        screen_name = self.login(art_login=on)
         console.log(
-            f'fetcher: current logined as {screen_name}',
+            f'fetcher: current logined as {screen_name} (is_art:{on})',
             style='green on dark_green')
 
     def get(self, url: str,

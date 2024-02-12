@@ -48,6 +48,7 @@ def save_log(func_name, download_dir):
     log_file = f"{func_name}_{time_format}.html"
     console.log(f'Saving log to {download_dir / log_file}')
     console.save_html(download_dir / log_file, theme=MONOKAI)
+    fetcher.save_cookie()
 
 
 class LogSaver:
