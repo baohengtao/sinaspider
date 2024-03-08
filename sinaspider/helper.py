@@ -297,6 +297,10 @@ def normalize_wb_id(wb_id: int | str) -> int:
 
 
 def encode_wb_id(id_: int) -> str:
+    try:
+        id_ = int(id_)
+    except ValueError:
+        return id_
     id_, bid = str(id_), ''
     while id_:
         id_, num = id_[:-7], id_[-7:]

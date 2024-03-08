@@ -9,7 +9,11 @@ from typer import Typer
 
 from sinaspider import console
 from sinaspider.exceptions import WeiboNotFoundError
-from sinaspider.helper import download_files, fetcher, normalize_wb_id
+from sinaspider.helper import (
+    download_files,
+    download_single_file,
+    encode_wb_id, fetcher
+)
 from sinaspider.model import Artist, User, UserConfig, Weibo, WeiboCache
 
 from .helper import default_path, logsaver_decorator
@@ -19,12 +23,23 @@ app = Typer()
 
 @app.command(help="fetch weibo by weibo_id")
 @logsaver_decorator
-def weibo(download_dir: Path = default_path, no_watermark: bool = False):
+def weibo(download_dir: Path = Path('.'), no_watermark: bool = False):
+    from photosinfo.model import PhotoExif
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
         fetcher.toggle_art(True)
-        if not (weibo_id := normalize_wb_id(weibo_id)):
+        try:
+            weibo = Weibo.from_id(weibo_id, update=True)
+        except WeiboNotFoundError:
+            console.log(
+                f'{weibo_id} not found, download from exifs...', style='error')
+            bid = encode_wb_id(weibo_id)
+            for e in PhotoExif.select().where(
+                    PhotoExif.exif['XMP:ImageUniqueID'] == bid):
+                exif = {k: v for k, v in e.exif.items() if k.startswith('XMP:')}
+                url = exif['XMP:URLUrl']
+                filename = exif['XMP:RawFileName']
+                download_single_file(url, download_dir, filename, exif)
             continue
-        weibo = Weibo.from_id(weibo_id, update=True)
         console.log(weibo)
         if medias := list(weibo.medias(download_dir, no_watermark=no_watermark)):
             console.log(

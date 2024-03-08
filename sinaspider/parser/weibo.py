@@ -160,7 +160,9 @@ def text_info(text) -> dict:
                 child.decompose()
     location, location_id = None, None
     if location_collector:
-        assert len(location_collector) == 1
+        if len(location_collector) > 1:
+            console.log(
+                f'multi location found: {location_collector}', style='warning')
         location, href = location_collector[-1]
         pattern1 = r'^http://weibo\.(?:com|cn)/p/100101([\w\.\_-]+)$'
         pattern2 = (r'^https://m\.weibo\.cn/p/index\?containerid='
@@ -168,6 +170,10 @@ def text_info(text) -> dict:
         if match := (re.match(pattern1, href)
                      or re.match(pattern2, href)):
             location_id = match.group(1)
+        elif 'poixy?lng' in href:
+            location = None
+            console.log(
+                f'location href is not parsed: {href}', style='warning')
         else:
             location_id = parse_loc_src(href)
     res = {
