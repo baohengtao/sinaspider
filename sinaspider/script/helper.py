@@ -1,4 +1,5 @@
 import sys
+import time
 from functools import wraps
 from inspect import signature
 from pathlib import Path
@@ -47,10 +48,17 @@ def save_log(func_name, download_dir: Path):
     if not download_dir.exists():
         console.log(f'{download_dir} not exists...', style='error')
         download_dir = Path.home()/'Pictures'
-    time_format = pendulum.now().format('YY-MM-DD_HHmmss')
-    log_file = f"{func_name}_{time_format}.html"
-    console.log(f'Saving log to {download_dir / log_file}')
-    console.save_html(download_dir / log_file, theme=MONOKAI)
+    while True:
+        time_format = pendulum.now().format('YY-MM-DD_HHmmss')
+        log_file = f"{func_name}_{time_format}.html"
+        log_path = download_dir / log_file
+        if log_path.exists():
+            time.sleep(1)
+        else:
+            break
+    console.log(f'Saving log to {log_path}')
+
+    console.save_html(log_path, theme=MONOKAI)
     fetcher.save_cookie()
 
 

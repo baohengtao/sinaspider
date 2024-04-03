@@ -107,7 +107,7 @@ class UserConfig(BaseModel):
                     break
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
-            if not insert_at or insert_at < pendulum.now().subtract(days=1):
+            if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
                 weibo_dict = WeiboCache.upsert(mblog).parse()
                 weibo_dict['username'] = self.username
                 weibo = Weibo.upsert(weibo_dict)

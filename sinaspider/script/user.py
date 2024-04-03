@@ -10,6 +10,7 @@ from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import fetcher, normalize_user_id
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
+from sinaspider.script.helper import LogSaver
 
 from .helper import default_path, logsaver_decorator
 
@@ -122,6 +123,7 @@ def user_loop(download_dir: Path = default_path,
               new_user: bool = Option(False, "--new-user", "-n"),
               following: bool = Option(False, "--following", "-f")):
     UserConfig.update_table()
+    logsaver = LogSaver('user_loop', download_dir)
     query = (UserConfig.select()
              .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
              .where(UserConfig.weibo_fetch_at.is_null(False)
@@ -170,6 +172,8 @@ def user_loop(download_dir: Path = default_path,
         else:
             config.fetch_weibo(download_dir)
         console.log(f'user {i}/{len(users)} completed!')
+        if new_user:
+            logsaver.save_log(save_manually=True)
         if stop_time and stop_time < pendulum.now():
             console.log(f'stop since {fetching_duration} minutes passed')
             break

@@ -177,10 +177,13 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
         assert len(annotations) <= 1
         if annotations:
             annotations = annotations[0]['place']
-            annotations = {
-                'title': annotations['title'],
-                'location_id': annotations['poiid'],
-            }
+            if annotations == {'spot_type': '0'}:
+                annotations = None
+            else:
+                annotations = {
+                    'title': annotations['title'],
+                    'location_id': annotations['poiid'],
+                }
 
         # merge annotations to tag_struct or geo
         if tag_struct:
