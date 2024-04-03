@@ -318,15 +318,22 @@ class Weibo(BaseModel):
         text = (self.text or '').lower().replace('night', '')
         has_ins = re.findall(r'(?<![a-z])(ins|ig|instagram)(?![a-z])', text)
         has_red = re.findall(r'小红书|📕', text)
-        if not (has_ins or has_red):
+        has_awe = re.findall(r'(?<![a-z])dy(?![a-z])|抖音', text)
+        if not (has_ins or has_red or has_awe):
             return False
-        girl = Girl.get_or_none(sina_id=self.user_id)
+        girl = (Girl.get_or_none(sina_id=self.user_id)
+                or Girl.get_or_none(username=self.username))
         if has_ins and not (girl and girl.inst_id):
             console.log('🍬 Find Instagram info',
                         style='bold green on dark_green')
         elif has_red and not (girl and girl.red_id):
             console.log('🍬 Find 小红书 info',
                         style='bold green on dark_green')
+        elif has_awe and not (girl and girl.awe_id):
+            console.log('🍬 Find 抖音 info',
+                        style='bold green on dark_green')
+        else:
+            return False
         return True
 
 
