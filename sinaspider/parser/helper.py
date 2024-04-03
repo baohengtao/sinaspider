@@ -187,10 +187,13 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
             assert annotations
             assert tag_struct['location_id'] == annotations['location_id']
             tag_struct |= annotations
-        elif geo:
-            assert annotations
+        elif geo and annotations:
             geo |= annotations
         else:
+            if geo and not annotations:
+                console.log(
+                    f'geo {geo} found but no annotation', style='error')
+
             locations.append(annotations or None)
             continue
 

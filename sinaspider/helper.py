@@ -76,18 +76,16 @@ class Fetcher:
         self.save_cookie()
 
     def save_cookie(self):
-        pkl = Path(__file__).with_name('cookie.pkl')
+        cookie_file = Path(__file__).with_name('cookie.pkl')
         cookies = {'main': self.sess_main.cookies,
                    'art': self.sess_art.cookies}
-        with pkl.open('wb') as f:
-            pickle.dump(cookies, f)
+        cookie_file.write_bytes(pickle.dumps(cookies))
 
     def load_cookie(self):
-        pkl = Path(__file__).with_name('cookie.pkl')
-        if not pkl.exists():
+        cookie_file = Path(__file__).with_name('cookie.pkl')
+        if not cookie_file.exists():
             return
-        with pkl.open('rb') as f:
-            cookies = pickle.load(f)
+        cookies = pickle.loads(cookie_file.read_bytes())
         self.sess_main.cookies = cookies['main']
         self.sess_art.cookies = cookies['art']
 

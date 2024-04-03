@@ -43,7 +43,10 @@ def logsaver_decorator(func):
     return wrapper
 
 
-def save_log(func_name, download_dir):
+def save_log(func_name, download_dir: Path):
+    if not download_dir.exists():
+        console.log(f'{download_dir} not exists...', style='error')
+        download_dir = Path.home()/'Pictures'
     time_format = pendulum.now().format('YY-MM-DD_HHmmss')
     log_file = f"{func_name}_{time_format}.html"
     console.log(f'Saving log to {download_dir / log_file}')

@@ -440,7 +440,7 @@ class Page:
         """判断用户是否设置微博半年内可见."""
         start, end = 1, 4
         while post_on := self._get_page_post_on(end):
-            if (days := post_on.diff().days) > 186:
+            if (days := post_on.diff().days) > 190:
                 return True
             start = end + 1
             end = min(max(end + 3, end * 180 // days), end * 2)
