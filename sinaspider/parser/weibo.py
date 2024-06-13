@@ -63,13 +63,12 @@ class WeiboParser:
                     'type': 'livephotos'}
                 pics = [pics[str(i)] for i in range(len(pics))]
             assert isinstance(pics, list)
+            pics = [pic for pic in pics if 'pid' in pic]
             assert [pic['pid'] for pic in pics] == weibo_info.pop('pic_ids')
             pics = [[pic['large']['url'], pic.get('videoSrc', '')]
                     for pic in pics]
             for p in pics:
                 if p[0].endswith('.gif'):
-                    if p[1] and ('https://video.weibo.com/media/play?fid=' not in p[1]):
-                        assert "://g.us.sinaimg.cn/" in p[1]
                     p[1] = ''
                 else:
                     p[1] = p[1].replace(

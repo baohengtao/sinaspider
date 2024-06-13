@@ -254,17 +254,17 @@ class Weibo(BaseModel):
         if url := self.video_url:
             assert not self.photos_extra
             assert ";" not in url
-            if (duration := self.video_duration) and duration > 600:
-                console.log(f"video_duration is {duration})...skipping...")
-            else:
-                ext = parse_url_extension(url) or '.mp4'
-                assert ext == '.mp4'
-                yield {
-                    "url": url,
-                    "filename": f"{prefix}{ext}",
-                    "xmp_info": self.gen_meta(url=url),
-                    "filepath": filepath,
-                }
+            # if (duration := self.video_duration) and duration > 600:
+            #     console.log(f"video_duration is {duration})...skipping...")
+            # else:
+            ext = parse_url_extension(url) or '.mp4'
+            assert ext == '.mp4'
+            yield {
+                "url": url,
+                "filename": f"{prefix}{ext}",
+                "xmp_info": self.gen_meta(url=url),
+                "filepath": filepath,
+            }
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
         if photos := ((self.photos or [])+(self.photos_edited or [])):

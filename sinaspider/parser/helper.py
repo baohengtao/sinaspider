@@ -8,7 +8,10 @@ class WeiboHist:
     def __init__(self, weibo_dict: dict,
                  hist_mblogs: list[dict]) -> None:
         self.weibo_dict = weibo_dict
-        self.hist_mblogs = hist_mblogs
+        self.hist_mblogs = [
+            h for h in hist_mblogs
+            if '抱歉，此微博已被删除。' not in h['text']
+        ]
 
     def parse(self) -> dict:
         if edit_at := self.hist_mblogs[-1].get('edit_at'):
@@ -181,7 +184,7 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
                 annotations = None
             else:
                 annotations = {
-                    'title': annotations['title'],
+                    'title': annotations.get('title'),
                     'location_id': annotations['poiid'],
                 }
 

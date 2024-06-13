@@ -425,6 +425,8 @@ class Page:
                   if card['card_type'] == 9]
         while mblogs:
             mblog = mblogs.pop()
+            if not mblogs:
+                break
             if '评论过的微博' in mblog.get('title', {}).get('text', ''):
                 continue
             if mblog['source'] in ['生日动态', '微博问答']:
@@ -440,7 +442,7 @@ class Page:
         """判断用户是否设置微博半年内可见."""
         start, end = 1, 4
         while post_on := self._get_page_post_on(end):
-            if (days := post_on.diff().days) > 190:
+            if (days := post_on.diff().days) > 210:
                 return True
             start = end + 1
             end = min(max(end + 3, end * 180 // days), end * 2)
@@ -454,7 +456,7 @@ class Page:
             console.log(f'checking page {mid}...to get visibility')
             if not (post_on := self._get_page_post_on(mid)):
                 end = mid - 1
-            elif post_on < pendulum.now().subtract(months=6, days=5):
+            elif post_on < pendulum.now().subtract(months=7):
                 return True
             else:
                 start = mid + 1

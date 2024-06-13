@@ -80,6 +80,7 @@ class UserConfig(BaseModel):
             console.log(f'{self.username} 当前显示全部微博', style='warning')
             console.log('reset weibo_cache_at to None', style='warning')
             self.weibo_cache_at = None
+            self.visible = visible
             self.save()
         else:
             raise ValueError(
@@ -107,12 +108,12 @@ class UserConfig(BaseModel):
                     break
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
+            if insert_at and skip_exist:
+                continue
             if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
                 weibo_dict = WeiboCache.upsert(mblog).parse()
                 weibo_dict['username'] = self.username
                 weibo = Weibo.upsert(weibo_dict)
-            elif skip_exist:
-                continue
             yield weibo
 
     def caching_weibo_for_new(self):
