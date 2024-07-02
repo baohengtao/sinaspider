@@ -150,7 +150,7 @@ class Weibo(BaseModel):
         cls.update(weibo_dict).where(cls.id == wid).execute()
         weibo = Weibo.get_by_id(wid)
         if weibo.has_media:
-            assert list(weibo.medias())
+            assert weibo.photos_extra or list(weibo.medias())
             weibo.update_location()
             loc_info = [weibo.location, weibo.location_id,
                         weibo.latitude, weibo.longitude]
@@ -527,6 +527,9 @@ def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
         all_cards += js['cards']
         if len(all_cards) >= edit_count + 1:
             assert len(all_cards) == edit_count + 1
+            break
+        elif not js['cards']:
+            assert len(all_cards) == edit_count
             break
     mblogs = []
     for card in all_cards[::-1]:

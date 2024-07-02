@@ -50,7 +50,7 @@ class Fetcher:
             "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
         s = '694a9ce0' if art_login else '537c037e'
         while True:
-            js = sess.get(url, params={'s': s}).json()
+            js = self.get(url, art_login, params={'s': s}).json()
             if not js.get('errmsg'):
                 break
             console.log(f'fetch {url} error: {js}', style='error')

@@ -204,6 +204,9 @@ class UserConfig(BaseModel):
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
         for weibo in self.get_homepage(since):
+            if weibo.photos_extra:
+                weibo.photos_extra = None
+                weibo.save()
 
             weibo_ids.append(weibo.id)
 
