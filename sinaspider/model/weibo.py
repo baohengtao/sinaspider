@@ -336,6 +336,19 @@ class Weibo(BaseModel):
             return False
         return True
 
+    def liked_by(self):
+        url = f'https://m.weibo.cn/api/attitudes/show?id={self.id}&page=%s'
+        friends = {f.friend_id: f for f in self.user.friends}
+        for page in itertools.count(1):
+            js = fetcher.get(url % page, art_login=self.user.following).json()
+            data = js.pop('data')
+            assert js == {'ok': 1, 'msg': '数据获取成功'}
+            if (users := data.pop('data')) is None:
+                break
+            for user in users:
+                if f := friends.get(user['user']['id']):
+                    yield f
+
 
 class Location(BaseModel):
     id = TextField(primary_key=True)
