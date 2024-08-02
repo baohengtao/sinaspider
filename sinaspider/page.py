@@ -442,7 +442,7 @@ class Page:
         """判断用户是否设置微博半年内可见."""
         start, end = 1, 4
         while post_on := self._get_page_post_on(end):
-            if (days := post_on.diff().days) > 210:
+            if (days := post_on.diff().days) > 360:
                 return True
             start = end + 1
             end = min(max(end + 3, end * 180 // days), end * 2)
@@ -456,7 +456,7 @@ class Page:
             console.log(f'checking page {mid}...to get visibility')
             if not (post_on := self._get_page_post_on(mid)):
                 end = mid - 1
-            elif post_on < pendulum.now().subtract(months=7):
+            elif post_on < pendulum.now().subtract(months=12):
                 return True
             else:
                 start = mid + 1

@@ -244,7 +244,7 @@ def download_single_file(
 
 
 def download_files(imgs: Iterable[dict]):
-    with ThreadPoolExecutor(max_workers=7) as pool:
+    with ThreadPoolExecutor(max_workers=15) as pool:
         futures = [pool.submit(download_single_file, **img) for img in imgs]
     for future in futures:
         future.result()

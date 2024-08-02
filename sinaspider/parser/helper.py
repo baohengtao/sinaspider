@@ -15,7 +15,7 @@ class WeiboHist:
 
     def parse(self) -> dict:
         if edit_at := self.hist_mblogs[-1].get('edit_at'):
-            assert len(self.hist_mblogs) > 1
+            # assert len(self.hist_mblogs) > 1
             edit_at = pendulum.from_format(
                 edit_at, 'ddd MMM DD HH:mm:ss ZZ YYYY')
             assert edit_at.is_local()

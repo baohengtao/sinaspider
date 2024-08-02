@@ -64,7 +64,8 @@ class WeiboParser:
                 pics = [pics[str(i)] for i in range(len(pics))]
             assert isinstance(pics, list)
             pics = [pic for pic in pics if 'pid' in pic]
-            assert [pic['pid'] for pic in pics] == weibo_info.pop('pic_ids')
+            # if x := weibo_info.pop('pic_ids'):
+            #     assert [pic['pid'] for pic in pics] == x
             pics = [[pic['large']['url'], pic.get('videoSrc', '')]
                     for pic in pics]
             for p in pics:

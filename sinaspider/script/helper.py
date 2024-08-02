@@ -63,8 +63,8 @@ def save_log(func_name, download_dir: Path):
 
 
 class LogSaver:
-    SAVE_LOG_FOR_COUNT = 100
-    SAVE_LOG_INTERVAL = 12  # hours
+    SAVE_LOG_FOR_COUNT = 200
+    SAVE_LOG_INTERVAL = 24  # hours
 
     def __init__(self, command: str, download_dir: Path):
         self.command = command
