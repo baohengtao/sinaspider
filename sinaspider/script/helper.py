@@ -72,8 +72,9 @@ class LogSaver:
         self.save_log_at = pendulum.now()
         self.save_visits_at = fetcher.visits
 
-    def save_log(self, save_manually=False):
-        pg_back.backup()
+    def save_log(self, save_manually=False, backup=True):
+        if backup:
+            pg_back.backup()
         fetch_count = fetcher.visits - self.save_visits_at
         log_hours = self.save_log_at.diff().in_hours()
         console.log(

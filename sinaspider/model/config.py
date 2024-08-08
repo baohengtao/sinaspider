@@ -190,12 +190,12 @@ class UserConfig(BaseModel):
         """
 
         if self.weibo_fetch_at is None:
-            user_root = 'User'
+            user_root = 'New'
         elif not self.photos_num:
             console.log(
                 f'seems {self.username} not processed, using User folder',
                 style='green on dark_green')
-            user_root = 'User'
+            user_root = 'New'
         else:
             user_root = 'Timeline'
         download_dir = download_dir / user_root / self.username

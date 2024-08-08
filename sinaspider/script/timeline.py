@@ -84,8 +84,8 @@ def timeline(days: float = Option(...),
                 config.fetch_liked(download_dir)
             else:
                 break
+        logsaver.save_log(backup=bool(WORKING_TIME))
         WORKING_TIME = 10
-        logsaver.save_log()
         next_start_time = start_time.add(hours=frequency)
         console.rule(
             f'waiting for next fetching at {next_start_time:%H:%M:%S}',
@@ -139,7 +139,7 @@ def timeline(days: float = Option(...),
 @app.command()
 def write_meta(download_dir: Path = default_path):
     from imgmeta.script import rename, write_meta
-    for folder in ['User', 'Timeline', 'Loop/Timeline']:
+    for folder in ['New', 'Timeline', 'Loop/Timeline']:
         ori = download_dir / folder
         if ori.exists():
             write_meta(ori)
