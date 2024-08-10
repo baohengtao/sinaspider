@@ -10,6 +10,7 @@ from playhouse.postgres_ext import (
     IntegerField, TextField
 )
 from playhouse.shortcuts import model_to_dict
+from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.helper import download_files, fetcher, parse_url_extension
@@ -83,6 +84,12 @@ class UserConfig(BaseModel):
             self.visible = visible
             self.save()
         else:
+            console.log(
+                f"conflict: {self.username}当前微博全部可见，请检查", style='error')
+            console.log(self)
+            if Confirm.ask('Reset weibo_fetch_at to None?'):
+                self.weibo_fetch_at = None
+                self.save()
             raise ValueError(
                 f"conflict: {self.username}当前微博全部可见，请检查")
         if not visible:
