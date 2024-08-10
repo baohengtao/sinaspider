@@ -771,7 +771,8 @@ class WeiboMissed(BaseModel):
                     'filesize', 'date', 'date_added',
                     'live_photo', 'with_place', 'ismovie',
                     'favorite', 'album', 'title', 'description', 'filename',
-                    'series_number', 'image_creator_name', 'filepath', 'edited'
+                    'series_number', 'image_creator_name', 'filepath', 'edited',
+                    'img_url',
                     ]
         for k in pop_keys:
             photo_dict.pop(k)

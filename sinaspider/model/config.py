@@ -188,16 +188,10 @@ class UserConfig(BaseModel):
         Save weibo to database and return media info
         :return: generator of medias to downloads
         """
-
-        if self.weibo_fetch_at is None:
-            user_root = 'New'
-        elif not self.photos_num:
-            console.log(
-                f'seems {self.username} not processed, using User folder',
-                style='green on dark_green')
-            user_root = 'New'
-        else:
-            user_root = 'Timeline'
+        user_root = 'Timeline' if self.weibo_fetch_at and self.photos_num else 'NewInit'
+        if user_root == 'NewInit' and self.weibo_fetch_at:
+            if not (download_dir / user_root / self.username).exists():
+                user_root = 'New'
         download_dir = download_dir / user_root / self.username
 
         since = self.weibo_fetch_at or pendulum.from_timestamp(0)
