@@ -23,7 +23,6 @@ from sinaspider.exceptions import UserNotFoundError
 class Fetcher:
     def __init__(self, art_login: bool = None) -> None:
         self.sess_main, self.sess_art = self.get_session()
-        self.load_cookie()
         self._visit_count = 0
         self.visits = 0
         self._last_fetch = time.time()
@@ -38,6 +37,12 @@ class Fetcher:
         sess_art = requests.Session()
         sess_main.headers['User-Agent'] = user_agent
         sess_art.headers['User-Agent'] = user_agent
+
+        cookie_file = Path(__file__).with_name('cookie.pkl')
+        if cookie_file.exists():
+            cookies = pickle.loads(cookie_file.read_bytes())
+            sess_main.cookies = cookies['main']
+            sess_art.cookies = cookies['art']
         return sess_main, sess_art
 
     def login(self, art_login: bool = None):
@@ -80,14 +85,6 @@ class Fetcher:
         cookies = {'main': self.sess_main.cookies,
                    'art': self.sess_art.cookies}
         cookie_file.write_bytes(pickle.dumps(cookies))
-
-    def load_cookie(self):
-        cookie_file = Path(__file__).with_name('cookie.pkl')
-        if not cookie_file.exists():
-            return
-        cookies = pickle.loads(cookie_file.read_bytes())
-        self.sess_main.cookies = cookies['main']
-        self.sess_art.cookies = cookies['art']
 
     @property
     def art_login(self):
