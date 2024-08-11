@@ -99,9 +99,9 @@ class Fetcher:
             f'fetcher: current logined as {screen_name} (is_art:{on})',
             style='green on dark_green')
 
-    def get(self, url: str,
-            art_login: bool = None,
-            params=None) -> requests.Response:
+    def request(self, method, url: str,
+                art_login: bool = None,
+                **kwargs) -> requests.Response:
         # write with session and pause
         if art_login is None:
             if self.art_login is None:
@@ -114,7 +114,7 @@ class Fetcher:
         s = self.sess_art if art_login else self.sess_main
         while True:
             try:
-                r = s.get(url, params=params)
+                r = s.request(method, url, **kwargs)
                 r.raise_for_status()
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.HTTPError) as e:
@@ -126,6 +126,14 @@ class Fetcher:
             else:
                 assert r.status_code == 200
                 return r
+
+    def get(self, url: str, art_login: bool = None,
+            **kwargs) -> requests.Response:
+        return self.request('get', url, art_login, **kwargs)
+
+    def post(self, url: str, art_login: bool = None,
+             **kwargs) -> requests.Response:
+        return self.request('post', url, art_login, **kwargs)
 
     def _pause(self):
         self.visits += 1

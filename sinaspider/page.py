@@ -15,7 +15,6 @@ from sinaspider.helper import fetcher
 class SinaBot:
     def __init__(self, art_login: bool = True) -> None:
         self.art_login = art_login
-        self.sess = fetcher.sess_art if self.art_login else fetcher.sess_main
         screen_name = fetcher.login(self.art_login)
         console.log(
             f'init bot logined as {screen_name} (art_login: {art_login})')
@@ -29,7 +28,7 @@ class SinaBot:
             "c": "weicoabroad",
             "s": s,
         }
-        response = self.sess.post(url,  data=data)
+        response = fetcher.post(url,  data=data, art_login=self.art_login)
         response.raise_for_status()
         js = response.json()
         if js.get('errormsg'):
@@ -62,7 +61,7 @@ class SinaBot:
             "s": "99312000",
             "uid": uid
         }
-        r = self.sess.post(url, data=data)
+        r = fetcher.post(url, data=data, art_login=self.art_login)
         r.raise_for_status()
         js = r.json()
         if (errmsg := js.get('errmsg')) == '该用户不存在':
@@ -86,7 +85,7 @@ class SinaBot:
             's': s,
             'uid': uid,
         }
-        response = self.sess.post(url,  data=data)
+        response = fetcher.post(url,  data=data, art_login=self.art_login)
         response.raise_for_status()
         js = response.json()
         if js.get('errmsg') == 'not followed':
