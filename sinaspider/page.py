@@ -5,7 +5,6 @@ from time import sleep
 from typing import Iterator
 
 import pendulum
-from requests import JSONDecodeError
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
@@ -303,17 +302,7 @@ class Page:
                     f'feature=1&c=weicoabroad&from=12CC293010&i=f185221&s={s}')
         while True:
             url = f'{seed}&max_id={next_cursor}' if next_cursor else seed
-            while True:
-                r = fetcher.get(url)
-                try:
-                    data = r.json()
-                except JSONDecodeError:
-                    console.log(
-                        f'{r.url} json decode error', style='error')
-                    console.log('sleeping 60 seconds')
-                    sleep(60)
-                else:
-                    break
+            data = fetcher.get(url).json()
             next_cursor = data['next_cursor']
             created_at = None
             for status in data['statuses']:

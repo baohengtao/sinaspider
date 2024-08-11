@@ -1,5 +1,6 @@
 import itertools
-import pickle
+import json
+import logging
 import random
 import re
 import time
@@ -8,16 +9,18 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import unquote, urlparse
 
+import httpx
 import pendulum
-import requests
 from baseconv import base62
 from exiftool import ExifToolHelper
 from geopy.distance import geodesic
-from requests.exceptions import ConnectionError
 from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
+
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.disabled = True
 
 
 class Fetcher:
@@ -33,16 +36,15 @@ class Fetcher:
             'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) '
             'AppleWebKit/537.36 (KHTML, like Gecko) '
             'Chrome/100.0.4896.75 Mobile Safari/537.36')
-        sess_main = requests.Session()
-        sess_art = requests.Session()
-        sess_main.headers['User-Agent'] = user_agent
-        sess_art.headers['User-Agent'] = user_agent
+        headers = {'User-Agent': user_agent}
 
-        cookie_file = Path(__file__).with_name('cookie.pkl')
+        cookie_file = Path(__file__).with_name('cookie.json')
         if cookie_file.exists():
-            cookies = pickle.loads(cookie_file.read_bytes())
-            sess_main.cookies = cookies['main']
-            sess_art.cookies = cookies['art']
+            cookies = json.loads(cookie_file.read_text())
+        else:
+            cookies = {}
+        sess_main = httpx.Client(headers=headers, cookies=cookies.get('main'))
+        sess_art = httpx.Client(headers=headers, cookies=cookies.get('art'))
         return sess_main, sess_art
 
     def login(self, art_login: bool = None):
@@ -68,23 +70,24 @@ class Fetcher:
         screen_name = js['mineinfo']['screen_name']
         return screen_name
 
-    def _set_cookie(self, sess: requests.Session):
+    def _set_cookie(self, sess: httpx.Client):
         from selenium import webdriver
         browser = webdriver.Chrome()
         browser.get('https://m.weibo.cn')
         input('press enter after login...')
         for cookie in browser.get_cookies():
-            for k in ['expiry', 'httpOnly', 'sameSite']:
+            for k in ['expiry', 'httpOnly', 'sameSite', 'secure']:
                 cookie.pop(k, None)
             sess.cookies.set(**cookie)
         browser.quit()
         self.save_cookie()
 
     def save_cookie(self):
-        cookie_file = Path(__file__).with_name('cookie.pkl')
-        cookies = {'main': self.sess_main.cookies,
-                   'art': self.sess_art.cookies}
-        cookie_file.write_bytes(pickle.dumps(cookies))
+        cookie_file = Path(__file__).with_name('cookie.json')
+        cookies = dict(
+            main={c.name: c.value for c in self.sess_main.cookies.jar},
+            art={c.name: c.value for c in self.sess_art.cookies.jar})
+        cookie_file.write_text(json.dumps(cookies))
 
     @property
     def art_login(self):
@@ -101,7 +104,7 @@ class Fetcher:
 
     def request(self, method, url: str,
                 art_login: bool = None,
-                **kwargs) -> requests.Response:
+                **kwargs) -> httpx.Response:
         # write with session and pause
         if art_login is None:
             if self.art_login is None:
@@ -116,8 +119,7 @@ class Fetcher:
             try:
                 r = s.request(method, url, **kwargs)
                 r.raise_for_status()
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.HTTPError) as e:
+            except httpx.HTTPError as e:
                 period = 3600 if '/feed/friends' in url else 60
                 console.log(
                     f"{e}: Sleepping {period} seconds and "
@@ -128,11 +130,11 @@ class Fetcher:
                 return r
 
     def get(self, url: str, art_login: bool = None,
-            **kwargs) -> requests.Response:
+            **kwargs) -> httpx.Response:
         return self.request('get', url, art_login, **kwargs)
 
     def post(self, url: str, art_login: bool = None,
-             **kwargs) -> requests.Response:
+             **kwargs) -> httpx.Response:
         return self.request('post', url, art_login, **kwargs)
 
     def _pause(self):
@@ -171,6 +173,7 @@ class Fetcher:
 
 
 fetcher = Fetcher()
+client = httpx.Client(follow_redirects=True)
 # fetcher.toggle_art(True)
 
 
@@ -212,7 +215,7 @@ def download_single_file(
             return
     while True:
         try:
-            r = requests.get(url)
+            r = client.get(url)
         except ConnectionError as e:
             period = 60
             console.log(
@@ -221,7 +224,7 @@ def download_single_file(
             time.sleep(period)
             continue
 
-        if r.status_code in [404, 302]:
+        if r.status_code == 404:
             console.log(
                 f"{url}, {xmp_info}, {r.status_code}", style="error")
             return
@@ -231,7 +234,7 @@ def download_single_file(
             console.log(f'retrying download for {url}...')
             continue
 
-        if urlparse(r.url).path == '/images/default_d_w_large.gif':
+        if r.url.path == '/images/default_d_w_large.gif':
             img = img.with_suffix('.gif')
 
         if int(r.headers['Content-Length']) != len(r.content):

@@ -10,4 +10,4 @@ docs
 *cache*
 test.*
 .env
-*.pkl
+cookie.json
