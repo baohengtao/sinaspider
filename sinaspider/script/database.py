@@ -165,7 +165,7 @@ async def _get_update():
 
 
 @app.command()
-def database_clean():
+def clean_database():
     for u in User:
         if (u.artist and u.artist[0].photos_num) or u.config:
             continue
@@ -173,8 +173,8 @@ def database_clean():
         for n in itertools.chain(u.weibos, u.config, u.artist):
             console.log(n, '\n')
         if Confirm.ask(f'是否删除{u.username}({u.id})？', default=False):
-            for n in itertools.chain(u.weibos, u.config, u.artist,
-                                     u.friends, u.weibos_liked):
+            for n in itertools.chain(u.weibos, u.config, u.artist, u.friends,
+                                     u.weibos_liked, u.weibos_missed):
                 n.delete_instance()
             u.delete_instance()
             console.log(f'用户{u.username}已删除')
