@@ -9,16 +9,21 @@ from sinaspider import console
 from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 
-from .helper import LogSaver, default_path, logsaver_decorator, print_command
+from .helper import (
+    LogSaver, default_path,
+    logsaver_decorator,
+    print_command, run_async
+)
 
 app = Typer()
 
 
 @app.command()
 @logsaver_decorator
-def timeline(days: float = Option(...),
-             frequency: float = 1,
-             download_dir: Path = default_path):
+@run_async
+async def timeline(days: float = Option(...),
+                   frequency: float = 1,
+                   download_dir: Path = default_path):
     """
     Fetch timeline for users in database
     days: days to fetch
@@ -33,31 +38,32 @@ def timeline(days: float = Option(...),
              .where(~UserConfig.blocked)
              .order_by(UserConfig.weibo_fetch_at, UserConfig.weibo_cache_at)
              )
-    bot = SinaBot(art_login=False)
-    bot_art = SinaBot(art_login=True)
+    bot = await SinaBot.create(art_login=False)
+    bot_art = await SinaBot.create(art_login=True)
 
     since = pendulum.now().subtract(days=days)
 
     WORKING_TIME = 0  # minutes
     logsaver = LogSaver('timeline', download_dir)
+    config: UserConfig
     while True:
         print_command()
         UserConfig.update_table()
         start_time = pendulum.now()
         console.log(f'Fetching timeline since {since}...')
 
-        bot_art.get_timeline(download_dir=download_dir, since=since,
-                             friend_circle=False)
-        bot.get_timeline(download_dir=download_dir,
-                         since=since, friend_circle=True)
+        await bot_art.get_timeline(download_dir=download_dir, since=since,
+                                   friend_circle=False)
+        await bot.get_timeline(download_dir=download_dir,
+                               since=since, friend_circle=True)
         since = start_time
 
         if start_time.diff().in_minutes() < WORKING_TIME:
             console.log('Looping user', style='notice')
             for config in query.where(UserConfig.following)[:2]:
-                config.fetch_weibo(download_dir/'Loop')
+                await config.fetch_weibo(download_dir/'Loop')
             for config in query.where(~UserConfig.following)[:1]:
-                config.fetch_weibo(download_dir/'Loop')
+                await config.fetch_weibo(download_dir/'Loop')
 
             for config in (UserConfig.select()
                            .where(UserConfig.liked_fetch)
@@ -69,7 +75,7 @@ def timeline(days: float = Option(...),
                 console.log(
                     f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
                     f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
-                config.fetch_liked(download_dir)
+                await config.fetch_liked(download_dir)
 
         while start_time.diff().in_minutes() < WORKING_TIME:
             c1 = UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None)
@@ -77,11 +83,11 @@ def timeline(days: float = Option(...),
                 weibo_cache_at=None, weibo_fetch_at=None)
             if config := (c1 or c2):
                 assert config.following
-                config = config.from_id(config.user_id)
-                config.fetch_weibo(download_dir)
+                config = await config.from_id(config.user_id)
+                await config.fetch_weibo(download_dir)
             elif config := UserConfig.get_or_none(liked_fetch=True,
                                                   liked_fetch_at=None):
-                config.fetch_liked(download_dir)
+                await config.fetch_liked(download_dir)
             else:
                 break
         logsaver.save_log(backup=bool(WORKING_TIME))

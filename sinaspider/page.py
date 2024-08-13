@@ -1,8 +1,8 @@
+import asyncio
 import itertools
 import re
 from pathlib import Path
-from time import sleep
-from typing import Iterator
+from typing import AsyncIterator, Self
 
 import pendulum
 
@@ -12,13 +12,18 @@ from sinaspider.helper import fetcher
 
 
 class SinaBot:
-    def __init__(self, art_login: bool = True) -> None:
-        self.art_login = art_login
-        screen_name = fetcher.login(self.art_login)
+    @classmethod
+    async def create(cls, art_login: bool = True) -> Self:
+        bot = cls(art_login)
+        screen_name = await fetcher.login(bot.art_login)
         console.log(
             f'init bot logined as {screen_name} (art_login: {art_login})')
+        return bot
 
-    def set_remark(self, uid, remark):
+    def __init__(self, art_login: bool = True) -> None:
+        self.art_login = art_login
+
+    async def set_remark(self, uid, remark):
         s = '0726b708' if self.art_login else 'c773e7e0'
         url = "https://api.weibo.cn/2/friendships/remark/update"
         data = {
@@ -27,32 +32,32 @@ class SinaBot:
             "c": "weicoabroad",
             "s": s,
         }
-        response = fetcher.post(url,  data=data, art_login=self.art_login)
+        response = await fetcher.post(url,  data=data, art_login=self.art_login)
         response.raise_for_status()
         js = response.json()
         if js.get('errormsg'):
             raise ValueError(js)
 
-    def set_special_follow(self, uid, special_follow: bool):
+    async def set_special_follow(self, uid, special_follow: bool):
         s = "4fff7801"  # for art_login
         cmd = 'create' if special_follow else 'destroy'
         url = (f"https://api.weibo.cn/2/friendships/special_attention_{cmd}?"
                f"from=10DA199020&c=iphone&s={s}&uid={uid}"
                )
-        r = fetcher.get(url, art_login=self.art_login)
-        if r.json().get('errmsg') == 'not followed':
+        js = await fetcher.get_json(url, art_login=self.art_login)
+        if js.get('errmsg') == 'not followed':
             console.log(
                 f'https://m.weibo.cn/u/{uid} not followed, '
                 'adding to special following failed', style='error')
             return
-        assert r.json()['result'] is True
+        assert js['result'] is True
         # url = ('https://m.weibo.cn/api/container/getIndex?'
         #        f'containerid=100505{uid}')
         # js = fetcher.get(url, art_login=self.art_login).json()
         # user_info = js['data']['userInfo']
         # assert user_info['special_follow'] is True
 
-    def follow(self, uid):
+    async def follow(self, uid):
         url = "https://api.weibo.cn/2/friendships/create"
         data = {
             "c": "weicoabroad",
@@ -70,7 +75,7 @@ class SinaBot:
             raise ValueError(js)
         url = ('https://m.weibo.cn/api/container/getIndex?'
                f'containerid=100505{uid}')
-        js = fetcher.get(url, art_login=self.art_login).json()
+        js = await fetcher.get_json(url, art_login=self.art_login)
         user_info = js['data']['userInfo']
         assert user_info['following'] is True
         user = f'{user_info["screen_name"]} (https://weibo.com/u/{uid}) '
@@ -94,8 +99,10 @@ class SinaBot:
             console.log(
                 f'{js["screen_name"]} (https://weibo.com/u/{uid}) unfollowed')
 
-    def get_following_list(self, pages=None,
-                           special_following=False) -> Iterator[dict]:
+    async def get_following_list(
+            self, pages=None,
+            max_user=None,
+            special_following=False) -> AsyncIterator[dict]:
         s = '0726b708' if self.art_login else 'c773e7e0'
         if special_following:
             gid = '4955723680713860' if self.art_login else '4268552720689336'
@@ -108,8 +115,8 @@ class SinaBot:
         if pages is None:
             pages = itertools.count(start=1)
         for page in pages:
-            r = fetcher.get(url % page, art_login=self.art_login)
-            if (cards := r.json()['cards']) is None:
+            js = await fetcher.get_json(url % page, art_login=self.art_login)
+            if (cards := js['cards']) is None:
                 return
             if page == 1:
                 if cards[-1].get('name') == '没有更多内容了':
@@ -135,15 +142,16 @@ class SinaBot:
                 user = {k: user[k] for k in keys}
                 yield user
                 cnt += 1
+            if max_user and cnt >= max_user:
+                break
 
-    def get_friends_list(self):
+    async def get_friends_list(self):
         s = 'c773e7e0'  # if self.art_login is False
         url = ('https://api.weibo.cn/2/friendships/bilateral?c=weicoabroad'
                f'&real_relationships=1&s={s}&trim_status=1&page=%s')
         cnt = 0
         for page in itertools.count(start=1):
-            r = fetcher.get(url % page, art_login=self.art_login)
-            js = r.json()
+            js = await fetcher.get_json(url % page, art_login=self.art_login)
             if not (users := js['users']):
                 console.log(f'{cnt} friends fetched')
                 break
@@ -153,12 +161,12 @@ class SinaBot:
                 yield {k: user[k] for k in keys}
                 cnt += 1
 
-    def get_timeline(self, download_dir: Path,
-                     since: pendulum.DateTime,
-                     friend_circle=False):
+    async def get_timeline(self, download_dir: Path,
+                           since: pendulum.DateTime,
+                           friend_circle=False):
         from sinaspider.model import UserConfig
-        fetcher.toggle_art(self.art_login)
-        for status in Page.timeline(
+        await fetcher.toggle_art(self.art_login)
+        async for status in Page.timeline(
                 since=since, friend_circle=friend_circle):
             uid = status['user']['id']
             if not (uc := UserConfig.get_or_none(user_id=uid)):
@@ -171,9 +179,9 @@ class SinaBot:
             if (uc.weibo_fetch is not False) and fetch_at < created_at:
                 uc: UserConfig
                 for _ in range(3):
-                    uc = UserConfig.from_id(uid)
+                    uc = await UserConfig.from_id(uid)
                     if uc.following == self.art_login:
-                        uc.fetch_weibo(download_dir)
+                        await uc.fetch_weibo(download_dir)
                         break
                 else:
                     raise ValueError(f'{uc.username} not following')
@@ -189,7 +197,7 @@ class Page:
     def __init__(self, user_id: int) -> None:
         self.id = int(user_id)
 
-    def homepage(self, start_page: int = 1) -> Iterator[dict]:
+    async def homepage(self, start_page: int = 1) -> AsyncIterator[dict]:
         """
         Fetch user's homepage weibo.
 
@@ -201,7 +209,7 @@ class Page:
                f'?containerid=107603{self.id}&page=%s')
         for page in itertools.count(start=max(start_page, 1)):
             for try_time in itertools.count(start=1):
-                if (js := fetcher.get(url % page).json())['ok']:
+                if (js := await fetcher.get_json(url % page))['ok']:
                     break
                 if js['msg'] == '请求过于频繁，歇歇吧':
                     raise ConnectionError(js['msg'])
@@ -286,7 +294,7 @@ class Page:
     #                 f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
     @staticmethod
-    def timeline(since: pendulum.DateTime, friend_circle=False):
+    async def timeline(since: pendulum.DateTime, friend_circle=False):
         """Get status on my timeline."""
         next_cursor = None
         # seed = 'https://m.weibo.cn/feed/friends'
@@ -302,7 +310,7 @@ class Page:
                     f'feature=1&c=weicoabroad&from=12CC293010&i=f185221&s={s}')
         while True:
             url = f'{seed}&max_id={next_cursor}' if next_cursor else seed
-            data = fetcher.get(url).json()
+            data = await fetcher.get_json(url)
             next_cursor = data['next_cursor']
             created_at = None
             for status in data['statuses']:
@@ -322,16 +330,16 @@ class Page:
                     yield status
             console.log(f'created_at:{created_at}')
 
-    def _liked_card(self) -> Iterator[dict]:
+    async def _liked_card(self) -> AsyncIterator[dict]:
         if fetcher.art_login is None:
-            fetcher.toggle_art(True)
+            await fetcher.toggle_art(True)
         s = '0726b708' if fetcher.art_login else 'c773e7e0'
         url = ('https://api.weibo.cn/2/cardlist?c=weicoabroad&containerid='
                f'230869{self.id}-_mix-_like-pic&page=%s&s={s}')
         for page in itertools.count(start=1):
             console.log(f'Fetching liked weibo page {page}...')
             while True:
-                if (r := fetcher.get(url % page)).status_code != 200:
+                if (r := await fetcher.get(url % page)).status_code != 200:
                     console.log(
                         f'{r.url} get status code {r.status_code}...',
                         style='warning')
@@ -343,18 +351,18 @@ class Page:
                 else:
                     console.log(f'{r.url} get js error: {js}', style='error')
                 console.log('sleeping 60 seconds')
-                sleep(60)
+                await asyncio.sleep(60)
 
             if (cards := js['cards']) is None:
                 console.log(
                     f"js[cards] is None for [link={r.url}]r.url[/link]",
                     style='warning')
                 break
-            mblogs = _yield_from_cards(cards)
-            yield from mblogs
+            for mblog in _yield_from_cards(cards):
+                yield mblog
 
-    def liked(self) -> Iterator[dict]:
-        for weibo_info in self._liked_card():
+    async def liked(self) -> AsyncIterator[dict]:
+        async for weibo_info in self._liked_card():
             if weibo_info.get('deleted') == '1':
                 continue
             if weibo_info['pic_num'] == 0:
@@ -365,18 +373,18 @@ class Page:
 
             yield weibo_info
 
-    def friends(self, parse=True):
+    async def friends(self, parse=True):
         """Get user's friends."""
         pattern = (r'(https://tvax?\d\.sinaimg\.cn)/'
                    r'(?:crop\.\d+\.\d+\.\d+\.\d+\.\d+\/)?(.*?)\?.*$')
         friend_count = 0
         if fetcher.art_login is None:
-            fetcher.toggle_art(True)
+            await fetcher.toggle_art(True)
         s = '0726b708' if fetcher.art_login else 'c773e7e0'
         for page in itertools.count(start=1):
             url = ("https://api.weibo.cn/2/friendships/bilateral?"
                    f"c=weicoabroad&page={page}&s={s}&uid={self.id}")
-            js = fetcher.get(url).json()
+            js = await fetcher.get_json(url)
             if not (users := js['users']):
                 console.log(
                     f"{friend_count} friends fetched "
@@ -404,10 +412,10 @@ class Page:
                 yield info if parse else raw
                 friend_count += 1
 
-    def _get_page_post_on(self, page: int):
+    async def _get_page_post_on(self, page: int):
         url = ('https://m.weibo.cn/api/container/getIndex'
                f'?containerid=107603{self.id}&page=%s')
-        if not (js := fetcher.get(url % page).json())['ok']:
+        if not (js := await fetcher.get_json(url % page))['ok']:
             return
         mblogs = [card['mblog'] for card in js['data']['cards']
                   if card['card_type'] == 9]
@@ -424,12 +432,12 @@ class Page:
             assert post_on.is_local()
             return post_on
         else:
-            assert not fetcher.get(url % (page + 1)).json()['ok']
+            assert not (await fetcher.get_json(url % (page + 1)))['ok']
 
-    def get_visibility(self) -> bool:
+    async def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""
         start, end = 1, 4
-        while post_on := self._get_page_post_on(end):
+        while post_on := await self._get_page_post_on(end):
             if (days := post_on.diff().days) > 360:
                 return True
             start = end + 1
@@ -442,7 +450,7 @@ class Page:
         while start <= end:
             mid = (start + end) // 2
             console.log(f'checking page {mid}...to get visibility')
-            if not (post_on := self._get_page_post_on(mid)):
+            if not (post_on := await self._get_page_post_on(mid)):
                 end = mid - 1
             elif post_on < pendulum.now().subtract(months=12):
                 return True

@@ -66,9 +66,9 @@ class User(BaseModel):
         table_name = "user"
 
     @classmethod
-    def from_id(cls, user_id: int, update=False) -> Self:
+    async def from_id(cls, user_id: int, update=False) -> Self:
         if update or not cls.get_or_none(id=user_id):
-            user_dict = UserParser(user_id).parse()
+            user_dict = await UserParser(user_id).parse()
             if followed_by := user_dict.pop('followed_by', None):
                 if query := cls.select().where(cls.id.in_(followed_by)):
                     user_dict['followed_by'] = sorted(

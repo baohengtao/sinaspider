@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import time
 from functools import wraps
@@ -92,3 +93,14 @@ class LogSaver:
         save_log(self.command, self.download_dir)
         self.save_log_at = pendulum.now()
         self.save_visits_at = fetcher.visits
+
+
+def run_async(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        async def coro_wrapper():
+            return await func(*args, **kwargs)
+
+        return asyncio.run(coro_wrapper())
+
+    return wrapper

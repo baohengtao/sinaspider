@@ -16,19 +16,20 @@ from sinaspider.helper import (
 )
 from sinaspider.model import Artist, User, UserConfig, Weibo, WeiboCache
 
-from .helper import default_path, logsaver_decorator
+from .helper import default_path, logsaver_decorator, run_async
 
 app = Typer()
 
 
 @app.command(help="fetch weibo by weibo_id")
 @logsaver_decorator
-def weibo(download_dir: Path = Path('.'), no_watermark: bool = False):
+@run_async
+async def weibo(download_dir: Path = Path('.'), no_watermark: bool = False):
     from photosinfo.model import PhotoExif
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
-        fetcher.toggle_art(True)
+        await fetcher.toggle_art(True)
         try:
-            weibo = Weibo.from_id(weibo_id, update=True)
+            weibo = await Weibo.from_id(weibo_id, update=True)
         except WeiboNotFoundError:
             console.log(
                 f'{weibo_id} not found, download from exifs...', style='error')
@@ -38,18 +39,19 @@ def weibo(download_dir: Path = Path('.'), no_watermark: bool = False):
                 exif = {k: v for k, v in e.exif.items() if k.startswith('XMP:')}
                 url = exif['XMP:URLUrl']
                 filename = exif['XMP:RawFileName']
-                download_single_file(url, download_dir, filename, exif)
+                await download_single_file(url, download_dir, filename, exif)
             continue
         console.log(weibo)
         if medias := list(weibo.medias(download_dir, no_watermark=no_watermark)):
             console.log(
                 f'Downloading {len(medias)} files to dir {download_dir}')
-            download_files(medias)
+            await download_files(medias)
 
 
 @app.command()
 @logsaver_decorator
-def update_missing():
+@run_async
+async def update_missing():
     from sinaspider.model import WeiboMissed
 
     from .helper import LogSaver
@@ -57,7 +59,7 @@ def update_missing():
     WeiboMissed.add_missing()
     WeiboMissed.add_missing_from_weiboliked()
     while True:
-        WeiboMissed.update_missing()
+        await WeiboMissed.update_missing()
         logsaver.save_log()
 
 
@@ -86,12 +88,13 @@ def update_location():
 
 @app.command()
 @logsaver_decorator
-def update_weibo(download_dir: Path = default_path):
+@run_async
+async def update_weibo(download_dir: Path = default_path):
 
-    for weibo in _get_update():
-        fetcher.toggle_art(weibo.user.following)
+    async for weibo in _get_update():
+        await fetcher.toggle_art(weibo.user.following)
         try:
-            weibo_dict = WeiboCache(weibo.id).parse()
+            weibo_dict = await WeiboCache(weibo.id).parse()
         except WeiboNotFoundError as e:
             weibo.try_update_at = pendulum.now()
             weibo.try_update_msg = str(e).removesuffix(
@@ -101,13 +104,13 @@ def update_weibo(download_dir: Path = default_path):
                 f"{weibo.username} ({weibo.url}): :disappointed_relieved: {e}")
             continue
         try:
-            Weibo.upsert(weibo_dict)
+            await Weibo.upsert(weibo_dict)
         except ValueError as e:
             console.log(f'value error: {e}', style='error')
             console.log(weibo)
         else:
-            weibo = Weibo.from_id(weibo.id)
-            download_files(weibo.medias(
+            weibo = await Weibo.from_id(weibo.id)
+            await download_files(weibo.medias(
                 download_dir/'fix_location'/weibo.username, extra=True))
             weibo.photos_extra = None
             weibo.save()
@@ -119,7 +122,7 @@ def update_weibo(download_dir: Path = default_path):
             )
 
 
-def _get_update():
+async def _get_update():
     from sinaspider.page import Page
     assert not Weibo.select().where(Weibo.photos_extra.is_null(False))
     photos = (Photo.select()
@@ -144,7 +147,7 @@ def _get_update():
     for i, weibo in enumerate(other_weibo, start=1):
         console.log(f'✨ processing {i} / {len(query)}')
         if (uid := weibo.user_id) not in uid2visible:
-            uid2visible[uid] = (visible := Page(uid).get_visibility())
+            uid2visible[uid] = visible = await Page(uid).get_visibility()
             if visible:
                 if config := UserConfig.get_or_none(user_id=uid):
                     if not config.visible:

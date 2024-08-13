@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterator, Self
+from typing import AsyncIterator, Self
 
 import pendulum
 from playhouse.postgres_ext import (
@@ -56,8 +56,8 @@ class UserConfig(BaseModel):
         self._liked_list: list[dict] = []
 
     @classmethod
-    def from_id(cls, user_id: int) -> Self:
-        user = User.from_id(user_id, update=True)
+    async def from_id(cls, user_id: int) -> Self:
+        user = await User.from_id(user_id, update=True)
         user_dict = model_to_dict(user)
         user_dict['user_id'] = user_dict.pop('id')
         to_insert = {k: v for k, v in user_dict.items()
@@ -68,12 +68,12 @@ class UserConfig(BaseModel):
             cls.insert(to_insert).execute()
         return cls.get(user_id=user_id)
 
-    def set_visibility(self) -> bool:
+    async def set_visibility(self) -> bool:
         if not (self.weibo_fetch_at or self.weibo_cache_at):
             self.visible = None
         if self.visible is True:
             return True
-        visible = self.page.get_visibility()
+        visible = await self.page.get_visibility()
         if self.visible is None or visible is False:
             self.visible = visible
             self.save()
@@ -96,11 +96,11 @@ class UserConfig(BaseModel):
             console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible
 
-    def get_homepage(self,
-                     since: pendulum.DateTime,
-                     skip_exist: bool = False,
-                     ) -> 'Weibo':
-        for mblog in self.page.homepage():
+    async def get_homepage(self,
+                           since: pendulum.DateTime,
+                           skip_exist: bool = False,
+                           ) -> AsyncIterator['Weibo']:
+        async for mblog in self.page.homepage():
             is_pinned = mblog.pop('is_pinned')
             created_at = pendulum.from_format(
                 mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
@@ -118,12 +118,12 @@ class UserConfig(BaseModel):
             if insert_at and skip_exist:
                 continue
             if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
-                weibo_dict = WeiboCache.upsert(mblog).parse()
+                weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
                 weibo_dict['username'] = self.username
-                weibo = Weibo.upsert(weibo_dict)
+                weibo = await Weibo.upsert(weibo_dict)
             yield weibo
 
-    def caching_weibo_for_new(self):
+    async def caching_weibo_for_new(self):
         if self.weibo_fetch is not None:
             assert self.weibo_cache_at is None
             assert self.weibo_fetch or self.weibo_fetch_at
@@ -137,8 +137,8 @@ class UserConfig(BaseModel):
         console.log(self.user)
 
         now, i = pendulum.now(), 0
-        for i, weibo in enumerate(
-                self.get_homepage(since, skip_exist=True), start=1):
+        async for weibo in self.get_homepage(since, skip_exist=True):
+            i += 1
             if weibo.photos_extra:
                 weibo.photos_extra = None
                 weibo.save()
@@ -156,14 +156,14 @@ class UserConfig(BaseModel):
             self.post_at = weibos[0].created_at
         self.save()
 
-    def fetch_weibo(self, download_dir: Path):
+    async def fetch_weibo(self, download_dir: Path):
         if self.weibo_fetch is False:
             return
-        fetcher.toggle_art(self.following)
-        self.set_visibility()
-        self.fetch_friends()
+        await fetcher.toggle_art(self.following)
+        await self.set_visibility()
+        await self.fetch_friends()
         if self.weibo_fetch is None:
-            self.caching_weibo_for_new()
+            await self.caching_weibo_for_new()
             return
         if self.weibo_fetch_at:
             msg = f"weibo_fetch:{self.weibo_fetch_at:%y-%m-%d}"
@@ -179,7 +179,7 @@ class UserConfig(BaseModel):
 
         now = pendulum.now()
         imgs = self._save_weibo(download_dir)
-        download_files(imgs)
+        await download_files(imgs)
         console.log(f"{self.username}微博获取完毕\n")
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
@@ -188,9 +188,9 @@ class UserConfig(BaseModel):
             self.post_at = weibos[0].created_at
         self.save()
 
-    def _save_weibo(
+    async def _save_weibo(
             self,
-            download_dir: Path) -> Iterator[dict]:
+            download_dir: Path) -> AsyncIterator[dict]:
         """
         Save weibo to database and return media info
         :return: generator of medias to downloads
@@ -204,7 +204,7 @@ class UserConfig(BaseModel):
         since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        for weibo in self.get_homepage(since):
+        async for weibo in self.get_homepage(since):
             if weibo.photos_extra:
                 weibo.photos_extra = None
                 weibo.save()
@@ -217,7 +217,8 @@ class UserConfig(BaseModel):
             if medias := list(weibo.medias(download_dir)):
                 console.log(
                     f"Downloading {len(medias)} files to {download_dir}..")
-                yield from medias
+                for media in medias:
+                    yield media
             console.log()
         if self.weibo_fetch_at:
             return
@@ -234,13 +235,14 @@ class UserConfig(BaseModel):
                 if medias := list(weibo.medias(download_dir)):
                     console.log(
                         f"Downloading {len(medias)} files to {download_dir}..")
-                    yield from medias
+                    for media in medias:
+                        yield media
                 console.log()
 
-    def fetch_liked(self, download_dir: Path):
+    async def fetch_liked(self, download_dir: Path):
         if not self.liked_fetch:
             return
-        self.fetch_friends(update=True)
+        await self.fetch_friends(update=True)
         # update = False
 
         msg = f"开始获取 {self.username} 的赞"
@@ -251,8 +253,8 @@ class UserConfig(BaseModel):
         console.rule(msg, style="magenta")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        imgs = self._save_liked(download_dir)
-        download_files(imgs)
+        imgs = await self._save_liked(download_dir)
+        await download_files(imgs)
 
         if count := len(self._liked_list):
             for w in WeiboLiked.select().where(
@@ -272,16 +274,17 @@ class UserConfig(BaseModel):
         self.liked_next_fetch = self.get_liked_next_fetch()
         self.save()
 
-    def fetch_friends(self, update=False):
+    async def fetch_friends(self, update=False):
         fids = {f.friend_id for f in self.user.friends}
         if update:
             Friend.delete().where(Friend.user_id == self.user_id).execute()
         if not Friend.get_or_none(user_id=self.user_id):
             console.log(f"开始获取 {self.username} 的好友")
-            friends = list(self.page.friends())
-            for friend in friends:
-                friend['username'] = self.username
-            friends = {f['friend_id']: f for f in friends}.values()
+            friends = {}
+            async for f in self.page.friends():
+                f['username'] = self.username
+                friends[f['friend_id']] = f
+            friends = friends.values()
             console.log(f'{len(friends)} friends found! 🥰 ')
             Friend.insert_many(friends).execute()
             Friend.delete().where(Friend.gender == 'm').execute()
@@ -321,9 +324,9 @@ class UserConfig(BaseModel):
             self.bilateral = bilateral_gold
             self.save()
 
-    def _save_liked(self,
-                    download_dir: Path,
-                    ) -> Iterator[dict]:
+    async def _save_liked(self,
+                          download_dir: Path,
+                          ) -> AsyncIterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
         download_dir /= 'Liked'
         dir_saved = download_dir / '_saved'
@@ -340,7 +343,7 @@ class UserConfig(BaseModel):
                 download_dir /= f'{self.username}_{self.liked_fetch_at:%y-%m-%d}'
         bulk = []
         early_stopping = False
-        for mblog in self.page.liked():
+        async for mblog in self.page.liked():
             uid, wid = mblog['user']['id'], int(mblog['id'])
             if not Friend.get_or_none(
                     friend_id=uid,
@@ -360,7 +363,7 @@ class UserConfig(BaseModel):
                 early_stopping = True
                 break
             try:
-                weibo_dict = WeiboCache.upsert(mblog).parse()
+                weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
             except KeyError as e:
                 console.log(
                     f'{e}: cannot parse https://weibo.com/{uid}/{wid}, '

@@ -1,10 +1,10 @@
+import asyncio
 import itertools
 import json
 import logging
 import random
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import unquote, urlparse
@@ -43,11 +43,13 @@ class Fetcher:
             cookies = json.loads(cookie_file.read_text())
         else:
             cookies = {}
-        sess_main = httpx.Client(headers=headers, cookies=cookies.get('main'))
-        sess_art = httpx.Client(headers=headers, cookies=cookies.get('art'))
+        sess_main = httpx.AsyncClient(
+            headers=headers, cookies=cookies.get('main'))
+        sess_art = httpx.AsyncClient(
+            headers=headers, cookies=cookies.get('art'))
         return sess_main, sess_art
 
-    def login(self, art_login: bool = None):
+    async def login(self, art_login: bool = None):
 
         if art_login is None:
             if (art_login := self.art_login) is None:
@@ -57,7 +59,7 @@ class Fetcher:
             "https://api.weibo.cn/2/profile/me?launchid=10000365--x&from=10D9293010&c=iphone")
         s = '694a9ce0' if art_login else '537c037e'
         while True:
-            js = self.get(url, art_login, params={'s': s}).json()
+            js = await self.get_json(url, art_login, params={'s': s})
             if not js.get('errmsg'):
                 break
             console.log(f'fetch {url} error: {js}', style='error')
@@ -93,51 +95,59 @@ class Fetcher:
     def art_login(self):
         return self._art_login
 
-    def toggle_art(self, on: bool = True):
+    async def toggle_art(self, on: bool = True) -> None:
         if self._art_login == on:
             return
         self._art_login = on
-        screen_name = self.login(art_login=on)
+        screen_name = await self.login(art_login=on)
         console.log(
             f'fetcher: current logined as {screen_name} (is_art:{on})',
             style='green on dark_green')
 
-    def request(self, method, url: str,
-                art_login: bool = None,
-                **kwargs) -> httpx.Response:
+    async def request(self, method, url: str,
+                      art_login: bool = None,
+                      **kwargs) -> httpx.Response:
         # write with session and pause
         if art_login is None:
             if self.art_login is None:
                 console.log(
                     'art_login is not set, set to True', style='warning')
-                self.toggle_art(True)
+                await self.toggle_art(True)
             art_login = self.art_login
 
-        self._pause()
+        await self._pause()
         s = self.sess_art if art_login else self.sess_main
         while True:
             try:
-                r = s.request(method, url, **kwargs)
+                r = await s.request(method, url, **kwargs)
                 r.raise_for_status()
+            except asyncio.CancelledError:
+                console.log(f'{method} {url}  was cancelled.', style='error')
+                raise
             except httpx.HTTPError as e:
                 period = 3600 if '/feed/friends' in url else 60
                 console.log(
                     f"{e}: Sleepping {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
-                time.sleep(period)
+                await asyncio.sleep(period)
             else:
                 assert r.status_code == 200
                 return r
 
-    def get(self, url: str, art_login: bool = None,
-            **kwargs) -> httpx.Response:
-        return self.request('get', url, art_login, **kwargs)
+    async def get(self, url: str, art_login: bool = None,
+                  **kwargs) -> httpx.Response:
+        return await self.request('get', url, art_login, **kwargs)
 
-    def post(self, url: str, art_login: bool = None,
-             **kwargs) -> httpx.Response:
-        return self.request('post', url, art_login, **kwargs)
+    async def get_json(self, url: str, art_login: bool = None,
+                       **kwargs) -> dict:
+        r = await self.request('get', url, art_login, **kwargs)
+        return r.json()
 
-    def _pause(self):
+    async def post(self, url: str, art_login: bool = None,
+                   **kwargs) -> httpx.Response:
+        return await self.request('post', url, art_login, **kwargs)
+
+    async def _pause(self):
         self.visits += 1
         if self._visit_count == 0:
             self._visit_count = 1
@@ -167,13 +177,18 @@ class Fetcher:
                 f'no sleeping since more than {sleep_time:.1f} seconds passed'
                 f'(count: {self._visit_count})')
         while time.time() < self._last_fetch:
-            time.sleep(0.1)
+            try:
+                await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                console.log('Cancelled on sleep', style='error')
+                raise KeyboardInterrupt
         self._last_fetch = time.time()
         self._visit_count += 1
 
 
 fetcher = Fetcher()
-client = httpx.Client(follow_redirects=True)
+client = httpx.AsyncClient(follow_redirects=True)
+et = ExifToolHelper()
 # fetcher.toggle_art(True)
 
 
@@ -182,19 +197,18 @@ def write_xmp(img: Path, tags: dict):
         if isinstance(v, str):
             tags[k] = v.replace('\n', '&#x0a;')
     params = ['-overwrite_original', '-ignoreMinorErrors', '-escapeHTML']
-    with ExifToolHelper() as et:
-        ext = et.get_tags(img, 'File:FileTypeExtension')[
-            0]['File:FileTypeExtension'].lower()
-        if (suffix := f'.{ext}') != img.suffix:
-            new_img = img.with_suffix(suffix)
-            console.log(
-                f'{img}: suffix is not right, moving to {new_img}...',
-                style='error')
-            img = img.rename(new_img)
-        et.set_tags(img, tags, params=params)
+    ext = et.get_tags(img, 'File:FileTypeExtension')[
+        0]['File:FileTypeExtension'].lower()
+    if (suffix := f'.{ext}') != img.suffix:
+        new_img = img.with_suffix(suffix)
+        console.log(
+            f'{img}: suffix is not right, moving to {new_img}...',
+            style='error')
+        img = img.rename(new_img)
+    et.set_tags(img, tags, params=params)
 
 
-def download_single_file(
+async def download_single_file(
         url: str,
         filepath: Path,
         filename: str,
@@ -215,13 +229,13 @@ def download_single_file(
             return
     while True:
         try:
-            r = client.get(url)
+            r = await client.get(url)
         except ConnectionError as e:
             period = 60
             console.log(
                 f"{e}: Sleepping {period} seconds and "
                 f"retry [link={url}]{url}[/link]...", style='error')
-            time.sleep(period)
+            await asyncio.sleep(period)
             continue
 
         if r.status_code == 404:
@@ -230,7 +244,7 @@ def download_single_file(
             return
         elif r.status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
-            time.sleep(15)
+            await asyncio.sleep(15)
             console.log(f'retrying download for {url}...')
             continue
 
@@ -251,11 +265,9 @@ def download_single_file(
         break
 
 
-def download_files(imgs: Iterable[dict]):
-    with ThreadPoolExecutor(max_workers=15) as pool:
-        futures = [pool.submit(download_single_file, **img) for img in imgs]
-    for future in futures:
-        future.result()
+async def download_files(imgs: Iterable[dict]):
+    tasks = [asyncio.create_task(download_single_file(**img)) async for img in imgs]
+    await asyncio.gather(*tasks)
 
 
 def parse_url_extension(url: str) -> str:
@@ -263,7 +275,7 @@ def parse_url_extension(url: str) -> str:
     return Path(parse.path).suffix or Path(url).suffix
 
 
-def normalize_user_id(user_id: str | int) -> int:
+async def normalize_user_id(user_id: str | int) -> int:
     """
     Normalize user_id to int.
 
@@ -274,13 +286,13 @@ def normalize_user_id(user_id: str | int) -> int:
     except ValueError:
         assert isinstance(user_id, str)
         url = f'https://m.weibo.cn/n/{user_id}'
-        r = fetcher.get(url)
+        r = await fetcher.get(url)
         if url != unquote(r.url):
             user_id = int(r.url.split('/')[-1])
         else:
             raise UserNotFoundError(f'{user_id} not exist')
     else:
-        r = fetcher.get(f'https://weibo.cn/u/{user_id}', art_login=True)
+        r = await fetcher.get(f'https://weibo.cn/u/{user_id}', art_login=True)
         if 'User does not exists!' in r.text:
             raise UserNotFoundError(f'{user_id} not exist')
     return user_id
@@ -351,7 +363,7 @@ def round_loc(lat: float | str, lng: float | str,
     return lat_, lng_
 
 
-def parse_loc_src(loc_src: str) -> str:
+async def parse_loc_src(loc_src: str) -> str:
     """
     >> loc_src = ('https://m.weibo.cn/p/index?containerid='
                   '100808fcf3af2237af9eae5bb1c3f55951b731_-_lbs')
@@ -361,7 +373,7 @@ def parse_loc_src(loc_src: str) -> str:
     containerid = re.search(r'containerid=([\w-]+)', loc_src).group(1)
     api = ('https://m.weibo.cn/api/container/getIndex?'
            f'containerid={containerid}')
-    js = fetcher.get(api).json()
+    js = await fetcher.get_json(api)
     cards = js['data']['cards'][0]['card_group']
     name = cards[0]['group'][0]['item_title']
     params = cards[1]['scheme'].split('?')[-1].split('&')

@@ -12,26 +12,27 @@ from sinaspider.model import UserConfig
 from sinaspider.page import SinaBot
 from sinaspider.script.helper import LogSaver
 
-from .helper import default_path, logsaver_decorator
+from .helper import default_path, logsaver_decorator, run_async
 
 app = Typer()
 
 
 @app.command(help='Add user to database of users whom we want to fetch from')
 @logsaver_decorator
-def user(download_dir: Path = default_path):
+@run_async
+async def user(download_dir: Path = default_path):
     """Add user to database of users whom we want to fetch from"""
     while user_id := Prompt.ask('请输入用户名:smile:').strip():
         if uc := UserConfig.get_or_none(username=user_id):
             user_id = uc.user_id
         try:
-            user_id = normalize_user_id(user_id)
+            user_id = await normalize_user_id(user_id)
         except UserNotFoundError as e:
             console.log(e, style='error')
             continue
         if uc := UserConfig.get_or_none(user_id=user_id):
             console.log(f'用户{uc.username}已在列表中')
-        uc = UserConfig.from_id(user_id)
+        uc = await UserConfig.from_id(user_id)
         console.log(uc, '\n')
         uc.weibo_fetch = Confirm.ask(
             f"是否获取{uc.username}的微博？", default=bool(uc.weibo_fetch_at))
@@ -54,22 +55,22 @@ def user(download_dir: Path = default_path):
                 console.log('记得取消关注', style='warning')
         elif uc.weibo_fetch is not False and Confirm.ask(
                 '是否现在抓取', default=(uc.weibo_fetch is None)):
-            uc.fetch_weibo(download_dir)
+            await uc.fetch_weibo(download_dir)
 
 
 @app.command()
 @logsaver_decorator
-def user_add(max_user: int = 20,
-             all_user: bool = Option(False, '--all-user', '-a'),
-             download_dir: Path = default_path):
-    from itertools import islice
+@run_async
+async def user_add(max_user: int = 20,
+                   all_user: bool = Option(False, '--all-user', '-a'),
+                   download_dir: Path = default_path):
     if all_user:
         max_user = None
     UserConfig.update_table()
-    bot = SinaBot(art_login=True)
+    bot = await SinaBot.create(art_login=True)
     uids = {u.user_id for u in UserConfig.select().where(UserConfig.following)}
-    uids_following = [u['id'] for u in islice(bot.get_following_list(),
-                                              max_user)]
+    uids_following = [u['id'] async for u in bot
+                      .get_following_list(max_user=max_user)]
     to_add = [uid for uid in uids_following if uid not in uids]
     if max_user is None:
         if uids := uids - set(uids_following):
@@ -77,29 +78,29 @@ def user_add(max_user: int = 20,
     console.log(f'{len(to_add)} users will be added')
     for u in to_add[::-1]:
         console.log(f'adding {u} to UserConfig...')
-        console.log(UserConfig.from_id(u), '\n')
+        console.log(await UserConfig.from_id(u), '\n')
 
-    special_fol = {u['id']: u['remark'] for u in bot.get_following_list(
+    special_fol = {u['id']: u['remark'] async for u in bot.get_following_list(
         special_following=True)}
     for u in UserConfig:
         if remark := special_fol.get(u.user_id):
             if u.username != remark:
-                u = UserConfig.from_id(u.user_id)
+                u = await UserConfig.from_id(u.user_id)
         if u.following and not u.photos_num:
             if u.user_id not in special_fol:
                 console.log(f'adding {u.username} ({u.homepage}) '
                             'to special following list...')
-                bot.set_special_follow(u.user_id, True)
+                await bot.set_special_follow(u.user_id, True)
         elif u.user_id in special_fol:
             console.log(f'removing {u.username} ({u.homepage}) '
                         'from special following list...')
-            bot.set_special_follow(u.user_id, False)
+            await bot.set_special_follow(u.user_id, False)
 
-    fetcher.toggle_art(True)
+    await fetcher.toggle_art(True)
     nov = [u for u in UserConfig.select()
            .where(UserConfig.weibo_cache_at.is_null())
            .where(UserConfig.weibo_fetch_at.is_null())
-           if u.visible is not True and not u.set_visibility()]
+           if u.visible is not True and not (await u.set_visibility())]
 
     to_cache = []
     for u in nov:
@@ -112,16 +113,17 @@ def user_add(max_user: int = 20,
         console.log(u, '\n')
 
     for u in to_cache:
-        u.fetch_weibo(download_dir)
+        await u.fetch_weibo(download_dir)
 
 
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver_decorator
-def user_loop(download_dir: Path = default_path,
-              max_user: int = 1,
-              fetching_duration: int = None,
-              new_user: bool = Option(False, "--new-user", "-n"),
-              following: bool = Option(False, "--following", "-f")):
+@run_async
+async def user_loop(download_dir: Path = default_path,
+                    max_user: int = 1,
+                    fetching_duration: int = None,
+                    new_user: bool = Option(False, "--new-user", "-n"),
+                    following: bool = Option(False, "--following", "-f")):
     UserConfig.update_table()
     logsaver = LogSaver('user_loop', download_dir)
     query = (UserConfig.select()
@@ -163,7 +165,7 @@ def user_loop(download_dir: Path = default_path,
         stop_time = None
     for i, user in enumerate(users, start=1):
         try:
-            config = UserConfig.from_id(user_id=user.user_id)
+            config = await UserConfig.from_id(user_id=user.user_id)
         except UserNotFoundError:
             config = UserConfig.get(user_id=user.user_id)
             config.blocked = True
@@ -171,7 +173,7 @@ def user_loop(download_dir: Path = default_path,
             console.log(
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:
-            config.fetch_weibo(download_dir)
+            await config.fetch_weibo(download_dir)
         console.log(f'user {i}/{len(users)} completed!')
         if new_user:
             logsaver.save_log(save_manually=True)

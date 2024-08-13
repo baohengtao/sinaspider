@@ -25,13 +25,13 @@ class WeiboParser:
         else:
             assert pic_num == len(self.info['pic_ids'])
 
-    def parse(self):
+    async def parse(self):
         if getattr(self, 'weibo', None):
             return self.weibo.copy()
         weibo = self.basic_info(self.info)
         if video := self.video_info():
             weibo |= video
-        weibo |= text_info(self.info['text'])
+        weibo |= await text_info(self.info['text'])
         if self.hist_mblogs:
             weibo = WeiboHist(weibo, self.hist_mblogs).parse()
         weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
@@ -124,7 +124,7 @@ class WeiboParser:
         return weibo
 
 
-def text_info(text) -> dict:
+async def text_info(text) -> dict:
     hypertext = text.replace('\u200b', '').strip()
     topics = []
     at_users = []
@@ -175,7 +175,7 @@ def text_info(text) -> dict:
             console.log(
                 f'location href is not parsed: {href}', style='warning')
         else:
-            location_id = parse_loc_src(href)
+            location_id = await parse_loc_src(href)
     res = {
         'at_users': at_users,
         'topics': topics,

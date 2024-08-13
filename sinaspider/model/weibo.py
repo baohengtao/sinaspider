@@ -1,7 +1,7 @@
+import asyncio
 import itertools
 import json
 import re
-import time
 from pathlib import Path
 from typing import Iterator, Self
 
@@ -74,11 +74,11 @@ class Weibo(BaseModel):
         table_name = "weibo"
 
     @classmethod
-    def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
+    async def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
         wb_id = normalize_wb_id(wb_id)
         if update or not cls.get_or_none(id=wb_id):
             try:
-                weibo_dict = WeiboCache.from_id(wb_id, update=update).parse()
+                weibo_dict = await (await WeiboCache.from_id(wb_id, update=update)).parse()
             except WeiboNotFoundError as e:
                 if not cls.get_or_none(id=wb_id):
                     raise e
@@ -87,11 +87,11 @@ class Weibo(BaseModel):
                     'loading from database...',
                     style="error")
             else:
-                Weibo.upsert(weibo_dict)
+                await Weibo.upsert(weibo_dict)
         return cls.get_by_id(wb_id)
 
     @classmethod
-    def upsert(cls, weibo_dict: dict) -> Self:
+    async def upsert(cls, weibo_dict: dict) -> Self:
         """
         return upserted weibo id
         """
@@ -106,7 +106,7 @@ class Weibo(BaseModel):
         if not (model := cls.get_or_none(id=wid)):
             cls.insert(weibo_dict).execute()
             weibo = cls.get_by_id(wid)
-            weibo.update_location()
+            await weibo.update_location()
             return weibo
         if model.location is None:
             if 'location' in weibo_dict:
@@ -151,7 +151,7 @@ class Weibo(BaseModel):
         weibo = Weibo.get_by_id(wid)
         if weibo.has_media:
             assert weibo.photos_extra or list(weibo.medias())
-            weibo.update_location()
+            await weibo.update_location()
             loc_info = [weibo.location, weibo.location_id,
                         weibo.latitude, weibo.longitude]
             if not all(loc_info):
@@ -161,12 +161,12 @@ class Weibo(BaseModel):
 
         return weibo
 
-    def update_location(self):
+    async def update_location(self):
         if self.location is None:
             assert self.location_id is None
             return
-        coord = self.get_coordinate()
-        if location := Location.from_id(self.location_id):
+        coord = await self.get_coordinate()
+        if location := await Location.from_id(self.location_id):
             if location.name != self.location:
                 if location.name:
                     console.log(
@@ -203,7 +203,7 @@ class Weibo(BaseModel):
         self.latitude, self.longitude = lat, lng
         self.save()
 
-    def get_coordinate(self) -> tuple[float, float] | None:
+    async def get_coordinate(self) -> tuple[float, float] | None:
         if self.latitude:
             return round_loc(self.latitude, self.longitude)
         if art_login := self.user.following:
@@ -215,8 +215,7 @@ class Weibo(BaseModel):
         url = ('https://api.weibo.cn/2/comments/build_comments?'
                f'launchid=10000365--x&c=iphone&{token}'
                f'&id={self.id}&is_show_bulletin=2')
-        status = fetcher.get(url, art_login=art_login).json()[
-            'status']
+        status = (await fetcher.get_json(url, art_login=art_login))['status']
         if 'geo' not in status:
             console.log(
                 f"no coordinates found: {self.url} ", style='error')
@@ -336,11 +335,11 @@ class Weibo(BaseModel):
             return False
         return True
 
-    def liked_by(self):
+    async def liked_by(self):
         url = f'https://m.weibo.cn/api/attitudes/show?id={self.id}&page=%s'
         friends = {f.friend_id: f for f in self.user.friends}
         for page in itertools.count(1):
-            js = fetcher.get(url % page, art_login=self.user.following).json()
+            js = await fetcher.get_json(url % page, art_login=self.user.following)
             data = js.pop('data')
             assert js == {'ok': 1, 'msg': '数据获取成功'}
             if (users := data.pop('data')) is None:
@@ -370,23 +369,23 @@ class Location(BaseModel):
         return self.latitude, self.longitude
 
     @classmethod
-    def from_id(cls, location_id: str) -> Self | None:
+    async def from_id(cls, location_id: str) -> Self | None:
         """
         return the Location instance from location_id
         or None if location has been deleted
         """
         if not cls.get_or_none(id=location_id):
-            if info := (cls.get_location_info_v2(location_id)
-                        or cls.get_location_info_v1p5(location_id)):
+            if info := (await cls.get_location_info_v2(location_id)
+                        or await cls.get_location_info_v1p5(location_id)):
                 cls.insert(info).execute()
             else:
                 return
         return cls.get_by_id(location_id)
 
     @staticmethod
-    def get_location_info_v2(location_id):
+    async def get_location_info_v2(location_id):
         api = f'http://place.weibo.com/wandermap/pois?poiid={location_id}'
-        info = fetcher.get(api, art_login=True).json()
+        info = await fetcher.get_json(api, art_login=True)
         if not info:
             return
         assert info.pop('poiid') == location_id
@@ -408,13 +407,13 @@ class Location(BaseModel):
         return res
 
     @staticmethod
-    def get_location_info_v1p5(location_id: str) -> dict | None:
+    async def get_location_info_v1p5(location_id: str) -> dict | None:
         url = f'https://weibo.com/p/100101{location_id}'
         url_m = ('https://m.weibo.cn/p/index?'
                  f'containerid=2306570042{location_id}')
         api = ('https://api.weibo.cn/2/cardlist?&from=10DA093010'
                f'&c=iphone&s=ba74941a&containerid=2306570042{location_id}')
-        js = fetcher.get(api, art_login=True).json()
+        js = await fetcher.get_json(api, art_login=True)
         cards = js['cards'][0]['card_group']
         pic = cards[0]['pic']
         if 'android_delete_poi.png' in pic:
@@ -461,19 +460,19 @@ class WeiboCache(BaseModel):
     updated_at = DateTimeTZField(null=True)
 
     @classmethod
-    def from_id(cls, weibo_id, update=False) -> Self:
+    async def from_id(cls, weibo_id, update=False) -> Self:
         weibo_id = normalize_wb_id(weibo_id)
         if not update and (cache := cls.get_or_none(id=weibo_id)):
             return cache
         try:
-            mblog = get_mblog_from_web(weibo_id)
+            mblog = await get_mblog_from_web(weibo_id)
         except WeiboNotFoundError as e:
             console.log(e, style='error')
             raise
-        return cls.upsert(mblog)
+        return await cls.upsert(mblog)
 
     @classmethod
-    def upsert(cls, mblog: dict) -> Self:
+    async def upsert(cls, mblog: dict) -> Self:
         weibo_id = mblog['id']
         edit_count = mblog.get('edit_count', 0)
         mblog_from = mblog['mblog_from']
@@ -494,16 +493,16 @@ class WeiboCache(BaseModel):
             "edit_count": edit_count,
         }
         if edit_count > 0:
-            row['hist_mblogs'] = get_hist_mblogs(weibo_id, edit_count)
+            row['hist_mblogs'] = await get_hist_mblogs(weibo_id, edit_count)
 
         if mblog_from != 'page_web':
             if mblog['pic_num'] > len(mblog['pic_ids']):
                 assert mblog['pic_num'] > 9
-                row['page_web'] = get_mblog_from_web(weibo_id)
+                row['page_web'] = await get_mblog_from_web(weibo_id)
             elif mblog['isLongText']:
                 ends = f'<a href=\"/status/{mblog["id"]}\">全文</a>'
                 assert mblog['text'].endswith(ends)
-                row['page_web'] = get_mblog_from_web(weibo_id)
+                row['page_web'] = await get_mblog_from_web(weibo_id)
         if cache:
             update_model_from_dict(cache, row)
             cache.updated_at = pendulum.now()
@@ -513,13 +512,13 @@ class WeiboCache(BaseModel):
             cls.insert(row).execute()
         return cls.get_by_id(weibo_id)
 
-    def parse(self):
+    async def parse(self):
         from sinaspider.parser.weibo import WeiboParser
         info = self.page_web or self.timeline_web or self.liked_weico
         assert bool(self.edit_count) == bool(self.hist_mblogs)
         if hist_mblogs := self.hist_mblogs:
             hist_mblogs = self.hist_mblogs['mblogs']
-        weibo_dict = WeiboParser(info, hist_mblogs).parse()
+        weibo_dict = await WeiboParser(info, hist_mblogs).parse()
         assert 'updated_at' not in weibo_dict
         assert 'added_at' not in weibo_dict
         if self.updated_at:
@@ -528,7 +527,7 @@ class WeiboCache(BaseModel):
         return weibo_dict
 
 
-def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
+async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
     s = '0726b708' if fetcher.art_login else 'c773e7e0'
     edit_url = ("https://api.weibo.cn/2/cardlist?c=weicoabroad"
                 f"&containerid=231440_-_{weibo_id}"
@@ -536,7 +535,7 @@ def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
                 )
     all_cards = []
     for page in itertools.count(1):
-        js = fetcher.get(edit_url % page).json()
+        js = await fetcher.get_json(edit_url % page)
         all_cards += js['cards']
         if len(all_cards) >= edit_count + 1:
             assert len(all_cards) == edit_count + 1
@@ -555,10 +554,10 @@ def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
     return dict(mblogs=mblogs, all_cards=all_cards)
 
 
-def get_mblog_from_web(weibo_id: str | int) -> dict:
+async def get_mblog_from_web(weibo_id: str | int) -> dict:
     url = f'https://m.weibo.cn/detail/{weibo_id}'
     while True:
-        text = fetcher.get(url).text
+        text = (await fetcher.get(url)).text
         soup = BeautifulSoup(text, 'html.parser')
         if soup.title.text == '微博-出错了':
             assert (err_msg := soup.body.p.text.strip())
@@ -566,7 +565,7 @@ def get_mblog_from_web(weibo_id: str | int) -> dict:
                 console.log(
                     f'{err_msg} for {url}, sleeping 60 secs...',
                     style='error')
-                time.sleep(60)
+                await asyncio.sleep(60)
                 continue
             else:
                 raise WeiboNotFoundError(err_msg, url)
@@ -623,7 +622,7 @@ class WeiboMissed(BaseModel):
     uid_visible = {}
 
     @classmethod
-    def update_missing(cls, num=50):
+    async def update_missing(cls, num=50):
         query = (cls.select()
                  .order_by(cls.user, cls.created_at)
                  .where(cls.try_update_at.is_null()))
@@ -640,25 +639,25 @@ class WeiboMissed(BaseModel):
                                     start=1):
             missing: cls
             console.log(f'🎠 Working on {i}/{len(query)}', style='notice')
-            missing.update_missing_single()
+            await missing.update_missing_single()
         console.log(f'updated {i} missing weibos', style='warning')
 
-    def update_missing_single(self):
+    async def update_missing_single(self):
         if self.created_at > pendulum.now().subtract(months=6):
             self.visible = True
             self.save()
         else:
             if self.user_id not in self.uid_visible:
                 console.log(f'getting visibility of {self.username}...')
-                self.uid_visible[self.user_id] = Page(
+                self.uid_visible[self.user_id] = await Page(
                     self.user_id).get_visibility()
             self.visible = self.uid_visible[self.user_id]
             self.save()
 
-        fetcher.toggle_art(self.user.following)
+        await fetcher.toggle_art(self.user.following)
         assert not Weibo.get_or_none(bid=self.bid)
         try:
-            weibo = Weibo.from_id(self.bid)
+            weibo = await Weibo.from_id(self.bid)
         except WeiboNotFoundError as e:
             self.try_update_at = pendulum.now()
             self.try_update_msg = str(e.err_msg)

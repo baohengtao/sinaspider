@@ -1,6 +1,6 @@
+import asyncio
 import html
 import re
-import time
 import warnings
 
 import bs4
@@ -16,21 +16,21 @@ class UserParser:
         self.id = user_id
         self._user = None
 
-    def parse(self) -> dict:
+    async def parse(self) -> dict:
         while True:
             try:
-                return self._parse()
+                return await self._parse()
             except (AssertionError, KeyError):
                 console.log(
                     f'AssertionError, retrying parse user {self.id}',
                     style='error')
-                time.sleep(60)
+                await asyncio.sleep(60)
 
-    def _parse(self) -> dict:
+    async def _parse(self) -> dict:
         if self._user is not None:
             return self._user.copy()
-        user_cn = self.get_user_cn()
-        user_info = self.get_user_info()
+        user_cn = await self.get_user_cn()
+        user_info = await self.get_user_info()
 
         assert user_cn.pop('昵称') == user_info['screen_name']
         assert user_cn.pop('备注', '') == user_info.get('remark', '')
@@ -63,7 +63,7 @@ class UserParser:
             user_info['description'] = html.unescape(descrip)
 
         assert 'followed_by' not in user_info
-        if followed_by := self.followed_by():
+        if followed_by := await self.followed_by():
             user_info['followed_by'] = followed_by
         self._user = self._normalize(user_info)
 
@@ -87,9 +87,9 @@ class UserParser:
             assert v or v == 0
         return user
 
-    def get_user_cn(self) -> dict:
-        user_cn = self._fetch_user_cn()
-        user_card = self._fetch_user_card()
+    async def get_user_cn(self) -> dict:
+        user_cn = await self._fetch_user_cn()
+        user_card = await self._fetch_user_card()
         assert user_card['所在地'] == user_cn.pop('地区')
         birthday_cn = user_cn.pop('生日', '')
         birthday_card = user_card.pop('生日', '')
@@ -109,9 +109,9 @@ class UserParser:
         user_cn = {k: v for k, v in user_cn.items() if v != ''}
         return user_cn
 
-    def _fetch_user_cn(self) -> dict:
+    async def _fetch_user_cn(self) -> dict:
         """获取来自cn的信息."""
-        r = fetcher.get(f'https://weibo.cn/{self.id}/info', art_login=True)
+        r = await fetcher.get(f'https://weibo.cn/{self.id}/info', art_login=True)
 
         with warnings.catch_warnings(
             action='ignore',
@@ -148,11 +148,11 @@ class UserParser:
         assert info.get('认证') == info.pop('认证信息', None)
         return info
 
-    def _fetch_user_card(self) -> dict:
+    async def _fetch_user_card(self) -> dict:
         """获取来自m.weibo.com的信息."""
         url = ('https://m.weibo.cn/api/container/'
                f'getIndex?containerid=230283{self.id}_-_INFO')
-        js = fetcher.get(url, art_login=True).json()
+        js = await fetcher.get_json(url, art_login=True)
         user_card = js['data']['cards']
         user_card = sum([c['card_group'] for c in user_card], [])
         user_card = {card['item_name']: card['item_content']
@@ -163,14 +163,14 @@ class UserParser:
             user_card['IP'] = ip.replace("（IP属地以运营商信息为准，如有问题可咨询客服）", "")
         return user_card
 
-    def get_user_info(self) -> dict:
+    async def get_user_info(self) -> dict:
         """获取主信息."""
         url = ('https://m.weibo.cn/api/container/getIndex?'
                f'containerid=100505{self.id}')
-        while not (js := fetcher.get(url, art_login=True).json())['ok']:
+        while not (js := await fetcher.get_json(url, art_login=True))['ok']:
             console.log(
                 f'not js[ok] for {url}, sleeping 60 secs...', style='warning')
-            time.sleep(60)
+            await asyncio.sleep(60)
         user_info = js['data']['userInfo']
         keys = ['cover_image_phone', 'profile_image_url',
                 'profile_url', 'toolbar_menus', 'badge']
@@ -187,7 +187,7 @@ class UserParser:
                     user_info[k] = v
         return user_info
 
-    def followed_by(self) -> list[int] | None:
+    async def followed_by(self) -> list[int] | None:
         """
         fetch users' id  who follow this user and also followed by me.
 
@@ -197,8 +197,8 @@ class UserParser:
         url = ("https://api.weibo.cn/2/cardlist?"
                "from=10DA093010&c=iphone&s=ba74941a"
                f"&containerid=231051_-_myfollow_followprofile_list_-_{self.id}")
-        r = fetcher.get(url, art_login=True)
-        if not (cards := r.json()['cards']):
+        js = await fetcher.get_json(url, art_login=True)
+        if not (cards := js['cards']):
             return
         cards = cards[0]['card_group']
         uids = [card['user']['id'] for card in cards]
