@@ -12,116 +12,104 @@ from sinaspider.helper import encode_wb_id, parse_loc_src
 from .helper import WeiboHist
 
 
-class WeiboParser:
-    """用于解析原始微博内容."""
+async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
+    info = deepcopy(weibo_info)
+    if (pic_num := info['pic_num']) < len(info['pic_ids']):
+        console.log(
+            f"pic_num < len(pic_ids) for {info['id']}",
+            style="warning")
+    else:
+        assert pic_num == len(info['pic_ids'])
 
-    def __init__(self, weibo_info: dict, hist_mblogs=None):
-        self.info = deepcopy(weibo_info)
-        self.hist_mblogs = hist_mblogs
-        if (pic_num := self.info['pic_num']) < len(self.info['pic_ids']):
-            console.log(
-                f"pic_num < len(pic_ids) for {self.info['id']}",
-                style="warning")
-        else:
-            assert pic_num == len(self.info['pic_ids'])
+    user = info.pop('user')
+    created_at = pendulum.from_format(
+        info.pop('created_at'), 'ddd MMM DD HH:mm:ss ZZ YYYY')
+    assert created_at.is_local()
+    if region_name := info.pop('region_name', None):
+        region_name = region_name.removeprefix('发布于').strip()
+    assert 'retweeted_status' not in info
+    if pics := info.pop('pics', []):
+        if isinstance(pics, dict):
+            assert pics.pop('') == {
+                'videoSrc': 'https://video.weibo.com/media/play?livephoto=https%3A%2F%2Flivephoto.us.sinaimg.cn%2F.mov',
+                'type': 'livephotos'}
+            pics = [pics[str(i)] for i in range(len(pics))]
+        assert isinstance(pics, list)
+        pics = [pic for pic in pics if 'pid' in pic]
+        # if x := weibo_info.pop('pic_ids'):
+        #     assert [pic['pid'] for pic in pics] == x
+        pics = [[pic['large']['url'], pic.get('videoSrc', '')]
+                for pic in pics]
+        for p in pics:
+            if p[0].endswith('.gif'):
+                p[1] = ''
+            else:
+                p[1] = p[1].replace(
+                    "livephoto.us.sinaimg.cn", "us.sinaimg.cn")
+        pics = ["🎀".join(p).strip("🎀") for p in pics]
+    else:
+        assert info['pic_num'] == 0
 
-    async def parse(self):
-        if getattr(self, 'weibo', None):
-            return self.weibo.copy()
-        weibo = self.basic_info(self.info)
-        if video := self.video_info():
-            weibo |= video
-        weibo |= await text_info(self.info['text'])
-        if self.hist_mblogs:
-            weibo = WeiboHist(weibo, self.hist_mblogs).parse()
-        weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
-        weibo['has_media'] = bool(weibo.get('video_url') or weibo.get(
-            'photos') or weibo.get('photos_edited'))
+    weibo = dict(
+        user_id=(user_id := user['id']),
+        username=user.get('remark') or user['screen_name'],
+        created_at=created_at,
+        region_name=region_name,
+        photos=pics,
+        id=(id_ := int(info.pop('id'))),
+        bid=(bid := encode_wb_id(id_)),
+        url=f'https://weibo.com/{user_id}/{bid}',
+        url_m=f'https://m.weibo.cn/detail/{bid}',
+        source=BeautifulSoup(
+            info.pop('source').strip(), 'html.parser').text,
+        mblog_from=info.pop('mblog_from'),
+        pic_num=info.pop('pic_num'),
+        edit_count=info.pop('edit_count', 0),
+        update_status='updated',
 
-        if loc := weibo.get('location'):
-            text = weibo.get('text', '').removesuffix('📍')
-            assert not text.endswith('📍')
-            text += f' 📍{loc}'
-            weibo['text'] = text.strip()
+    )
 
-        self.weibo = weibo
-        return weibo.copy()
+    if video := video_info(info):
+        weibo |= video
+    weibo |= await text_info(info['text'])
+    if hist_mblogs:
+        weibo = WeiboHist(weibo, hist_mblogs).parse()
 
-    @staticmethod
-    def basic_info(weibo_info) -> dict:
-        user = weibo_info.pop('user')
-        created_at = pendulum.from_format(
-            weibo_info.pop('created_at'), 'ddd MMM DD HH:mm:ss ZZ YYYY')
-        assert created_at.is_local()
-        if region_name := weibo_info.pop('region_name', None):
-            region_name = region_name.removeprefix('发布于').strip()
-        assert 'retweeted_status' not in weibo_info
-        if pics := weibo_info.pop('pics', []):
-            if isinstance(pics, dict):
-                assert pics.pop('') == {
-                    'videoSrc': 'https://video.weibo.com/media/play?livephoto=https%3A%2F%2Flivephoto.us.sinaimg.cn%2F.mov',
-                    'type': 'livephotos'}
-                pics = [pics[str(i)] for i in range(len(pics))]
-            assert isinstance(pics, list)
-            pics = [pic for pic in pics if 'pid' in pic]
-            # if x := weibo_info.pop('pic_ids'):
-            #     assert [pic['pid'] for pic in pics] == x
-            pics = [[pic['large']['url'], pic.get('videoSrc', '')]
-                    for pic in pics]
-            for p in pics:
-                if p[0].endswith('.gif'):
-                    p[1] = ''
-                else:
-                    p[1] = p[1].replace(
-                        "livephoto.us.sinaimg.cn", "us.sinaimg.cn")
-            pics = ["🎀".join(p).strip("🎀") for p in pics]
-        else:
-            assert weibo_info['pic_num'] == 0
+    for key in ['reposts_count', 'comments_count', 'attitudes_count']:
+        if (v := info.pop(key)) == '100万+':
+            v = 1000000
+        weibo[key] = v
+    weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
+    weibo['has_media'] = bool(weibo.get('video_url') or weibo.get(
+        'photos') or weibo.get('photos_edited'))
 
-        weibo = dict(
-            user_id=(user_id := user['id']),
-            username=user.get('remark') or user['screen_name'],
-            created_at=created_at,
-            region_name=region_name,
-            photos=pics,
-            id=(id_ := int(weibo_info.pop('id'))),
-            bid=(bid := encode_wb_id(id_)),
-            url=f'https://weibo.com/{user_id}/{bid}',
-            url_m=f'https://m.weibo.cn/detail/{bid}',
-            source=BeautifulSoup(
-                weibo_info.pop('source').strip(), 'html.parser').text,
-            mblog_from=weibo_info.pop('mblog_from'),
-            pic_num=weibo_info.pop('pic_num'),
-            edit_count=weibo_info.pop('edit_count', 0),
-            update_status='updated',
+    if loc := weibo.get('location'):
+        text = weibo.get('text', '').removesuffix('📍')
+        assert not text.endswith('📍')
+        text += f' 📍{loc}'
+        weibo['text'] = text.strip()
+    return weibo
 
-        )
-        for key in ['reposts_count', 'comments_count', 'attitudes_count']:
-            if (v := weibo_info.pop(key)) == '100万+':
-                v = 1000000
-            weibo[key] = v
-        return weibo
 
-    def video_info(self) -> dict | None:
-        weibo = {}
-        page_info = self.info.get('page_info', {})
-        if not page_info.get('type') == "video":
-            return
-        if (urls := page_info['urls']) is None:
-            console.log('cannot get video url', style='error')
-            return
-        keys = ['mp4_1080p_mp4', 'mp4_720p_mp4',
-                'mp4_hd_mp4', 'mp4_ld_mp4']
-        for key in keys:
-            if url := urls.get(key):
-                weibo['video_url'] = url
-                break
-        else:
-            console.log(f'no video info:==>{page_info}', style='error')
-            raise ValueError('no video info')
+def video_info(info) -> dict | None:
+    weibo = {}
+    page_info = info.get('page_info', {})
+    if page_info.get('type') != "video":
+        return
+    if (urls := page_info['urls']) is None:
+        console.log('cannot get video url', style='error')
+        return
+    for key in ['mp4_1080p_mp4', 'mp4_720p_mp4',
+                'mp4_hd_mp4', 'mp4_ld_mp4']:
+        if url := urls.get(key):
+            weibo['video_url'] = url
+            break
+    else:
+        console.log(f'no video info:==>{page_info}', style='error')
+        raise ValueError('no video info')
 
-        weibo['video_duration'] = page_info['media_info']['duration']
-        return weibo
+    weibo['video_duration'] = page_info['media_info']['duration']
+    return weibo
 
 
 async def text_info(text) -> dict:
