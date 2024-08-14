@@ -74,6 +74,9 @@ class Weibo(BaseModel):
     class Meta:
         table_name = "weibo"
 
+    def __repr__(slef):
+        return super().__repr__()
+
     @classmethod
     async def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
         wb_id = normalize_wb_id(wb_id)
@@ -209,7 +212,6 @@ class Weibo(BaseModel):
             return round_loc(self.latitude, self.longitude)
         if art_login := self.user.following:
             token = 'from=10DA093010&s=ba74941a'
-
         else:
             token = 'from=10CB193010&s=BF3838D9'
 
@@ -340,7 +342,8 @@ class Weibo(BaseModel):
         url = f'https://m.weibo.cn/api/attitudes/show?id={self.id}&page=%s'
         friends = {f.friend_id: f for f in self.user.friends}
         for page in itertools.count(1):
-            js = await fetcher.get_json(url % page, art_login=self.user.following)
+            js = await fetcher.get_json(
+                url % page, art_login=self.user.following)
             data = js.pop('data')
             assert js == {'ok': 1, 'msg': '数据获取成功'}
             if (users := data.pop('data')) is None:
@@ -361,6 +364,9 @@ class Location(BaseModel):
     url = TextField()
     url_m = TextField()
     version = TextField()
+
+    def __str__(self):
+        return super().__repr__()
 
     @property
     def coordinate(self) -> tuple[float, float]:
@@ -459,6 +465,9 @@ class WeiboCache(BaseModel):
     edit_count = IntegerField()
     added_at = DateTimeTZField()
     updated_at = DateTimeTZField(null=True)
+
+    def __str__(self):
+        return super().__repr__()
 
     @classmethod
     async def from_id(cls, weibo_id, update=False) -> Self:
@@ -596,6 +605,9 @@ class WeiboLiked(BaseModel):
     username = TextField()
     created_at = DateTimeTZField()
 
+    def __str__(self):
+        return super().__repr__()
+
     class Meta:
         table_name = "liked"
         indexes = (
@@ -620,6 +632,9 @@ class WeiboMissed(BaseModel):
 
     uid_username = {a.user_id: a.username for a in Artist}
     uid_visible = {}
+
+    def __str__(self):
+        return super().__repr__()
 
     @classmethod
     async def update_missing(cls, num=50):
@@ -766,13 +781,12 @@ class WeiboMissed(BaseModel):
                     'username': 'cooper_math'}
         """
         photo_dict = model_to_dict(photo)
-        pop_keys = ['uuid', 'row_created', 'hidden',
-                    'filesize', 'date', 'date_added',
-                    'live_photo', 'with_place', 'ismovie',
-                    'favorite', 'album', 'title', 'description', 'filename',
-                    'series_number', 'image_creator_name', 'filepath', 'edited',
-                    'img_url',
-                    ]
+        pop_keys = [
+            'uuid', 'row_created', 'hidden', 'filesize',
+            'date', 'date_added', 'live_photo', 'with_place', 'ismovie',
+            'favorite', 'album', 'title', 'description', 'filename',
+            'series_number', 'image_creator_name', 'filepath', 'edited',
+            'img_url', ]
         for k in pop_keys:
             photo_dict.pop(k)
         assert photo_dict.pop('image_supplier_name') == 'Weibo'

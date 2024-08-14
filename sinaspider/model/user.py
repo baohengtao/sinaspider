@@ -140,6 +140,9 @@ class Artist(BaseModel):
     class Meta:
         table_name = "artist"
 
+    def __str__(self):
+        return super().__repr__()
+
     @classmethod
     def from_id(cls, user_id: int, update: bool = False) -> Self:
         if not update and user_id in cls._cache:
@@ -188,6 +191,9 @@ class Friend(BaseModel):
 
     added_at = DateTimeTZField(default=pendulum.now)
     frequency = IntegerField(default=1)
+
+    def __str__(self):
+        return super().__repr__()
 
     class Meta:
         table_name = "friend"

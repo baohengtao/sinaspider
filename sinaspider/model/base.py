@@ -13,7 +13,7 @@ class BaseModel(Model):
     class Meta:
         database = database
 
-    def __str__(self):
+    def __repr__(self):
         model = model_to_dict(self, recurse=False)
         for k, v in model.items():
             if isinstance(v, datetime):

@@ -55,6 +55,9 @@ class UserConfig(BaseModel):
         self.page = Page(self.user_id)
         self._liked_list: list[dict] = []
 
+    def __str__(self):
+        return super().__repr__()
+
     @classmethod
     async def from_id(cls, user_id: int) -> Self:
         user = await User.from_id(user_id, update=True)

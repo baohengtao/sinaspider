@@ -31,7 +31,8 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
     if pics := info.pop('pics', []):
         if isinstance(pics, dict):
             assert pics.pop('') == {
-                'videoSrc': 'https://video.weibo.com/media/play?livephoto=https%3A%2F%2Flivephoto.us.sinaimg.cn%2F.mov',
+                'videoSrc': 'https://video.weibo.com/media/play?'
+                'livephoto=https%3A%2F%2Flivephoto.us.sinaimg.cn%2F.mov',
                 'type': 'livephotos'}
             pics = [pics[str(i)] for i in range(len(pics))]
         assert isinstance(pics, list)
