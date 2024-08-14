@@ -33,7 +33,7 @@ class WeiboHist:
 
     def parse_photos_info(self) -> dict:
         final_photos = self.weibo_dict.pop('photos', [])
-        photos, ori_num = parse_photos_info_from_hist(self.hist_mblogs)
+        photos, ori_num = get_photos_info_from_hist(self.hist_mblogs)
 
         if not set(final_photos).issubset(set(photos)):
             console.log(
@@ -56,7 +56,7 @@ class WeiboHist:
         self.weibo_dict |= info
 
 
-def parse_photos_info(info: dict) -> list[str]:
+def get_photos_info(info: dict) -> list[str]:
     if info['pic_num'] == 0:
         return []
     if 'pic_infos' in info:
@@ -98,11 +98,11 @@ def parse_photos_info(info: dict) -> list[str]:
     return photos
 
 
-def parse_photos_info_from_hist(hist_mblogs) -> tuple[list[str], int]:
+def get_photos_info_from_hist(hist_mblogs) -> tuple[list[str], int]:
     photos, ori_num = [], None
     for mblog in hist_mblogs:
         try:
-            ps = parse_photos_info(mblog)
+            ps = get_photos_info(mblog)
         except KeyError:
             if '抱歉，此微博已被删除。查看帮助：' not in mblog['text']:
                 console.log(
@@ -118,97 +118,100 @@ def parse_photos_info_from_hist(hist_mblogs) -> tuple[list[str], int]:
     return photos, ori_num
 
 
+def get_region_from_mblog(mblog):
+    if region_name := mblog.get('region_name'):
+        region_name = region_name.removeprefix('发布于').strip()
+    if region_name == '其他':
+        region_name = None
+    return region_name
+
+
+def get_location_url_from_mblog(mblog):
+    url_struct = mblog.get('url_struct', [])
+    pos = [u for u in url_struct if u.get('object_type') == 'place']
+    if not pos:
+        return None
+    assert len(pos) == 1
+    pos = pos[0]
+    page_id = pos['page_id']
+    assert page_id.startswith('100101')
+    location_id = page_id.removeprefix('100101')
+    location = pos['url_title']
+    return {
+        'location': location,
+        'location_id': location_id,
+    }
+
+
+def get_location_from_mblog(mblog):
+
+    tag_struct = [s for s in mblog.get(
+        'tag_struct', []) if s.get('otype') == 'place']
+    assert len(tag_struct) <= 1
+    if tag_struct:
+        tag_struct = tag_struct[0]
+        location_id: str = tag_struct['oid']
+        assert location_id.startswith('1022:100101')
+        location_id = location_id.removeprefix('1022:100101')
+        location = tag_struct['tag_name']
+        tag_struct = {
+            'location': location,
+            'location_id': location_id,
+        }
+
+    # parse geo
+    if geo := mblog.get('geo'):
+        assert geo['type'] == 'Point'
+        lat, lng = geo['coordinates']
+        assert list(geo.keys()) == ['type', 'coordinates']
+        geo = {
+            'latitude': lat,
+            'longitude': lng,
+        }
+
+    # parse annotations
+    annotations = [a for a in mblog.get(
+        'annotations', []) if 'place' in a]
+    assert len(annotations) <= 1
+    if annotations:
+        annotations = annotations[0]['place']
+        if annotations == {'spot_type': '0'}:
+            annotations = None
+        else:
+            annotations = {
+                'title': annotations.get('title'),
+                'location_id': annotations['poiid'],
+            }
+
+    # merge annotations to tag_struct or geo
+    if tag_struct:
+        assert annotations
+        assert tag_struct['location_id'] == annotations['location_id']
+        tag_struct |= annotations
+    elif geo and annotations:
+        geo |= annotations
+    else:
+        if geo and not annotations:
+            console.log(
+                f'geo {geo} found but no annotation', style='error')
+
+        return annotations or None
+
+    if tag_struct and geo:
+        return tag_struct | geo
+    elif not geo:
+        return tag_struct
+    else:
+        return geo
+
+
 def parse_location_info_from_hist(hist_mblogs) -> dict | None:
     if not hist_mblogs:
         return
-    regions = []
-    for mblog in hist_mblogs:
-        if region_name := mblog.get('region_name'):
-            region_name = region_name.removeprefix('发布于').strip()
-        if region_name == '其他':
-            region_name = None
-        regions.append(region_name)
-
-    locations_from_url = []
-    for mblog in hist_mblogs:
-        url_struct = mblog.get('url_struct', [])
-        pos = [u for u in url_struct if u.get('object_type') == 'place']
-        if not pos:
-            locations_from_url.append(None)
-            continue
-        assert len(pos) == 1
-        pos = pos[0]
-        page_id = pos['page_id']
-        assert page_id.startswith('100101')
-        location_id = page_id.removeprefix('100101')
-        location = pos['url_title']
-        locations_from_url.append({
-            'location': location,
-            'location_id': location_id,
-        })
-
-    locations = []
-    for mblog in hist_mblogs:
-        # parse tag_struct
-        tag_struct = [s for s in mblog.get(
-            'tag_struct', []) if s.get('otype') == 'place']
-        assert len(tag_struct) <= 1
-        if tag_struct:
-            tag_struct = tag_struct[0]
-            location_id: str = tag_struct['oid']
-            assert location_id.startswith('1022:100101')
-            location_id = location_id.removeprefix('1022:100101')
-            location = tag_struct['tag_name']
-            tag_struct = {
-                'location': location,
-                'location_id': location_id,
-            }
-
-        # parse geo
-        if geo := mblog.get('geo'):
-            assert geo['type'] == 'Point'
-            lat, lng = geo['coordinates']
-            assert list(geo.keys()) == ['type', 'coordinates']
-            geo = {
-                'latitude': lat,
-                'longitude': lng,
-            }
-
-        # parse annotations
-        annotations = [a for a in mblog.get(
-            'annotations', []) if 'place' in a]
-        assert len(annotations) <= 1
-        if annotations:
-            annotations = annotations[0]['place']
-            if annotations == {'spot_type': '0'}:
-                annotations = None
-            else:
-                annotations = {
-                    'title': annotations.get('title'),
-                    'location_id': annotations['poiid'],
-                }
-
-        # merge annotations to tag_struct or geo
-        if tag_struct:
-            assert annotations
-            assert tag_struct['location_id'] == annotations['location_id']
-            tag_struct |= annotations
-        elif geo and annotations:
-            geo |= annotations
-        else:
-            if geo and not annotations:
-                console.log(
-                    f'geo {geo} found but no annotation', style='error')
-
-            locations.append(annotations or None)
-            continue
-
-        if tag_struct and geo:
-            locations.append(tag_struct | geo)
-        elif not geo:
-            locations.append(tag_struct)
-        else:
-            locations.append(geo)
+    regions = [get_region_from_mblog(mblog) for mblog in hist_mblogs]
+    locations_from_url = [get_location_url_from_mblog(
+        mblog) for mblog in hist_mblogs]
+    locations = [get_location_from_mblog(mblog) for mblog in hist_mblogs]
 
     assert len(locations) == len(
         locations_from_url) == len(hist_mblogs)

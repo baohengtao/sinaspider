@@ -46,6 +46,7 @@ class UserConfig(BaseModel):
     bilateral = ArrayField(field_class=TextField, null=True)
     blocked = BooleanField(default=False)
     weibo_cache_at = DateTimeTZField(default=None, null=True)
+    statuses_count = IntegerField()
 
     class Meta:
         table_name = "userconfig"

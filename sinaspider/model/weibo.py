@@ -82,7 +82,8 @@ class Weibo(BaseModel):
         wb_id = normalize_wb_id(wb_id)
         if update or not cls.get_or_none(id=wb_id):
             try:
-                weibo_dict = await (await WeiboCache.from_id(wb_id, update=update)).parse()
+                cache = await WeiboCache.from_id(wb_id, update=update)
+                weibo_dict = await cache.parse()
             except WeiboNotFoundError as e:
                 if not cls.get_or_none(id=wb_id):
                     raise e
