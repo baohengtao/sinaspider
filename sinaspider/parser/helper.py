@@ -1,4 +1,6 @@
 
+from copy import deepcopy
+
 import pendulum
 
 from sinaspider import console
@@ -143,7 +145,8 @@ def get_location_url_from_mblog(mblog):
     }
 
 
-def get_location_from_mblog(mblog):
+def get_location_from_mblog(mblog, from_hist=True):
+    mblog = deepcopy(mblog)
 
     tag_struct = [s for s in mblog.get(
         'tag_struct', []) if s.get('otype') == 'place']
@@ -158,12 +161,14 @@ def get_location_from_mblog(mblog):
             'location': location,
             'location_id': location_id,
         }
+        if not from_hist:
+            tag_struct['location_title'] = tag_struct.pop('location')
 
     # parse geo
     if geo := mblog.get('geo'):
-        assert geo['type'] == 'Point'
-        lat, lng = geo['coordinates']
-        assert list(geo.keys()) == ['type', 'coordinates']
+        assert geo.pop('type') == 'Point'
+        lat, lng = geo.pop('coordinates')
+        assert not geo or not from_hist
         geo = {
             'latitude': lat,
             'longitude': lng,
@@ -179,7 +184,7 @@ def get_location_from_mblog(mblog):
             annotations = None
         else:
             annotations = {
-                'title': annotations.get('title'),
+                'location_title': annotations.get('title'),
                 'location_id': annotations['poiid'],
             }
 
@@ -187,7 +192,7 @@ def get_location_from_mblog(mblog):
     if tag_struct:
         assert annotations
         assert tag_struct['location_id'] == annotations['location_id']
-        tag_struct |= annotations
+        tag_struct = annotations | tag_struct
     elif geo and annotations:
         geo |= annotations
     else:
@@ -303,8 +308,8 @@ def merge_hist_location(weibo: dict) -> dict:
         console.log('<'*50, style='warning')
 
     # compare location
-    if not weibo.get('location'):
-        if locations[-1] and ('weico' not in weibo.get('mblog_from', '')):
+    if not weibo.get('location') and not weibo.get('location_title'):
+        if locations[-1]:
             if 'location' not in locations[-1]:
                 console.log(
                     '>>>>>>>>>>>location not found but geo is in there<<<<<<<<<<<<<<',
@@ -316,15 +321,17 @@ def merge_hist_location(weibo: dict) -> dict:
                     'location not parsed but it should be in weibo',
                     style='error')
     else:
-        assert weibo['location'] == locations[-1]['location']
-        assert weibo['location_id'] == locations[-1]['location_id']
+        lx = locations[-1]
+        assert (weibo.get('location') == lx['location']
+                or weibo['location_title'] == lx['location_title'])
+        assert weibo['location_id'] == lx['location_id']
 
     weibo['region_name'] = weibo.pop('selected_region')
     if location := weibo.pop('selected_location'):
         weibo |= location
-        weibo.pop('title', None)
+        weibo.pop('location_title', None)
         if 'location' not in location:
             assert 'location' not in weibo
-            weibo['location'] = location['title']
+            weibo['location'] = location['location_title']
 
     return weibo

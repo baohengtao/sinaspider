@@ -52,19 +52,19 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
         assert info['pic_num'] == 0
 
     weibo = dict(
+        id=(id_ := int(info.pop('id'))),
+        bid=(bid := encode_wb_id(id_)),
         user_id=(user_id := user['id']),
         username=user.get('remark') or user['screen_name'],
         created_at=created_at,
         region_name=region_name,
         photos=pics,
-        id=(id_ := int(info.pop('id'))),
-        bid=(bid := encode_wb_id(id_)),
         url=f'https://weibo.com/{user_id}/{bid}',
         url_m=f'https://m.weibo.cn/detail/{bid}',
         source=BeautifulSoup(
             info.pop('source').strip(), 'html.parser').text,
-        mblog_from=info.pop('mblog_from'),
         pic_num=info.pop('pic_num'),
+        mblog_from=info.pop('mblog_from'),
         edit_count=info.pop('edit_count', 0),
         update_status='updated',
 
@@ -101,7 +101,7 @@ def video_info(info) -> dict | None:
         console.log('cannot get video url', style='error')
         return
     for key in ['mp4_1080p_mp4', 'mp4_720p_mp4',
-                'mp4_hd_mp4', 'mp4_ld_mp4']:
+                'mp4_hd_mp4', 'mp4_sd_mp4', 'mp4_ld_mp4']:
         if url := urls.get(key):
             weibo['video_url'] = url
             break

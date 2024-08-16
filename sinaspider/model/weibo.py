@@ -459,8 +459,11 @@ class Location(BaseModel):
 
 class WeiboCache(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
+    user_id = BigIntegerField(index=True)
     timeline_web = JSONField(null=True)
     page_web = JSONField(null=True)
+    timeline_weico = JSONField(null=True)
+    page_weico = JSONField(null=True)
     liked_weico = JSONField(null=True)
     hist_mblogs = JSONField(null=True)
     edit_count = IntegerField()
@@ -482,37 +485,56 @@ class WeiboCache(BaseModel):
             raise
         return await cls.upsert(mblog)
 
+    @staticmethod
+    def preprocess_mblog(mblog):
+        if 'pic_ids' not in mblog:
+            assert 'weico' in mblog['mblog_from']
+            p = [u for u in mblog['url_struct'] if 'pic_ids' in u]
+            assert len(p) == 1
+            p = p[0]
+            assert p | mblog == mblog | p
+            mblog |= p
+        return mblog
+
     @classmethod
     async def upsert(cls, mblog: dict) -> Self:
+        mblog = cls.preprocess_mblog(mblog)
+        assert len(mblog['pic_ids']) == min(mblog['pic_num'], 9)
+        need_page = (mblog['pic_num'] > 9) or mblog['isLongText']
+
         weibo_id = mblog['id']
+        user_id = mblog['user']['id']
         edit_count = mblog.get('edit_count', 0)
         mblog_from = mblog['mblog_from']
         if cache := WeiboCache.get_or_none(id=weibo_id):
-            if mblog_from == 'page_web' or (
-                    mblog_from == 'timeline_web' and not cache.page_web):
-                cache.updated_at = pendulum.now()
+            assert cache.user_id == user_id
             assert bool(cache.edit_count) == bool(cache.hist_mblogs)
-            if cache.edit_count == edit_count:
+            assert edit_count >= cache.edit_count
+            if cache.edit_count == edit_count and getattr(cache, mblog_from):
+                if need_page:
+                    assert getattr(
+                        cache, mblog_from.replace('timeline', 'page'))
                 setattr(cache, mblog_from, mblog)
+                cache.updated_at = pendulum.now()
                 cache.save()
                 return cache
-            else:
-                assert edit_count > cache.edit_count
         row = {
             'id': weibo_id,
             mblog_from: mblog,
             "edit_count": edit_count,
+            'user_id': user_id,
         }
-        if edit_count > 0:
+        if edit_count > (cache.edit_count if cache else 0):
+            console.log(
+                f'fetching hist_mblogs: https://weibo.com/{user_id}/{weibo_id}')
             row['hist_mblogs'] = await get_hist_mblogs(weibo_id, edit_count)
 
-        if mblog_from != 'page_web':
-            if mblog['pic_num'] > len(mblog['pic_ids']):
-                assert mblog['pic_num'] > 9
-                row['page_web'] = await get_mblog_from_web(weibo_id)
-            elif mblog['isLongText']:
-                ends = f'<a href=\"/status/{mblog["id"]}\">全文</a>'
-                assert mblog['text'].endswith(ends)
+        if need_page and 'page' not in mblog_from:
+            console.log(
+                f'fetching weibo page: https://weibo.com/{user_id}/{weibo_id}')
+            if 'weico' in mblog_from:
+                row['page_weico'] = await get_mblog_from_weico(weibo_id)
+            else:
                 row['page_web'] = await get_mblog_from_web(weibo_id)
         if cache:
             update_model_from_dict(cache, row)
@@ -562,6 +584,20 @@ async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
             continue
         mblogs.append(card['mblog'])
     return dict(mblogs=mblogs, all_cards=all_cards)
+
+
+async def get_mblog_from_weico(id):
+    if fetcher.art_login is None:
+        await fetcher.toggle_art(True)
+    s = '2a2eb444' if fetcher.art_login else 'c2c66eee'
+    id = normalize_wb_id(id)
+    url = ('https://api.weibo.cn/2/statuses/show?'
+           f"&c=weicoabroad&from=12D9393010&s={s}"
+           f'&id={id}&isGetLongText=1'
+           )
+    mblog = await fetcher.get_json(url)
+    mblog['mblog_from'] = 'page_weico'
+    return mblog
 
 
 async def get_mblog_from_web(weibo_id: str | int) -> dict:
