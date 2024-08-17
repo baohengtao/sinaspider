@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import AsyncIterator, Self
 
 import pendulum
+from bs4 import BeautifulSoup
 
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
@@ -197,7 +198,7 @@ class Page:
     def __init__(self, user_id: int) -> None:
         self.id = int(user_id)
 
-    async def homepage(self, start_page: int = 1) -> AsyncIterator[dict]:
+    async def homepage_web(self, start_page: int = 1) -> AsyncIterator[dict]:
         """
         Fetch user's homepage weibo.
 
@@ -238,7 +239,7 @@ class Page:
                 console.log(
                     f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
 
-    async def homepage_api(self, start_page: int = 1) -> AsyncIterator[dict]:
+    async def homepage_weico(self, start_page: int = 1) -> AsyncIterator[dict]:
         """
         Fetch user's homepage weibo.
 
@@ -267,6 +268,9 @@ class Page:
                 return
 
             for weibo_info in mblogs:
+                if '生日动态' == BeautifulSoup(
+                        weibo_info['source'], 'lxml').text.strip():
+                    continue
                 assert weibo_info['user']['id'] == self.id
                 if 'retweeted_status' in weibo_info:
                     continue

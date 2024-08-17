@@ -104,7 +104,7 @@ class UserConfig(BaseModel):
                            since: pendulum.DateTime,
                            skip_exist: bool = False,
                            ) -> AsyncIterator['Weibo']:
-        async for mblog in self.page.homepage():
+        async for mblog in self.page.homepage_web():
             is_pinned = mblog.pop('is_pinned')
             created_at = pendulum.from_format(
                 mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')

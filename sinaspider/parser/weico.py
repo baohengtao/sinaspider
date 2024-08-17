@@ -1,3 +1,4 @@
+import re
 from copy import deepcopy
 
 import pendulum
@@ -16,6 +17,7 @@ from .helper import (
 
 def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
     info = deepcopy(mblog)
+    assert 'weico' in info['mblog_from']
     assert 'retweeted_status' not in info
     assert info.pop('idstr') == info.pop('mid') == str(info['id'])
 
@@ -26,9 +28,12 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
     else:
         assert pic_num == len(info['pic_ids'])
 
-    assert info['isLongText'] == ('longText' in info)
+    assert info['isLongText'] == (
+        ('longText' in info) or (info['pic_num'] > 9))
     if 'longText' in info:
         info['text'] = info['longText']['content']
+    url_pattern = r'http://t\.cn/[A-Za-z0-9]+|\u200b'
+    text = re.sub(url_pattern, '', info.pop('text'))
 
     user = info.pop('user')
     created_at = pendulum.from_format(
@@ -38,6 +43,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         region_name = region_name.removeprefix('发布于').strip()
     source = BeautifulSoup(
         info.pop('source'), 'lxml').text.strip()
+    assert source != '生日动态'
     pics = get_photos_info(info)
     weibo = dict(
         id=(id_ := int(info.pop('id'))),
@@ -45,7 +51,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         user_id=(user_id := user['id']),
         username=user.get('remark') or user['screen_name'],
         created_at=created_at,
-        text=info.pop('text').replace('\u200b', '').strip(),
+        text=text.strip(),
         region_name=region_name,
         photos=pics,
         url=f'https://weibo.com/{user_id}/{bid}',
@@ -85,11 +91,14 @@ def _get_video_info(info):
     video = {}
     if not (page_info := info.pop('page_info', None)):
         return
-    if (object_type := page_info.pop('object_type')) == 'video':
+    if (object_type := page_info.get('object_type')) == 'video':
         media_info = page_info.pop('media_info')
         assert media_info.pop('format') == 'mp4'
-        keys = ['mp4_1080p_mp4', 'mp4_720p_mp4', 'mp4_hd_mp4',
-                'mp4_sd_mp4', 'mp4_ld_mp4']
+        keys = ['mp4_1080p_mp4', 'mp4_1080p_url',
+                'mp4_720p_mp4', 'mp4_720p_url',
+                'mp4_hd_mp4', 'mp4_hd_url',
+                'mp4_sd_mp4', 'mp4_sd_url',
+                'mp4_ld_mp4', 'mp4_ld_url']
         for key in keys:
             if url := media_info.get(key):
                 video['video_url'] = url
@@ -99,13 +108,16 @@ def _get_video_info(info):
             raise ValueError('no video info')
         video['video_duration'] = media_info['duration']
     elif object_type == 'story':
-        slide = page_info['slide_cover']['slide_videos'][0]
+        slide = page_info['slide_cover']
+        if 'slide_videos' not in slide:
+            return
+        slide = slide['slide_videos'][0]
         video['video_url'] = slide['url']
         video['video_duration'] = slide['segment_duration'] // 1000
     if video:
-        assert page_info['page_title'].endswith('微博视频')
+        assert page_info['page_title'].endswith(('微博视频', '秒拍视频'))
     else:
-        assert object_type in ['webpage', 'audio', 'movie'], object_type
+        assert object_type in ['webpage', 'audio', 'movie', None], object_type
         assert not page_info['page_title'].endswith('微博视频')
 
     return video

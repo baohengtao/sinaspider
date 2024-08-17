@@ -14,6 +14,7 @@ from .helper import WeiboHist
 
 async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
     info = deepcopy(weibo_info)
+    assert 'web' in info['mblog_from']
     if (pic_num := info['pic_num']) < len(info['pic_ids']):
         console.log(
             f"pic_num < len(pic_ids) for {info['id']}",
@@ -171,7 +172,6 @@ async def text_info(text) -> dict:
         'location': location,
         'location_id': location_id,
     }
-    text = soup.get_text(' ', strip=True)
-    assert text == text.strip()
+    text = soup.get_text(' ', strip=True).removesuffix('网页链接').strip()
     res['text'] = text
     return {k: v for k, v in res.items() if v is not None}

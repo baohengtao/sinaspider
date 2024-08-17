@@ -11,3 +11,4 @@ docs
 test.*
 .env
 cookie.json
+*.json
