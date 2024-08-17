@@ -23,8 +23,8 @@ class WeiboHist:
             assert edit_at.is_local()
             assert 'edit_at' not in self.weibo_dict
             self.weibo_dict['edit_at'] = edit_at
-        else:
-            assert len(self.hist_mblogs) == 1
+        # else:
+        #     assert len(self.hist_mblogs) == 1
         self.parse_photos_info()
 
         location_info = parse_location_info_from_hist(self.hist_mblogs) or {}

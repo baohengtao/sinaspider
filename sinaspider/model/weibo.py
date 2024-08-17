@@ -29,7 +29,7 @@ from sinaspider.helper import (
     round_loc
 )
 from sinaspider.page import Page
-from sinaspider.parser import parse_weibo_from_web
+from sinaspider.parser import parse_weibo
 
 from .base import BaseModel
 from .user import Artist, User
@@ -545,12 +545,14 @@ class WeiboCache(BaseModel):
             cls.insert(row).execute()
         return cls.get_by_id(weibo_id)
 
-    async def parse(self):
-        info = self.page_web or self.timeline_web or self.liked_weico
+    async def parse(self, weico_first=False):
         assert bool(self.edit_count) == bool(self.hist_mblogs)
         if hist_mblogs := self.hist_mblogs:
             hist_mblogs = self.hist_mblogs['mblogs']
-        weibo_dict = await parse_weibo_from_web(info, hist_mblogs)
+        web = self.page_web or self.timeline_web
+        weico = self.page_weico or self.timeline_weico or self.liked_weico
+        info = (weico or web) if weico_first else (web or weico)
+        weibo_dict = await parse_weibo(info, hist_mblogs)
         assert 'updated_at' not in weibo_dict
         assert 'added_at' not in weibo_dict
         if self.updated_at:
