@@ -22,7 +22,7 @@ from playhouse.shortcuts import model_to_dict, update_model_from_dict
 from rich.prompt import Confirm
 
 from sinaspider import console
-from sinaspider.exceptions import WeiboNotFoundError
+from sinaspider.exceptions import HistLocationError, WeiboNotFoundError
 from sinaspider.helper import (
     fetcher, normalize_wb_id,
     parse_url_extension,
@@ -552,7 +552,14 @@ class WeiboCache(BaseModel):
         web = self.page_web or self.timeline_web
         weico = self.page_weico or self.timeline_weico or self.liked_weico
         info = (weico or web) if weico_first else (web or weico)
-        weibo_dict = await parse_weibo(info, hist_mblogs)
+        try:
+            weibo_dict = await parse_weibo(info, hist_mblogs)
+        except HistLocationError:
+            self.hist_mblogs = await get_hist_mblogs(self.id, self.edit_count)
+            self.save()
+            hist_mblogs = self.hist_mblogs['mblogs']
+            weibo_dict = await parse_weibo(info, hist_mblogs)
+
         assert 'updated_at' not in weibo_dict
         assert 'added_at' not in weibo_dict
         if self.updated_at:

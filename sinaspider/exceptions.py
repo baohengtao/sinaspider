@@ -7,3 +7,7 @@ class WeiboNotFoundError(Exception):
 
 class UserNotFoundError(Exception):
     pass
+
+
+class HistLocationError(Exception):
+    pass

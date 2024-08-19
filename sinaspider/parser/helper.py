@@ -4,6 +4,7 @@ from copy import deepcopy
 import pendulum
 
 from sinaspider import console
+from sinaspider.exceptions import HistLocationError
 
 
 class WeiboHist:
@@ -30,7 +31,10 @@ class WeiboHist:
         location_info = parse_location_info_from_hist(self.hist_mblogs) or {}
         assert self.weibo_dict | location_info == location_info | self.weibo_dict
         self.weibo_dict |= location_info
-        self.weibo_dict = merge_hist_location(self.weibo_dict)
+        try:
+            self.weibo_dict = merge_hist_location(self.weibo_dict)
+        except AssertionError:
+            raise HistLocationError(self.weibo_dict)
         return self.weibo_dict
 
     def parse_photos_info(self) -> dict:
