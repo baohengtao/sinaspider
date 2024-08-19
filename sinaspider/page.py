@@ -198,7 +198,7 @@ class Page:
     def __init__(self, user_id: int) -> None:
         self.id = int(user_id)
 
-    async def homepage_web(self, start_page: int = 1) -> AsyncIterator[dict]:
+    async def homepage_web(self) -> AsyncIterator[dict]:
         """
         Fetch user's homepage weibo.
 
@@ -206,24 +206,15 @@ class Page:
                 start_page: the start page to fetch
                 parse: whether to parse weibo, default True
         """
-        url = ('https://m.weibo.cn/api/container/getIndex'
-               f'?containerid=107603{self.id}&page=%s')
-        for page in itertools.count(start=max(start_page, 1)):
-            for _ in range(3):
-                if (js := await fetcher.get_json(url % page))['ok']:
-                    break
-                if js['msg'] == '请求过于频繁，歇歇吧':
-                    raise ConnectionError(js['msg'])
-            else:
-                console.log(
-                    "not js['ok'], seems reached end, no wb return for "
-                    f"page {page}", style='warning')
-                return
+        url = ('https://m.weibo.cn/api/container/getIndex?containerid='
+               f'230413{self.id}_-_WEIBO_SECOND_PROFILE_ORI')
+        since_id = None
+        ids = []
+        for page in itertools.count(start=1):
+            params = {'since_id': since_id} if since_id else None
+            data = (await fetcher.get_json(url, params=params))['data']
 
-            mblogs = [card['mblog'] for card in js['data']['cards']
-                      if card['card_type'] == 9]
-
-            for weibo_info in mblogs:
+            for weibo_info in _yield_from_cards(data['cards']):
                 if weibo_info['user']['id'] != self.id:
                     assert '评论过的微博' in weibo_info['title']['text']
                     continue
@@ -234,10 +225,19 @@ class Page:
                 weibo_info['mblog_from'] = 'timeline_web'
                 weibo_info['is_pinned'] = weibo_info.get(
                     'title', {}).get('text') == '置顶'
+                assert weibo_info['id'] not in ids
+                ids.append(weibo_info['id'])
                 yield weibo_info
             else:
                 console.log(
                     f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+            if not (since_id := data['cardlistInfo'].get('since_id')):
+                assert params is None or data['cards'][0]['name'] == '暂无微博'
+                console.log(
+                    f"seems reached end at page {page} for {url, params}",
+                    style='warning'
+                )
+                return
 
     async def homepage_weico(self, start_page: int = 1) -> AsyncIterator[dict]:
         """
@@ -250,14 +250,14 @@ class Page:
         s = "99312000" if fetcher.art_login else "b59fafff"
         # fetch original weibo only
         url = ('https://api.weibo.cn/2/profile/statuses/tab?c=weicoabroad&'
-               f'containerid=230413{self.id}_-_WEIBO_SECOND_PROFILE_WEIBO_ORI&'
+               f'containerid=230413{self.id}_-_WEIBO_SECOND_PROFILE_WEIBO&'
                f'from=12CC293010&page=%s&s={s}'
                )
 
+        ids = []
         for page in itertools.count(start=max(start_page, 1)):
             cards = (await fetcher.get_json(url % page))['cards']
-            mblogs = [card['mblog'] for card in cards
-                      if card['card_type'] == 9]
+            mblogs = list(_yield_from_cards(cards))
             if not mblogs:
                 assert len(cards) == 1
                 assert cards[0]['name'] == '暂无微博'
@@ -271,10 +271,23 @@ class Page:
                 if '生日动态' == BeautifulSoup(
                         weibo_info['source'], 'lxml').text.strip():
                     continue
-                assert weibo_info['user']['id'] == self.id
+                if weibo_info['user']['id'] != self.id:
+                    assert (
+                        (weibo_info.get('ori_uid') == self.id)
+                        or weibo_info.get('like_status')
+                        or re.findall(r'(评论|赞)过的微博',
+                                      weibo_info['title']['text']))
+                    continue
                 if 'retweeted_status' in weibo_info:
                     continue
                 weibo_info['mblog_from'] = 'timeline_weico'
+                if weibo_info['id'] in ids:
+                    id_ = weibo_info['id']
+                    ids = ids[-10:]
+                    pid = [m['id'] for m in mblogs]
+                    raise ValueError(
+                        f'{id_} last 10 ids: {ids} current page ids: {pid}')
+                ids.append(weibo_info['id'])
                 yield weibo_info
             else:
                 console.log(

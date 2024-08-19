@@ -77,10 +77,7 @@ class Fetcher:
         browser = webdriver.Chrome()
         browser.get('https://m.weibo.cn')
         input('press enter after login...')
-        for cookie in browser.get_cookies():
-            for k in ['expiry', 'httpOnly', 'sameSite', 'secure']:
-                cookie.pop(k, None)
-            sess.cookies.set(**cookie)
+        sess.cookies = {c['name']: c['value'] for c in browser.get_cookies()}
         browser.quit()
         self.save_cookie()
 
