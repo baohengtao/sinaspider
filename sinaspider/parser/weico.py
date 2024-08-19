@@ -117,7 +117,7 @@ def _get_video_info(info):
         assert page_info['page_title'].endswith(('微博视频', '秒拍视频'))
     else:
         types = [
-            'webpage', 'audio', 'hudongvote',
+            'webpage', 'audio', 'book', 'hudongvote',
             'movie', None, 'user']
         assert object_type in types, object_type
         assert not page_info['page_title'].endswith('视频')

@@ -308,8 +308,10 @@ def merge_hist_location(weibo: dict) -> dict:
         console.log('<'*50, style='warning')
 
     # compare location
+    mblog_from = weibo['mblog_from']
     if not weibo.get('location') and not weibo.get('location_title'):
         if locations[-1]:
+            assert 'web' in mblog_from
             if 'location' not in locations[-1]:
                 console.log(
                     '>>>>>>>>>>>location not found but geo is in there<<<<<<<<<<<<<<',
@@ -322,9 +324,15 @@ def merge_hist_location(weibo: dict) -> dict:
                     style='error')
     else:
         lx = locations[-1]
-        assert (weibo.get('location') == lx['location']
-                or weibo['location_title'] == lx['location_title'])
         assert weibo['location_id'] == lx['location_id']
+        if 'web' in mblog_from:
+            assert weibo['location'] == lx['location']
+        elif 'location' in lx:
+
+            assert (weibo.get('location') == lx['location'] or
+                    weibo['location_title'] == lx['location'].split('·', 1)[-1])
+        else:
+            assert weibo['location_title'] == lx['location_title']
 
     weibo['region_name'] = weibo.pop('selected_region')
     if location := weibo.pop('selected_location'):

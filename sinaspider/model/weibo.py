@@ -562,6 +562,8 @@ class WeiboCache(BaseModel):
 
 
 async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
+    if fetcher.art_login is None:
+        await fetcher.toggle_art(True)
     s = '0726b708' if fetcher.art_login else 'c773e7e0'
     edit_url = ("https://api.weibo.cn/2/cardlist?c=weicoabroad"
                 f"&containerid=231440_-_{weibo_id}"
@@ -570,7 +572,9 @@ async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
     all_cards = []
     for page in itertools.count(1):
         js = await fetcher.get_json(edit_url % page)
-        all_cards += js['cards']
+        if not (cards := js.get('cards')):
+            raise ValueError(js)
+        all_cards += cards
         if len(all_cards) >= edit_count + 1:
             assert len(all_cards) == edit_count + 1
             break
