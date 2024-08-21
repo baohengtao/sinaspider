@@ -52,7 +52,6 @@ class Weibo(BaseModel):
     reposts_count = IntegerField(null=True)
     source = TextField(null=True)
     topics = ArrayField(field_class=TextField, null=True)
-    video_duration = BigIntegerField(null=True)
     video_url = TextField(null=True)
     photos = ArrayField(field_class=TextField, null=True)
     photos_edited = ArrayField(field_class=TextField, null=True)
@@ -257,9 +256,6 @@ class Weibo(BaseModel):
         if url := self.video_url:
             assert not self.photos_extra
             assert ";" not in url
-            # if (duration := self.video_duration) and duration > 600:
-            #     console.log(f"video_duration is {duration})...skipping...")
-            # else:
             ext = parse_url_extension(url) or '.mp4'
             assert ext == '.mp4'
             yield {
@@ -499,13 +495,17 @@ class WeiboCache(BaseModel):
     @classmethod
     async def upsert(cls, mblog: dict) -> Self:
         mblog = cls.preprocess_mblog(mblog)
-        assert len(mblog['pic_ids']) == min(mblog['pic_num'], 9)
-        need_page = (mblog['pic_num'] > 9) or mblog['isLongText']
+        mblog_from = mblog['mblog_from']
+        if 'page' not in mblog_from:
+            assert len(mblog['pic_ids']) == min(mblog['pic_num'], 9)
+            need_page = ((mblog['pic_num'] > 9) or mblog['isLongText']
+                         or 'mix_media_ids' in mblog)
+        else:
+            need_page = False
 
         weibo_id = mblog['id']
         user_id = mblog['user']['id']
         edit_count = mblog.get('edit_count', 0)
-        mblog_from = mblog['mblog_from']
         if cache := WeiboCache.get_or_none(id=weibo_id):
             assert cache.user_id == user_id
             assert bool(cache.edit_count) == bool(cache.hist_mblogs)
@@ -529,7 +529,7 @@ class WeiboCache(BaseModel):
                 f'fetching hist_mblogs: https://weibo.com/{user_id}/{weibo_id}')
             row['hist_mblogs'] = await get_hist_mblogs(weibo_id, edit_count)
 
-        if need_page and 'page' not in mblog_from:
+        if need_page:
             console.log(
                 f'fetching weibo page: https://weibo.com/{user_id}/{weibo_id}')
             if 'weico' in mblog_from:
@@ -579,14 +579,11 @@ async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
     all_cards = []
     for page in itertools.count(1):
         js = await fetcher.get_json(edit_url % page)
-        if not (cards := js.get('cards')):
+        if 'cards' not in js:
             raise ValueError(js)
-        all_cards += cards
-        if len(all_cards) >= edit_count + 1:
-            assert len(all_cards) == edit_count + 1
-            break
-        elif not js['cards']:
-            assert len(all_cards) == edit_count
+        all_cards += js['cards']
+        assert len(all_cards) <= edit_count + 1
+        if (len(all_cards) == edit_count + 1) or not js['cards']:
             break
     mblogs = []
     for card in all_cards[::-1]:
@@ -610,6 +607,7 @@ async def get_mblog_from_weico(id):
            )
     mblog = await fetcher.get_json(url)
     mblog['mblog_from'] = 'page_weico'
+    assert mblog['pic_num'] == len(mblog['pic_ids'])
     return mblog
 
 

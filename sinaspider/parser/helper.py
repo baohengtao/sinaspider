@@ -65,16 +65,10 @@ class WeiboHist:
 def get_photos_info(info: dict) -> list[str]:
     if info['pic_num'] == 0:
         return []
-    if 'pic_infos' in info:
-        pic_infos = [info['pic_infos'][pic_id]
-                     for pic_id in info['pic_ids']]
-        photos = [[pic_info['largest']['url'], pic_info.get('video', '')]
-                  for pic_info in pic_infos]
-    elif pics := info.get('pics'):
-        pics = pics.values() if isinstance(pics, dict) else pics
-        pics = [p for p in pics if 'pid' in p]
-        photos = [[pic['large']['url'], pic.get('videoSrc', '')]
-                  for pic in pics]
+    if pic_infos := info.get('pic_infos'):
+        assert list(pic_infos) == info['pic_ids']
+        photos = [[p['largest']['url'], p.get('video', '')]
+                  for p in pic_infos.values()]
     elif page_info := info.get('page_info'):
         assert info['pic_num'] == 1
         page_pic = page_info['page_pic']
@@ -84,13 +78,12 @@ def get_photos_info(info: dict) -> list[str]:
     else:
         assert info['pic_num'] == 1
         for struct in info['url_struct']:
-            if 'pic_infos' in struct:
+            if pic_infos := struct.get('pic_infos'):
                 break
-        pic_infos = [struct['pic_infos'][pic_id]
-                     for pic_id in struct['pic_ids']]
-        photos = [[pic_info['largest']['url'], pic_info.get('video', '')]
-                  for pic_info in pic_infos]
         info = struct
+        assert list(pic_infos) == info['pic_ids']
+        photos = [[p['largest']['url'], p.get('video', '')]
+                  for p in pic_infos.values()]
 
     for p in photos:
         if p[0].endswith('.gif'):

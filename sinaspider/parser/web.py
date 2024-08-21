@@ -29,6 +29,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
     if region_name := info.pop('region_name', None):
         region_name = region_name.removeprefix('发布于').strip()
     assert 'retweeted_status' not in info
+    pics = vids = None
     if pics := info.pop('pics', []):
         if isinstance(pics, dict):
             assert pics.pop('') == {
@@ -38,10 +39,12 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
             pics = [pics[str(i)] for i in range(len(pics))]
         assert isinstance(pics, list)
         pics = [pic for pic in pics if 'pid' in pic]
-        # if x := weibo_info.pop('pic_ids'):
-        #     assert [pic['pid'] for pic in pics] == x
+        vids = [p for p in pics if p.get('type') == 'video']
+        pics = [p for p in pics if p.get('type') != 'video']
+        assert [pic['pid'] for pic in pics] == info.pop('pic_ids')
         pics = [[pic['large']['url'], pic.get('videoSrc', '')]
                 for pic in pics]
+        vids = [[vid['large']['url'], vid.get('videoSrc', '')] for vid in vids]
         for p in pics:
             if p[0].endswith('.gif'):
                 p[1] = ''
@@ -60,6 +63,8 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
         created_at=created_at,
         region_name=region_name,
         photos=pics,
+        videos=vids,
+        video_url=_get_video_info(info),
         url=f'https://weibo.com/{user_id}/{bid}',
         url_m=f'https://m.weibo.cn/detail/{bid}',
         source=BeautifulSoup(
@@ -71,8 +76,6 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
 
     )
 
-    if video := video_info(info):
-        weibo |= video
     weibo |= await text_info(info['text'])
     if hist_mblogs:
         weibo = WeiboHist(weibo, hist_mblogs).parse()
@@ -93,8 +96,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
     return weibo
 
 
-def video_info(info) -> dict | None:
-    weibo = {}
+def _get_video_info(info) -> str | None:
     page_info = info.get('page_info', {})
     if page_info.get('type') != "video":
         return
@@ -103,15 +105,10 @@ def video_info(info) -> dict | None:
         return
     for key in ['mp4_1080p_mp4', 'mp4_720p_mp4',
                 'mp4_hd_mp4', 'mp4_sd_mp4', 'mp4_ld_mp4']:
-        if url := urls.get(key):
-            weibo['video_url'] = url
-            break
-    else:
-        console.log(f'no video info:==>{page_info}', style='error')
-        raise ValueError('no video info')
-
-    weibo['video_duration'] = page_info['media_info']['duration']
-    return weibo
+        if video_url := urls.get(key):
+            return video_url
+    console.log(f'no video info:==>{page_info}', style='error')
+    raise ValueError('no video info')
 
 
 async def text_info(text) -> dict:
