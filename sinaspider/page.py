@@ -215,16 +215,16 @@ class Page:
             data = (await fetcher.get_json(url, params=params))['data']
 
             for weibo_info in _yield_from_cards(data['cards']):
+                if weibo_info['source'] == '生日动态':
+                    continue
                 if weibo_info['user']['id'] != self.id:
                     assert '评论过的微博' in weibo_info['title']['text']
                     continue
-                if weibo_info['source'] == '生日动态':
-                    continue
                 if 'retweeted_status' in weibo_info:
                     continue
-                weibo_info['mblog_from'] = 'timeline_web'
                 weibo_info['is_pinned'] = weibo_info.get(
                     'title', {}).get('text') == '置顶'
+                weibo_info['mblog_from'] = 'timeline_web'
                 assert weibo_info['id'] not in ids
                 ids.append(weibo_info['id'])
                 yield weibo_info
@@ -280,6 +280,8 @@ class Page:
                     continue
                 if 'retweeted_status' in weibo_info:
                     continue
+                weibo_info['is_pinned'] = weibo_info.get(
+                    'title', {}).get('text') == '置顶'
                 weibo_info['mblog_from'] = 'timeline_weico'
                 if weibo_info['id'] in ids:
                     id_ = weibo_info['id']
