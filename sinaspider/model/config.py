@@ -257,7 +257,7 @@ class UserConfig(BaseModel):
         console.rule(msg, style="magenta")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
-        imgs = await self._save_liked(download_dir)
+        imgs = self._save_liked(download_dir)
         await download_files(imgs)
 
         if count := len(self._liked_list):
@@ -333,6 +333,7 @@ class UserConfig(BaseModel):
                           ) -> AsyncIterator[dict]:
         assert Friend.get_or_none(user_id=self.user_id)
         download_dir /= 'Liked'
+        download_dir.mkdir(parents=True, exist_ok=True)
         dir_saved = download_dir / '_saved'
         dir_new = download_dir / f'_Liked_New/{self.username}'
         if not self.liked_fetch_at or dir_new.exists():

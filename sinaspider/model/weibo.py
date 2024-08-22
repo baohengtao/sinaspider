@@ -506,7 +506,8 @@ class WeiboCache(BaseModel):
         edit_count = mblog.get('edit_count', 0)
         if cache := WeiboCache.get_or_none(id=weibo_id):
             assert cache.user_id == user_id
-            assert bool(cache.edit_count) == bool(cache.hist_mblogs)
+            if cache.edit_count:
+                assert cache.hist_mblogs
             assert edit_count >= cache.edit_count
             if cache.edit_count == edit_count and getattr(cache, mblog_from):
                 if need_page:

@@ -6,7 +6,7 @@ import random
 import re
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import AsyncIterable
 from urllib.parse import unquote, urlparse
 
 import httpx
@@ -227,7 +227,7 @@ async def download_single_file(
     while True:
         try:
             r = await client.get(url)
-        except ConnectionError as e:
+        except httpx.HTTPError as e:
             period = 60
             console.log(
                 f"{e}: Sleepping {period} seconds and "
@@ -262,7 +262,7 @@ async def download_single_file(
         break
 
 
-async def download_files(imgs: Iterable[dict]):
+async def download_files(imgs: AsyncIterable[dict]):
     tasks = [asyncio.create_task(download_single_file(**img)) async for img in imgs]
     await asyncio.gather(*tasks)
 
