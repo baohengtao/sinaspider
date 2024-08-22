@@ -44,7 +44,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
         assert [pic['pid'] for pic in pics] == info.pop('pic_ids')
         pics = [[pic['large']['url'], pic.get('videoSrc', '')]
                 for pic in pics]
-        vids = [[vid['large']['url'], vid.get('videoSrc', '')] for vid in vids]
+        vids = [vid['videoSrc'] for vid in vids]
         for p in pics:
             if p[0].endswith('.gif'):
                 p[1] = ''
@@ -55,6 +55,12 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
     else:
         assert info['pic_num'] == 0
 
+    if video_url := _get_video_info(info):
+        if vids:
+            assert video_url in vids
+        else:
+            vids = [video_url]
+
     weibo = dict(
         id=(id_ := int(info.pop('id'))),
         bid=(bid := encode_wb_id(id_)),
@@ -64,7 +70,6 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
         region_name=region_name,
         photos=pics,
         videos=vids,
-        video_url=_get_video_info(info),
         url=f'https://weibo.com/{user_id}/{bid}',
         url_m=f'https://m.weibo.cn/detail/{bid}',
         source=BeautifulSoup(
@@ -85,7 +90,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
             v = 1000000
         weibo[key] = v
     weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
-    weibo['has_media'] = bool(weibo.get('video_url') or weibo.get(
+    weibo['has_media'] = bool(weibo.get('videos') or weibo.get(
         'photos') or weibo.get('photos_edited'))
 
     if loc := weibo.get('location'):
@@ -165,7 +170,7 @@ async def text_info(text) -> dict:
             location_id = await parse_loc_src(href)
     res = {
         'at_users': at_users,
-        'topics': topics,
+        'topics': sorted(set(topics)),
         'location': location,
         'location_id': location_id,
     }

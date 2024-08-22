@@ -32,6 +32,8 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         ('longText' in info) or (info['pic_num'] > 9))
     if 'longText' in info:
         info['text'] = info['longText']['content']
+        info |= info['longText']
+        assert info['text'] == info['content']
     url_pattern = r'http://t\.cn/[A-Za-z0-9]+|\u200b'
     text = re.sub(url_pattern, '', info.pop('text'))
 
@@ -45,6 +47,9 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         info.pop('source'), 'lxml').text.strip()
     assert source != '生日动态'
     pics, videos = get_medias(info)
+    if video_url := _get_video_url(info.pop('page_info', None)):
+        assert not videos
+        videos = [video_url]
     weibo = dict(
         id=(id_ := int(info.pop('id'))),
         bid=(bid := encode_wb_id(id_)),
@@ -52,17 +57,17 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         username=user.get('remark') or user['screen_name'],
         created_at=created_at,
         text=text.strip(),
+        at_users=re.findall(r'@([\u4e00-\u9fa5\w\-\·]+)', text),
         region_name=region_name,
         photos=pics,
         videos=videos,
-        video_url=_get_video_url(info.pop('page_info', None)),
         url=f'https://weibo.com/{user_id}/{bid}',
         url_m=f'https://m.weibo.cn/detail/{bid}',
         source=source,
         pic_num=pic_num,
         mblog_from=info.pop('mblog_from'),
         edit_count=info.pop('edit_count', 0),
-
+        update_status='updated',
     )
     l1 = get_location_from_mblog(info, from_hist=False)
     l2 = get_location_url_from_mblog(info)
@@ -76,16 +81,19 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         weibo |= location_info
 
     if topic_struct := info.pop('topic_struct', None):
-        weibo['topics'] = [topic['topic_title'] for topic in topic_struct]
+        weibo['topics'] = sorted(topic['topic_title']
+                                 for topic in topic_struct)
+
+    if hist_mblogs:
+        weibo = WeiboHist(weibo, hist_mblogs).parse()
 
     for key in ['reposts_count', 'comments_count', 'attitudes_count']:
         if (v := info.pop(key)) == '100万+':
             v = 1000000
         weibo[key] = v
     weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
-
-    if hist_mblogs:
-        weibo = WeiboHist(weibo, hist_mblogs).parse()
+    weibo['has_media'] = bool(weibo.get('videos') or weibo.get(
+        'photos') or weibo.get('photos_edited'))
 
     return weibo
 
@@ -120,15 +128,13 @@ def _get_video_url(page_info) -> str | None:
     if video_url:
         assert page_info['page_title'].endswith(
             ('微博视频', '秒拍视频', '微博故事', '美拍')), page_info
-    else:
-        types = [
-            'webpage', 'audio', 'book', 'hudongvote', 'cardlist',
-            'adFeedEvent', 'article',
-            'movie', None, 'user', 'wenda']
-        assert object_type in types, object_type
-        assert not page_info['page_title'].endswith('视频')
-
-    return video_url
+        return video_url.replace('http://', 'https://')
+    types = [
+        'webpage', 'audio', 'book', 'hudongvote', 'cardlist',
+        'adFeedEvent', 'article',
+        'movie', None, 'user', 'wenda']
+    assert object_type in types, object_type
+    assert not page_info['page_title'].endswith('视频')
 
 
 def get_medias(info):

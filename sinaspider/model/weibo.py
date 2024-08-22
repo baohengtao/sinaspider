@@ -52,7 +52,7 @@ class Weibo(BaseModel):
     reposts_count = IntegerField(null=True)
     source = TextField(null=True)
     topics = ArrayField(field_class=TextField, null=True)
-    video_url = TextField(null=True)
+    videos = ArrayField(field_class=TextField, null=True)
     photos = ArrayField(field_class=TextField, null=True)
     photos_edited = ArrayField(field_class=TextField, null=True)
     photos_extra = ArrayField(field_class=TextField, null=True)
@@ -253,15 +253,13 @@ class Weibo(BaseModel):
                     "xmp_info": self.gen_meta(sn=sn, url=url),
                     "filepath": filepath,
                 }
-        if url := self.video_url:
-            assert not self.photos_extra
-            assert ";" not in url
+        for sn, url in enumerate(self.videos or [], start=1):
             ext = parse_url_extension(url) or '.mp4'
             assert ext == '.mp4'
             yield {
                 "url": url,
-                "filename": f"{prefix}{ext}",
-                "xmp_info": self.gen_meta(url=url),
+                "filename": f"{prefix}_{sn}{ext}",
+                "xmp_info": self.gen_meta(url=url, sn=sn),
                 "filepath": filepath,
             }
 
@@ -475,7 +473,7 @@ class WeiboCache(BaseModel):
         if not update and (cache := cls.get_or_none(id=weibo_id)):
             return cache
         try:
-            mblog = await get_mblog_from_web(weibo_id)
+            mblog = await get_mblog_from_weico(weibo_id)
         except WeiboNotFoundError as e:
             console.log(e, style='error')
             raise
