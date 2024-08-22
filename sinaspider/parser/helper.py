@@ -214,13 +214,11 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
     locations_from_url = [get_location_url_from_mblog(
         mblog) for mblog in hist_mblogs]
     locations = [get_location_from_mblog(mblog) for mblog in hist_mblogs]
-
-    assert len(locations) == len(
-        locations_from_url) == len(hist_mblogs)
-    if locations == [None] * len(locations):
-        locations = locations_from_url
-    else:
-        assert locations_from_url == [None] * len(locations)
+    for i in range(len(hist_mblogs)):
+        if locations[i]:
+            assert not locations_from_url[i]
+        else:
+            locations[i] = locations_from_url[i]
 
     rl = None
     has_geo = False

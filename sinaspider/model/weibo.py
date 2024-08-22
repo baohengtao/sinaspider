@@ -543,8 +543,9 @@ class WeiboCache(BaseModel):
             cls.insert(row).execute()
         return cls.get_by_id(weibo_id)
 
-    async def parse(self, weico_first=False):
-        assert bool(self.edit_count) == bool(self.hist_mblogs)
+    async def parse(self, weico_first=True) -> dict:
+        if self.edit_count:
+            assert self.hist_mblogs
         if hist_mblogs := self.hist_mblogs:
             hist_mblogs = self.hist_mblogs['mblogs']
         web = self.page_web or self.timeline_web
@@ -563,6 +564,20 @@ class WeiboCache(BaseModel):
         if self.updated_at:
             weibo_dict['updated_at'] = self.updated_at
         weibo_dict['added_at'] = self.added_at
+        if weibo_dict.pop('location_title', None) and (
+                not weibo_dict.get('location')):
+            assert not self.hist_mblogs
+            if web:
+                weibo_dict['location'] = (await parse_weibo(web)).get('location')
+            elif loc := Location.get_or_none(id=weibo_dict['location_id']):
+                assert loc.name
+                weibo_dict['location'] = loc.name
+            if not weibo_dict.get('location'):
+                self.hist_mblogs = await get_hist_mblogs(self.id, self.edit_count)
+                self.save()
+                return await self.parse(weico_first)
+            assert weibo_dict['location']
+
         return weibo_dict
 
 
@@ -604,6 +619,8 @@ async def get_mblog_from_weico(id):
            f'&id={id}&isGetLongText=1'
            )
     mblog = await fetcher.get_json(url)
+    if err_msg := mblog.get('errmsg'):
+        raise WeiboNotFoundError(err_msg, f'https://m.weibo.cn/detail/{id}')
     mblog['mblog_from'] = 'page_weico'
     assert mblog['pic_num'] == len(mblog['pic_ids'])
     return mblog
