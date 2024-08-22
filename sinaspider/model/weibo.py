@@ -578,6 +578,12 @@ class WeiboCache(BaseModel):
                 return await self.parse(weico_first)
             assert weibo_dict['location']
 
+        if loc := weibo_dict.get('location'):
+            text = weibo_dict.get('text', '').removesuffix('📍')
+            assert not text.endswith('📍')
+            text += f' 📍{loc}'
+            weibo_dict['text'] = text.strip()
+
         return weibo_dict
 
 

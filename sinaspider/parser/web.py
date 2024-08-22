@@ -93,11 +93,6 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
     weibo['has_media'] = bool(weibo.get('videos') or weibo.get(
         'photos') or weibo.get('photos_edited'))
 
-    if loc := weibo.get('location'):
-        text = weibo.get('text', '').removesuffix('📍')
-        assert not text.endswith('📍')
-        text += f' 📍{loc}'
-        weibo['text'] = text.strip()
     return weibo
 
 
