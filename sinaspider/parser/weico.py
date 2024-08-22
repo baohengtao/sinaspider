@@ -51,7 +51,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         assert not videos
         videos = [video_url]
     weibo = dict(
-        id=(id_ := int(info.pop('id'))),
+        id=(id_ := int(info['id'])),
         bid=(bid := encode_wb_id(id_)),
         user_id=(user_id := user['id']),
         username=user.get('remark') or user['screen_name'],
@@ -65,7 +65,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         url_m=f'https://m.weibo.cn/detail/{bid}',
         source=source,
         pic_num=pic_num,
-        mblog_from=info.pop('mblog_from'),
+        mblog_from=info.get('mblog_from'),
         edit_count=info.pop('edit_count', 0),
         update_status='updated',
     )

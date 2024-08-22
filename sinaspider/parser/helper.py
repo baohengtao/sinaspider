@@ -144,6 +144,7 @@ def get_location_url_from_mblog(mblog):
 
 def get_location_from_mblog(mblog, from_hist=True):
     mblog = deepcopy(mblog)
+    assert from_hist == (mblog['id'] == -1)
 
     tag_struct = [s for s in mblog.get(
         'tag_struct', []) if s.get('otype') == 'place']
@@ -158,8 +159,13 @@ def get_location_from_mblog(mblog, from_hist=True):
             'location': location,
             'location_id': location_id,
         }
-        if not from_hist:
-            tag_struct['location_title'] = tag_struct.pop('location')
+        if mblog_from := mblog.get('mblog_from'):
+            assert not from_hist
+            if mblog_from != 'liked_weico':
+                assert mblog_from in ['timeline_weico', 'page_weico']
+                tag_struct['location_title'] = tag_struct.pop('location')
+        else:
+            assert from_hist
 
     # parse geo
     if geo := mblog.get('geo'):
