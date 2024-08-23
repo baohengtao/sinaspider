@@ -253,18 +253,19 @@ class Weibo(BaseModel):
                     "xmp_info": self.gen_meta(sn=sn, url=url),
                     "filepath": filepath,
                 }
-        for sn, url in enumerate(self.videos or [], start=1):
+        for sn, url in enumerate(self.videos or [], start=len(photos)+1):
             ext = parse_url_extension(url) or '.mp4'
             assert ext == '.mp4'
             yield {
                 "url": url,
-                "filename": f"{prefix}_{sn}{ext}",
+                "filename": f"{prefix}_{sn}_video{ext}",
                 "xmp_info": self.gen_meta(url=url, sn=sn),
                 "filepath": filepath,
             }
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
-        if photos := ((self.photos or [])+(self.photos_edited or [])):
+        if photos := ((self.photos or [])+(self.photos_edited or [])
+                      + (self.videos or [])):
             if (pic_num := len(photos)) == 1:
                 assert not sn or int(sn) == 1
                 sn = ""

@@ -24,7 +24,7 @@ app = Typer()
 @app.command(help="fetch weibo by weibo_id")
 @logsaver_decorator
 @run_async
-async def weibo(download_dir: Path = Path('.'), no_watermark: bool = False):
+async def weibo(download_dir: Path = default_path, no_watermark: bool = False):
     from photosinfo.model import PhotoExif
     while weibo_id := Prompt.ask('请输入微博ID:smile:'):
         await fetcher.toggle_art(True)
@@ -45,7 +45,12 @@ async def weibo(download_dir: Path = Path('.'), no_watermark: bool = False):
         if medias := list(weibo.medias(download_dir, no_watermark=no_watermark)):
             console.log(
                 f'Downloading {len(medias)} files to dir {download_dir}')
-            await download_files(medias)
+
+            async def amedias():
+                for media in medias:
+                    yield media
+
+            await download_files(amedias())
 
 
 @app.command()

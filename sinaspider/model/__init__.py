@@ -26,7 +26,7 @@ class PG_BACK:
         backfile = self.backpath / filename
         console.log(f'backuping database to {backfile}...')
         databse_backup = {table._meta.table_name: list(
-            table) for table in tables}
+            table) for table in tables if table != WeiboCache}
         with backfile.open('wb') as f:
             pickle.dump(databse_backup, f)
         if self.backfile.exists():

@@ -124,7 +124,7 @@ class Fetcher:
             except httpx.HTTPError as e:
                 period = 3600 if '/feed/friends' in url else 60
                 console.log(
-                    f"{e}: Sleepping {period} seconds and "
+                    f"{e!r}: sleep {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
                 await asyncio.sleep(period)
             else:
@@ -205,6 +205,9 @@ def write_xmp(img: Path, tags: dict):
     et.set_tags(img, tags, params=params)
 
 
+semaphore = asyncio.Semaphore(20)
+
+
 async def download_single_file(
         url: str,
         filepath: Path,
@@ -216,8 +219,6 @@ async def download_single_file(
     if img.exists():
         console.log(f'{img} already exists..skipping...', style='info')
         return
-    else:
-        console.log(f'downloading {img}...', style="dim")
     if match := re.search(r'[\?&]Expires=(\d+)(&|$)', url):
         expires = pendulum.from_timestamp(int(match.group(1)), tz='local')
         if expires < pendulum.now():
@@ -226,12 +227,13 @@ async def download_single_file(
             return
     while True:
         try:
-            r = await client.get(url)
+            async with semaphore:
+                console.log(f'downloading {img}...', style="dim")
+                r = await client.get(url)
         except httpx.HTTPError as e:
-            period = 60
-            console.log(
-                f"{e}: Sleepping {period} seconds and "
-                f"retry [link={url}]{url}[/link]...", style='error')
+            period = 10
+            console.log(f'download img {img} failed with {e!r} ({url})...'
+                        f' retry in {period} seconds...', style='error')
             await asyncio.sleep(period)
             continue
 

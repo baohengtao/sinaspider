@@ -65,9 +65,6 @@ async def liked_loop(download_dir: Path = default_path,
     for config in configs[:max_user]:
         config: UserConfig
         try:
-            console.log(
-                f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
-                f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
             await config.fetch_liked(download_dir)
         except UserNotFoundError:
             console.log(

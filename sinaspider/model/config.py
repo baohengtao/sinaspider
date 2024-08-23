@@ -251,7 +251,8 @@ class UserConfig(BaseModel):
 
         msg = f"开始获取 {self.username} 的赞"
         if self.liked_fetch_at:
-            msg += f" (fetch at:{self.liked_fetch_at:%y-%m-%d})"
+            msg += (f" (fetch at:{self.liked_fetch_at:%y-%m-%d} "
+                    f" next fetch at:{self.liked_next_fetch:%y-%m-%d})")
         else:
             msg = f"🎈 {msg} (New user) 🎈"
         console.rule(msg, style="magenta")
@@ -377,7 +378,8 @@ class UserConfig(BaseModel):
 
             weibo: Weibo = Weibo(**weibo_dict)
             prefix = f"{self.username}_{weibo.username}_{weibo.id}"
-            photos = (weibo.photos or []) + (weibo.photos_edited or [])
+            photos = weibo.photos or []
+            weibo.pic_num = len(photos)
             console.log(weibo)
             console.log(
                 f"Downloading {len(photos)} files to {download_dir}..\n")

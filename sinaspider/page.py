@@ -33,7 +33,7 @@ class SinaBot:
             "c": "weicoabroad",
             "s": s,
         }
-        response = await fetcher.post(url,  data=data, art_login=self.art_login)
+        response = await fetcher.post(url, data=data, art_login=self.art_login)
         response.raise_for_status()
         js = response.json()
         if js.get('errormsg'):
@@ -275,6 +275,7 @@ class Page:
                     assert (
                         (weibo_info.get('ori_uid') == self.id)
                         or weibo_info.get('like_status')
+                        or weibo_info.get('comment_status')
                         or re.findall(r'(评论|赞)过的微博',
                                       weibo_info['title']['text']))
                     continue
@@ -323,7 +324,8 @@ class Page:
                     status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 if created_at < since:
                     console.log(
-                        f'🎉 created_at:{created_at: %y-%m-%d} < since:{since: %y-%m-%d}, finished')
+                        f'🎉 created_at:{created_at: %y-%m-%d} '
+                        f'< since:{since: %y-%m-%d}, finished')
                     return
 
                 if status.get('pic_ids'):
@@ -364,7 +366,10 @@ class Page:
                 yield mblog
 
     async def liked(self) -> AsyncIterator[dict]:
+        ids = []
         async for weibo_info in self._liked_card():
+            if 'retweeted_status' in weibo_info:
+                continue
             if weibo_info.get('deleted') == '1':
                 continue
             if weibo_info['pic_num'] == 0:
@@ -372,6 +377,9 @@ class Page:
             if weibo_info['user']['gender'] == 'm':
                 continue
             weibo_info['mblog_from'] = 'liked_weico'
+            if weibo_info['id'] in ids:
+                continue
+            ids.append(weibo_info['id'])
 
             yield weibo_info
 
