@@ -186,7 +186,6 @@ class Fetcher:
 fetcher = Fetcher()
 client = httpx.AsyncClient(follow_redirects=True)
 et = ExifToolHelper()
-# fetcher.toggle_art(True)
 
 
 def write_xmp(img: Path, tags: dict):
@@ -205,7 +204,7 @@ def write_xmp(img: Path, tags: dict):
     et.set_tags(img, tags, params=params)
 
 
-semaphore = asyncio.Semaphore(20)
+semaphore = asyncio.Semaphore(8)
 
 
 async def download_single_file(
@@ -225,17 +224,17 @@ async def download_single_file(
             console.log(
                 f"{url} expires at {expires}, skip...", style="warning")
             return
-    while True:
-        try:
-            async with semaphore:
-                console.log(f'downloading {img}...', style="dim")
+    for i in range(10):
+        async with semaphore:
+            try:
                 r = await client.get(url)
-        except httpx.HTTPError as e:
-            period = 10
-            console.log(f'download img {img} failed with {e!r} ({url})...'
-                        f' retry in {period} seconds...', style='error')
-            await asyncio.sleep(period)
-            continue
+            except httpx.HTTPError as e:
+                period = 30
+                console.log(f'download img {img} failed with {e!r} ({url})...'
+                            f' retry in {period} seconds...(has tried {i} time(s))',
+                            style='error')
+                await asyncio.sleep(period)
+                continue
 
         if r.status_code == 404:
             console.log(
@@ -261,7 +260,10 @@ async def download_single_file(
 
         if xmp_info:
             write_xmp(img, xmp_info)
+        console.log(f'successfully downloaded: {img}...', style="dim")
         break
+    else:
+        raise ValueError(f'cannot download {url} for {img}')
 
 
 async def download_files(imgs: AsyncIterable[dict]):
