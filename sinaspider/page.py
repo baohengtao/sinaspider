@@ -254,7 +254,6 @@ class Page:
                f'from=12CC293010&page=%s&s={s}'
                )
 
-        ids = []
         for page in itertools.count(start=max(start_page, 1)):
             cards = (await fetcher.get_json(url % page))['cards']
             mblogs = list(_yield_from_cards(cards))
@@ -284,13 +283,6 @@ class Page:
                 weibo_info['is_pinned'] = weibo_info.get(
                     'title', {}).get('text') == '置顶'
                 weibo_info['mblog_from'] = 'timeline_weico'
-                if weibo_info['id'] in ids:
-                    id_ = weibo_info['id']
-                    ids = ids[-10:]
-                    pid = [m['id'] for m in mblogs]
-                    raise ValueError(
-                        f'{id_} last 10 ids: {ids} current page ids: {pid}')
-                ids.append(weibo_info['id'])
                 yield weibo_info
             else:
                 console.log(

@@ -70,7 +70,7 @@ async def timeline(days: float = Option(...),
                            .where(UserConfig.liked_fetch_at.is_null(False))
                            .where(UserConfig.liked_next_fetch < pendulum.now())
                            .order_by(UserConfig.liked_fetch_at.asc())
-                           )[:1]:
+                           )[:0]:
                 console.log('Looping liked user', style='notice')
                 console.log(
                     f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
@@ -92,7 +92,7 @@ async def timeline(days: float = Option(...),
                 break
         logsaver.save_log(backup=bool(WORKING_TIME))
         WORKING_TIME = 10
-        next_start_time = start_time.add(hours=frequency)
+        next_start_time = pendulum.now().add(hours=frequency)
         console.rule(
             f'waiting for next fetching at {next_start_time:%H:%M:%S}',
             style='magenta on dark_magenta'

@@ -193,9 +193,9 @@ def get_location_from_mblog(mblog, from_hist=True):
 
     # merge annotations to tag_struct or geo
     if tag_struct:
-        assert annotations
-        assert tag_struct['location_id'] == annotations['location_id']
-        tag_struct = annotations | tag_struct
+        if annotations:
+            assert tag_struct['location_id'] == annotations['location_id']
+            tag_struct = annotations | tag_struct
     elif geo and annotations:
         geo |= annotations
     else:
@@ -207,10 +207,8 @@ def get_location_from_mblog(mblog, from_hist=True):
 
     if tag_struct and geo:
         return tag_struct | geo
-    elif not geo:
-        return tag_struct
     else:
-        return geo
+        return geo or tag_struct
 
 
 def parse_location_info_from_hist(hist_mblogs) -> dict | None:
