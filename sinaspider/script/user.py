@@ -130,7 +130,6 @@ async def user_loop(download_dir: Path = default_path,
              .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
              .where(UserConfig.weibo_fetch_at.is_null(False)
                     | UserConfig.weibo_cache_at.is_null(False))
-             .where(UserConfig.weibo_next_fetch < pendulum.now())
              .where(~UserConfig.blocked)
              .order_by(UserConfig.following,
                        fn.COALESCE(UserConfig.weibo_fetch_at,
@@ -157,6 +156,10 @@ async def user_loop(download_dir: Path = default_path,
             users = query.where(UserConfig.following | UserConfig.is_friend)
         else:
             users = query.where(~UserConfig.following & ~UserConfig.is_friend)
+        if x := users.where(UserConfig.weibo_next_fetch < pendulum.now()):
+            users = x
+        else:
+            users = users[:max_user]
         download_dir /= 'Loop'
         console.log(f'{len(users)} will be fetched...')
     if fetching_duration:

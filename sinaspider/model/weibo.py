@@ -514,10 +514,11 @@ class WeiboCache(BaseModel):
                 if need_page:
                     assert getattr(
                         cache, mblog_from.replace('timeline', 'page'))
-                setattr(cache, mblog_from, mblog)
-                cache.updated_at = pendulum.now()
-                cache.save()
-                return cache
+                if not need_page or not (await cache.parse()).get('videos'):
+                    setattr(cache, mblog_from, mblog)
+                    cache.updated_at = pendulum.now()
+                    cache.save()
+                    return cache
         row = {
             'id': weibo_id,
             mblog_from: mblog,

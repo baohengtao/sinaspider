@@ -102,7 +102,7 @@ class Fetcher:
             style='green on dark_green')
 
     async def request(self, method, url: str,
-                      art_login: bool = None,
+                      art_login: bool | None = None,
                       **kwargs) -> httpx.Response:
         # write with session and pause
         if art_login is None:

@@ -131,7 +131,7 @@ def _get_video_url(page_info) -> str | None:
         return video_url.replace('http://', 'https://')
     types = [
         'webpage', 'audio', 'book', 'hudongvote', 'cardlist',
-        'adFeedEvent', 'article', 'group',
+        'adFeedEvent', 'article', 'group', 'event',
         'movie', None, 'user', 'wenda']
     if object_type not in types:
         console.log(f'unknown object_type: {object_type}', style='error')
