@@ -249,6 +249,8 @@ class Page:
 
         for page in itertools.count(start=max(start_page, 1)):
             async for weibo_info in self._get_single_page_weico(page):
+                if weibo_info is None:
+                    return
                 yield weibo_info
             console.log(
                 f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
@@ -269,7 +271,7 @@ class Page:
                 f"seems reached end at page {page} for {url % page}",
                 style='warning'
             )
-            return
+            yield None
 
         for weibo_info in mblogs:
             weibo_info['source'] = BeautifulSoup(
@@ -421,7 +423,8 @@ class Page:
         from sinaspider.model import WeiboCache
         mblogs = [mblog async for mblog in self._get_single_page_weico(page)]
         while mblogs:
-            mblog = mblogs.pop()
+            if (mblog := mblogs.pop()) is None:
+                continue
             cache = await WeiboCache.upsert(mblog)
             info = await cache.parse()
             if info.get('videos'):
