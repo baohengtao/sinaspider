@@ -247,46 +247,48 @@ class Page:
                 start_page: the start page to fetch
         """
 
+        for page in itertools.count(start=max(start_page, 1)):
+            async for weibo_info in self._get_single_page_weico(page):
+                yield weibo_info
+            console.log(
+                f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+
+    async def _get_single_page_weico(self, page: int) -> AsyncIterator[dict]:
+
         s = "99312000" if fetcher.art_login else "b59fafff"
-        # fetch original weibo only
         url = ('https://api.weibo.cn/2/profile/statuses/tab?c=weicoabroad&'
                f'containerid=230413{self.id}_-_WEIBO_SECOND_PROFILE_WEIBO&'
                f'from=12CC293010&page=%s&s={s}'
                )
+        cards = (await fetcher.get_json(url % page))['cards']
+        mblogs = list(_yield_from_cards(cards))
+        if not mblogs:
+            assert len(cards) == 1
+            assert cards[0]['name'] == '暂无微博'
+            console.log(
+                f"seems reached end at page {page} for {url % page}",
+                style='warning'
+            )
+            return
 
-        for page in itertools.count(start=max(start_page, 1)):
-            cards = (await fetcher.get_json(url % page))['cards']
-            mblogs = list(_yield_from_cards(cards))
-            if not mblogs:
-                assert len(cards) == 1
-                assert cards[0]['name'] == '暂无微博'
-                console.log(
-                    f"seems reached end at page {page} for {url % page}",
-                    style='warning'
-                )
-                return
-
-            for weibo_info in mblogs:
-                if '生日动态' == BeautifulSoup(
-                        weibo_info['source'], 'lxml').text.strip():
-                    continue
-                if weibo_info['user']['id'] != self.id:
-                    assert (
-                        (weibo_info.get('ori_uid') == self.id)
-                        or weibo_info.get('like_status')
-                        or weibo_info.get('comment_status')
-                        or re.findall(r'(评论|赞)过的微博',
-                                      weibo_info['title']['text']))
-                    continue
-                if 'retweeted_status' in weibo_info:
-                    continue
-                weibo_info['is_pinned'] = weibo_info.get(
-                    'title', {}).get('text') == '置顶'
-                weibo_info['mblog_from'] = 'timeline_weico'
-                yield weibo_info
-            else:
-                console.log(
-                    f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+        for weibo_info in mblogs:
+            if '生日动态' == BeautifulSoup(
+                    weibo_info['source'], 'lxml').text.strip():
+                continue
+            if weibo_info['user']['id'] != self.id:
+                assert (
+                    (weibo_info.get('ori_uid') == self.id)
+                    or weibo_info.get('like_status')
+                    or weibo_info.get('comment_status')
+                    or re.findall(r'(评论|赞)过的微博',
+                                  weibo_info['title']['text']))
+                continue
+            if 'retweeted_status' in weibo_info:
+                continue
+            weibo_info['is_pinned'] = weibo_info.get(
+                'title', {}).get('text') == '置顶'
+            weibo_info['mblog_from'] = 'timeline_weico'
+            yield weibo_info
 
     @staticmethod
     async def timeline(since: pendulum.DateTime, friend_circle=False):
