@@ -81,18 +81,13 @@ class UserConfig(BaseModel):
         if self.visible is None or visible is False:
             self.visible = visible
             self.save()
-        elif self.weibo_cache_at:
-            console.log(f'{self.username} 当前显示全部微博', style='warning')
-            console.log('reset weibo_cache_at to None', style='warning')
-            self.weibo_cache_at = None
-            self.visible = visible
-            self.save()
         else:
             console.log(
                 f"conflict: {self.username}当前微博全部可见，请检查", style='error')
             console.log(self)
-            if Confirm.ask('Reset weibo_fetch_at to None?'):
+            if Confirm.ask('Reset weibo fetch/cache at to None?'):
                 self.weibo_fetch_at = None
+                self.weibo_cache_at = None
                 self.save()
             raise ValueError(
                 f"conflict: {self.username}当前微博全部可见，请检查")

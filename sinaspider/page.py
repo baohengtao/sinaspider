@@ -272,8 +272,9 @@ class Page:
             return
 
         for weibo_info in mblogs:
-            if '生日动态' == BeautifulSoup(
-                    weibo_info['source'], 'lxml').text.strip():
+            weibo_info['source'] = BeautifulSoup(
+                weibo_info['source'], 'lxml').text.strip()
+            if weibo_info['source'] == '生日动态':
                 continue
             if weibo_info['user']['id'] != self.id:
                 assert (
@@ -417,32 +418,21 @@ class Page:
                 friend_count += 1
 
     async def _get_page_post_on(self, page: int):
-        url = ('https://m.weibo.cn/api/container/getIndex'
-               f'?containerid=107603{self.id}&page=%s')
-        if not (js := await fetcher.get_json(url % page))['ok']:
-            return
-        mblogs = [card['mblog'] for card in js['data']['cards']
-                  if card['card_type'] == 9]
+        from sinaspider.model import WeiboCache
+        mblogs = [mblog async for mblog in self._get_single_page_weico(page)]
         while mblogs:
             mblog = mblogs.pop()
-            if not mblogs:
-                break
-            if '评论过的微博' in mblog.get('title', {}).get('text', ''):
+            cache = await WeiboCache.upsert(mblog)
+            info = await cache.parse()
+            if info.get('videos'):
                 continue
-            if mblog['source'] in ['生日动态', '微博问答']:
-                continue
-            post_on = pendulum.from_format(
-                mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            assert post_on.is_local()
-            return post_on
-        else:
-            assert not (await fetcher.get_json(url % (page + 1)))['ok']
+            return info['created_at']
 
     async def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""
         start, end = 1, 4
         while post_on := await self._get_page_post_on(end):
-            if (days := post_on.diff().days) > 360:
+            if (days := post_on.diff().days) > 210:
                 return True
             start = end + 1
             end = min(max(end + 3, end * 180 // days), end * 2)
@@ -456,7 +446,7 @@ class Page:
             console.log(f'checking page {mid}...to get visibility')
             if not (post_on := await self._get_page_post_on(mid)):
                 end = mid - 1
-            elif post_on < pendulum.now().subtract(months=12):
+            elif post_on < pendulum.now().subtract(months=7):
                 return True
             else:
                 start = mid + 1
