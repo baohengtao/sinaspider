@@ -324,11 +324,11 @@ class Page:
                         f'🎉 created_at:{created_at: %y-%m-%d} '
                         f'< since:{since: %y-%m-%d}, finished')
                     return
+                for key in ['pic_num', 'mix_media_ids', 'page_info']:
+                    if status.get(key):
+                        yield status
+                        break
 
-                if status.get('pic_ids'):
-                    yield status
-                elif status.get('page_info', {}).get('type') == 'video':
-                    yield status
             console.log(f'created_at:{created_at}')
 
     async def _liked_card(self) -> AsyncIterator[dict]:

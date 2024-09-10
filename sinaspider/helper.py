@@ -24,7 +24,7 @@ httpx_logger.disabled = True
 
 
 class Fetcher:
-    def __init__(self, art_login: bool = None) -> None:
+    def __init__(self, art_login: bool | None = None) -> None:
         self.sess_main, self.sess_art = self.get_session()
         self._visit_count = 0
         self.visits = 0
@@ -49,7 +49,7 @@ class Fetcher:
             headers=headers, cookies=cookies.get('art'))
         return sess_main, sess_art
 
-    async def login(self, art_login: bool = None):
+    async def login(self, art_login: bool | None = None):
 
         if art_login is None:
             if (art_login := self.art_login) is None:

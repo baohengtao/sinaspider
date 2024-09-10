@@ -179,7 +179,7 @@ async def user_loop(download_dir: Path = default_path,
             await config.fetch_weibo(download_dir)
         console.log(f'user {i}/{len(users)} completed!')
         if new_user:
-            logsaver.save_log(save_manually=True)
+            logsaver.save_log(save_manually=True, backup=False)
         if stop_time and stop_time < pendulum.now():
             console.log(f'stop since {fetching_duration} minutes passed')
             break
