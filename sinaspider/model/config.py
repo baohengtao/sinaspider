@@ -233,7 +233,8 @@ class UserConfig(BaseModel):
                 for media in medias:
                     yield media
             assert weibo.photos_extra is None
-            console.log()
+            if medias or not has_fetched:
+                console.log()
         if self.weibo_fetch_at:
             return
         if weibos := self.user.weibos.where(Weibo.id.not_in(weibo_ids)):

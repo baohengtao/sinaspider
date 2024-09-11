@@ -276,7 +276,7 @@ class Page:
         for weibo_info in mblogs:
             weibo_info['source'] = BeautifulSoup(
                 weibo_info['source'], 'lxml').text.strip()
-            if weibo_info['source'] == '生日动态':
+            if weibo_info['source'] in ['生日动态', '会员特权专用']:
                 continue
             if weibo_info['user']['id'] != self.id:
                 assert (

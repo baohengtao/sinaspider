@@ -139,8 +139,17 @@ class Weibo(BaseModel):
             assert v or v == 0
             if v == model_dict[k]:
                 continue
-            if k in ['photos', 'photos_edited']:
+            if k == 'updated_at':
+                assert (model.updated_at is None) or (v > model.updated_at)
                 continue
+            if k in ['reposts_count', 'attitudes_count',
+                     'comments_count']:
+                continue
+            if k == 'videos':
+                if [x.split('?')[0] for x in v] == [
+                        x.split('?')[0] for x in model.videos]:
+                    continue
+
             console.log(f'+{k}: {v}', style='green')
             if (ori := model_dict[k]) is not None:
                 console.log(f'-{k}: {ori}', style='red')
@@ -179,7 +188,7 @@ class Weibo(BaseModel):
                         style='warning')
                 location.name = self.location
                 location.save()
-            console.log(location)
+                console.log(location)
         elif not coord:
             console.log(
                 f'no coord and location found: {self.url}', style='error')
