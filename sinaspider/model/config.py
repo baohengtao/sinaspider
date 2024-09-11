@@ -95,32 +95,21 @@ class UserConfig(BaseModel):
             console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible
 
-    async def get_homepage(self,
-                           since: pendulum.DateTime,
-                           skip_exist: bool = False,
-                           ) -> AsyncIterator['Weibo']:
+    async def get_homepage(
+            self, since: pendulum.DateTime) -> AsyncIterator[dict]:
         async for mblog in self.page.homepage_weico():
             is_pinned = mblog.pop('is_pinned')
             created_at = pendulum.from_format(
                 mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            if created_at < since:
-                if is_pinned:
-                    console.log("略过置顶微博...")
-                    continue
-                else:
-                    console.log(
-                        f"时间 {created_at:%y-%m-%d} 在 "
-                        f"{since:%y-%m-%d}之前, 获取完毕")
-                    break
-            weibo = Weibo.get_or_none(id=mblog['id'])
-            insert_at = weibo and (weibo.updated_at or weibo.added_at)
-            if insert_at and skip_exist:
-                continue
-            if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
-                weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
-                weibo_dict['username'] = self.username
-                weibo = await Weibo.upsert(weibo_dict)
-            yield weibo
+            if created_at >= since:
+                yield mblog
+            elif is_pinned:
+                console.log("略过置顶微博...")
+            else:
+                console.log(
+                    f"时间 {created_at:%y-%m-%d} 在 "
+                    f"{since:%y-%m-%d}之前, 获取完毕")
+                return
 
     async def caching_weibo_for_new(self):
         if self.weibo_fetch is not None:
@@ -136,8 +125,13 @@ class UserConfig(BaseModel):
         console.log(self.user)
 
         now, i = pendulum.now(), 0
-        async for weibo in self.get_homepage(since, skip_exist=True):
+        async for mblog in self.get_homepage(since):
+            if Weibo.get_or_none(id=mblog['id']):
+                continue
             i += 1
+            weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
+            weibo_dict['username'] = self.username
+            weibo = await Weibo.upsert(weibo_dict)
             if weibo.photos_extra:
                 weibo.photos_extra = None
                 weibo.save()
@@ -200,24 +194,45 @@ class UserConfig(BaseModel):
                 user_root = 'New'
         download_dir = download_dir / user_root / self.username
 
-        since = self.weibo_fetch_at or pendulum.from_timestamp(0)
+        since = pendulum.instance(
+            self.weibo_fetch_at or pendulum.from_timestamp(0))
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        async for weibo in self.get_homepage(since):
-            if weibo.photos_extra:
-                weibo.photos_extra = None
-                weibo.save()
+        async for mblog in self.get_homepage(since.subtract(months=1)):
+            weibo = Weibo.get_or_none(id=mblog['id'])
+            insert_at = weibo and (weibo.updated_at or weibo.added_at)
+            if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
+                weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
+                weibo_dict['username'] = self.username
+                weibo = await Weibo.upsert(weibo_dict)
 
             weibo_ids.append(weibo.id)
 
-            console.log(weibo)
-            weibo.highlight_social()
+            if weibo.created_at < since and not insert_at:
+                console.log(
+                    f'find weibo created before {since:%Y-%m-%d} '
+                    'but not fetched', style='notice')
 
-            if medias := list(weibo.medias(download_dir)):
+            has_fetched = insert_at and (weibo.created_at < since)
+            if not has_fetched:
+                console.log(weibo)
+                weibo.highlight_social()
+                if weibo.photos_extra:
+                    weibo.photos_extra = None
+                    weibo.save()
+
+            if medias := list(weibo.medias(download_dir, extra=has_fetched)):
+                if has_fetched:
+                    weibo.photos_extra = None
+                    weibo.save()
+                    console.log(weibo)
+                    console.log(
+                        f'{len(medias)} new edited imgs found', style='notice')
                 console.log(
                     f"Downloading {len(medias)} files to {download_dir}..")
                 for media in medias:
                     yield media
+            assert weibo.photos_extra is None
             console.log()
         if self.weibo_fetch_at:
             return
