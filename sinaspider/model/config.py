@@ -78,21 +78,28 @@ class UserConfig(BaseModel):
         if self.visible is True:
             return True
         visible = await self.page.get_visibility()
-        if self.visible is None or visible is False:
+        if visible is False:
+            console.log(f"{self.username} 只显示半年内的微博", style="notice")
+            self.visible = visible
+            self.save()
+            return visible
+        assert visible is True
+        console.log(
+            f"conflict: {self.username}当前微博全部可见，请检查", style='error')
+        console.log(self)
+        if not Confirm.ask(f'{self.username}当前微博全部可见?'):
+            raise ValueError(f"conflict: {self.username}当前微博全部可见，请检查")
+
+        if self.visible is None:
             self.visible = visible
             self.save()
         else:
-            console.log(
-                f"conflict: {self.username}当前微博全部可见，请检查", style='error')
-            console.log(self)
             if Confirm.ask('Reset weibo fetch/cache at to None?'):
                 self.weibo_fetch_at = None
                 self.weibo_cache_at = None
                 self.save()
             raise ValueError(
                 f"conflict: {self.username}当前微博全部可见，请检查")
-        if not visible:
-            console.log(f"{self.username} 只显示半年内的微博", style="notice")
         return visible
 
     async def get_homepage(
