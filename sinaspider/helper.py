@@ -287,9 +287,10 @@ async def normalize_user_id(user_id: str | int) -> int:
     except ValueError:
         assert isinstance(user_id, str)
         url = f'https://m.weibo.cn/n/{user_id}'
-        r = await fetcher.get(url)
-        if url != unquote(r.url):
-            user_id = int(r.url.split('/')[-1])
+        r = await fetcher.get(url, follow_redirects=True)
+        url_new = str(r.url)
+        if url != unquote(url_new):
+            user_id = int(url_new.split('/')[-1])
         else:
             raise UserNotFoundError(f'{user_id} not exist')
     else:

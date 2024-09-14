@@ -123,7 +123,10 @@ class Weibo(BaseModel):
         model_dict['user_id'] = model_dict.pop('user')
 
         # compare photos
-        assert model.photos == weibo_dict.get('photos')
+        x = [p for p in (model.photos or [])
+             if '://f.video.weibocdn.com' not in p]
+        assert x == weibo_dict.get('photos', [])
+
         edited = model.photos_edited or []
         edited_update = weibo_dict.get('photos_edited', [])
         assert edited_update[:len(edited)] == edited

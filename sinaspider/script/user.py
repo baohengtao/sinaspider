@@ -131,7 +131,7 @@ async def user_loop(download_dir: Path = default_path,
              .where(UserConfig.weibo_fetch_at.is_null(False)
                     | UserConfig.weibo_cache_at.is_null(False))
              .where(~UserConfig.blocked)
-             .order_by(UserConfig.following,
+             .order_by(UserConfig.following | UserConfig.is_friend,
                        fn.COALESCE(UserConfig.weibo_fetch_at,
                                    UserConfig.weibo_cache_at),
                        UserConfig.id)

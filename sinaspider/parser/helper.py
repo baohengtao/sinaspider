@@ -5,6 +5,7 @@ import pendulum
 
 from sinaspider import console
 from sinaspider.exceptions import HistLocationError
+from sinaspider.helper import round_loc
 
 
 class WeiboHist:
@@ -171,6 +172,7 @@ def get_location_from_mblog(mblog, from_hist=True):
     if geo := mblog.get('geo'):
         assert geo.pop('type') == 'Point'
         lat, lng = geo.pop('coordinates')
+        lat, lng = round_loc(lat, lng)
         assert not geo or not from_hist
         geo = {
             'latitude': lat,

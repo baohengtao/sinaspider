@@ -173,7 +173,7 @@ class UserConfig(BaseModel):
         now = pendulum.now()
         imgs = self._save_weibo(download_dir)
         await download_files(imgs)
-        console.log(f"{self.username}微博获取完毕\n")
+        console.log(f"{self.username}的微博🧣获取完毕\n")
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
         self.weibo_cache_at = None
@@ -223,11 +223,11 @@ class UserConfig(BaseModel):
 
             if medias := list(weibo.medias(download_dir, extra=has_fetched)):
                 if has_fetched:
+                    console.log(weibo)
+                    console.log(f'🎉 {len(medias)} new edited imgs found',
+                                style='bold green on dark_green')
                     weibo.photos_extra = None
                     weibo.save()
-                    console.log(weibo)
-                    console.log(
-                        f'{len(medias)} new edited imgs found', style='notice')
                 console.log(
                     f"Downloading {len(medias)} files to {download_dir}..")
                 for media in medias:
