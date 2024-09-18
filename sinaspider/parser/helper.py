@@ -94,7 +94,7 @@ def get_photos_info(info: dict) -> list[str]:
         else:
             p[1] = p[1].replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
     assert len(photos) == len(info['pic_ids'])
-    photos = ["🎀".join(p).strip("🎀") for p in photos]
+    photos = [' '.join(p).strip() for p in photos]
     return photos
 
 

@@ -51,7 +51,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
             else:
                 p[1] = p[1].replace(
                     "livephoto.us.sinaimg.cn", "us.sinaimg.cn")
-        pics = ["🎀".join(p).strip("🎀") for p in pics]
+        pics = [" ".join(p).strip() for p in pics]
     else:
         assert info['pic_num'] == 0
 

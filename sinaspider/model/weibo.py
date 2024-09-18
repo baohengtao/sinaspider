@@ -252,7 +252,7 @@ class Weibo(BaseModel):
         for sn, urls in enumerate(photos, start=1):
             if self.photos_extra and (urls not in self.photos_extra):
                 continue
-            for i, url in enumerate(urls.split('🎀')):
+            for i, url in enumerate(urls.split()):
                 aux = '_video' if i == 1 else ''
                 if i == 0 and no_watermark:
                     url = url.replace('/large/', '/oslarge/')

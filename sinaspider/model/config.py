@@ -287,7 +287,7 @@ class UserConfig(BaseModel):
                 w.save()
             WeiboLiked.insert_many(self._liked_list).execute()
             pic_counts = sum(p['pic_num'] for p in self._liked_list)
-            console.log(f"🎀 插入 {count} 条新赞, 共 {pic_counts} 张图片",
+            console.log(f"🎉 插入 {count} 条新赞, 共 {pic_counts} 张图片",
                         style="bold green on dark_green")
             WeiboLiked.delete().where(WeiboLiked.order_num > 1000).execute()
             self._liked_list.clear()
@@ -402,7 +402,7 @@ class UserConfig(BaseModel):
             console.log(
                 f"Downloading {len(photos)} files to {download_dir}..\n")
             for sn, url in enumerate(photos, start=1):
-                url = url.split('🎀')[0]
+                url = url.split()[0]
                 assert (ext := parse_url_extension(url))
                 xmp_info = weibo.gen_meta(sn, url=url)
                 description = '\n'.join([
