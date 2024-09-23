@@ -61,9 +61,9 @@ async def timeline(days: float = Option(...),
         if start_time.diff().in_minutes() < WORKING_TIME:
             console.log('Looping user', style='notice')
             for config in query.where(UserConfig.following)[:2]:
-                await config.fetch_weibo(download_dir/'Loop')
+                await config.fetch_weibo(download_dir)
             for config in query.where(~UserConfig.following)[:1]:
-                await config.fetch_weibo(download_dir/'Loop')
+                await config.fetch_weibo(download_dir)
 
             for config in (UserConfig.select()
                            .where(UserConfig.liked_fetch)
@@ -99,7 +99,7 @@ async def timeline(days: float = Option(...),
         )
         console.log(
             "Press S to fetching immediately,\n"
-            "L to fetch log manually,\n"
+            "L to fetch log and backup database manually,\n"
             "Q to exit,\n"
             "int number for the time in minutes to fetch new users",
             style='info')
@@ -116,7 +116,7 @@ async def timeline(days: float = Option(...),
                         console.log("q pressed. exiting.")
                         return
                     case "l":
-                        logsaver.save_log(save_manually=True)
+                        logsaver.save_log(save_manually=True, backup=True)
                         console.log(
                             f'latest start_time: {start_time:%y-%m-%d %H:%M:%S}')
                         console.log(
@@ -145,7 +145,7 @@ async def timeline(days: float = Option(...),
 @app.command()
 def write_meta(download_dir: Path = default_path):
     from imgmeta.script import rename, write_meta
-    for folder in ['New', 'Timeline', 'Loop/Timeline']:
+    for folder in ['New', 'Timeline']:
         ori = download_dir / folder
         if ori.exists():
             write_meta(ori)

@@ -160,7 +160,6 @@ async def user_loop(download_dir: Path = default_path,
             users = x
         else:
             users = users[:max_user]
-        download_dir /= 'Loop'
         console.log(f'{len(users)} will be fetched...')
     if fetching_duration:
         stop_time = pendulum.now().add(minutes=fetching_duration)
@@ -173,6 +172,7 @@ async def user_loop(download_dir: Path = default_path,
             config = UserConfig.get(user_id=user.user_id)
             config.blocked = True
             config.save()
+            console.log(config)
             console.log(
                 f'用户 {config.username} 不存在 ({config.homepage})', style='error')
         else:

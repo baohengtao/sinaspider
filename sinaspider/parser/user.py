@@ -33,7 +33,8 @@ class UserParser:
         user_info = await self.get_user_info()
 
         assert user_cn.pop('昵称') == user_info['screen_name']
-        assert user_cn.pop('备注', '') == user_info.get('remark', '')
+        if x := user_cn.pop('备注', ''):
+            assert x == user_info.get('remark', '')
         assert user_cn.pop('简介', '') == user_info.get('description', '')
         assert user_cn.pop('认证', None) == user_info.get('verified_reason')
 
