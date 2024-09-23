@@ -434,11 +434,14 @@ class Page:
     async def get_visibility(self) -> bool:
         """判断用户是否设置微博半年内可见."""
         start, end = 1, 4
+        post_ons = []
         while post_on := await self._get_page_post_on(end):
-            if (days := post_on.diff().days) > 210:
-                return True
+            post_ons.append(post_on)
             start = end + 1
-            end = min(max(end + 3, end * 180 // days), end * 2)
+            if (days := post_on.diff().days) > 360:
+                end *= 2
+            else:
+                end = min(max(end + 3, end * 360 // days), end * 2)
             console.log(f'checking page {(start, end)}...'
                         f'to get visibility (days:{days})')
         else:
@@ -449,11 +452,19 @@ class Page:
             console.log(f'checking page {mid}...to get visibility')
             if not (post_on := await self._get_page_post_on(mid)):
                 end = mid - 1
-            elif post_on < pendulum.now().subtract(months=7):
-                return True
             else:
+                post_ons.append(post_on)
                 start = mid + 1
-        return False
+        assert post_ons == sorted(post_ons, reverse=True)
+        if post_on := post_ons[-1] if post_ons else None:
+            console.log(f'all weibos are after {post_on:%y-%m-%d}',
+                        style='error')
+        else:
+            console.log('no weibo found.', style='error')
+        if post_on and post_on < pendulum.now().subtract(months=12):
+            return True
+        else:
+            return False
 
 
 def _yield_from_cards(cards):
