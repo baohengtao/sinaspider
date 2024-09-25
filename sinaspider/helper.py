@@ -2,14 +2,16 @@ import asyncio
 import itertools
 import json
 import logging
+import mimetypes
 import random
 import re
 import time
 from pathlib import Path
 from typing import AsyncIterable
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote
 
 import httpx
+import magic
 import pendulum
 from baseconv import base62
 from exiftool import ExifToolHelper
@@ -27,6 +29,7 @@ from sinaspider.exceptions import UserNotFoundError
 
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.disabled = True
+mime_detector = magic.Magic(mime=True)
 
 
 class Fetcher:
@@ -202,11 +205,12 @@ def write_xmp(img: Path, tags: dict):
     ext = et.get_tags(img, 'File:FileTypeExtension')[
         0]['File:FileTypeExtension'].lower()
     if (suffix := f'.{ext}') != img.suffix:
-        new_img = img.with_suffix(suffix)
-        console.log(
-            f'{img}: suffix is not right, moving to {new_img}...',
-            style='error')
-        img = img.rename(new_img)
+        raise ValueError(f'{img} suffix is not right: {suffix}')
+        # new_img = img.with_suffix(suffix)
+        # console.log(
+        #     f'{img}: suffix is not right, moving to {new_img}...',
+        #     style='error')
+        # img = img.rename(new_img)
     et.set_tags(img, tags, params=params)
 
 
@@ -290,8 +294,18 @@ async def download_single_file(
             console.log(f'retrying download for {url}...')
             continue
 
-        if r.url.path == '/images/default_d_w_large.gif':
-            img = img.with_suffix('.gif')
+        mime_type = mime_detector.from_buffer(r.content)
+        suffix = mimetypes.guess_extension(mime_type)
+        if suffix == '.gif':
+            if r.url.path.endswith('.gif'):
+                img = img.with_suffix('.gif')
+            else:
+                console.log(
+                    f"{img} shouldn't be gif, retrying...", style="error")
+                continue
+        elif img.suffix != suffix:
+            console.log(f"{img}: suffix should be {suffix}", style="warning")
+            img = img.with_suffix(suffix)
 
         if int(r.headers['Content-Length']) != len(r.content):
             console.log(f"expected length: {r.headers['Content-Length']}, "
@@ -313,11 +327,6 @@ async def download_single_file(
 async def download_files(imgs: AsyncIterable[list[dict]]):
     tasks = [asyncio.create_task(download_file_pair(img)) async for img in imgs]
     await asyncio.gather(*tasks)
-
-
-def parse_url_extension(url: str) -> str:
-    parse = urlparse(url)
-    return Path(parse.path).suffix or Path(url).suffix
 
 
 async def normalize_user_id(user_id: str | int) -> int:

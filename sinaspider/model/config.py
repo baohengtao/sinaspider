@@ -13,7 +13,7 @@ from playhouse.shortcuts import model_to_dict
 from rich.prompt import Confirm
 
 from sinaspider import console
-from sinaspider.helper import download_files, fetcher, parse_url_extension
+from sinaspider.helper import download_files, fetcher
 from sinaspider.page import Page
 
 from .base import BaseModel
@@ -403,7 +403,6 @@ class UserConfig(BaseModel):
                 f"Downloading {len(photos)} files to {download_dir}..\n")
             for sn, url in enumerate(photos, start=1):
                 url = url.split()[0]
-                assert (ext := parse_url_extension(url))
                 xmp_info = weibo.gen_meta(sn, url=url)
                 description = '\n'.join([
                     f'weibo.com/{weibo.user_id}/{weibo.bid}',
@@ -420,7 +419,7 @@ class UserConfig(BaseModel):
 
                 yield {
                     "url": url,
-                    "filename": f"{prefix}_{sn}{ext}",
+                    "filename": f"{prefix}_{sn}.jpg",
                     "xmp_info": xmp_info,
                     "filepath": filepath
                 }
