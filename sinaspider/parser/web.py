@@ -44,7 +44,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
         assert [pic['pid'] for pic in pics] == info.pop('pic_ids')
         pics = [[pic['large']['url'], pic.get('videoSrc', '')]
                 for pic in pics]
-        vids = [vid['videoSrc'] for vid in vids]
+        vids = [vid['videoSrc'].replace('http://', 'https://') for vid in vids]
         for p in pics:
             if p[0].endswith('.gif'):
                 p[1] = ''

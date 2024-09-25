@@ -123,10 +123,7 @@ class Weibo(BaseModel):
         model_dict['user_id'] = model_dict.pop('user')
 
         # compare photos
-        x = [p for p in (model.photos or [])
-             if '://f.video.weibocdn.com' not in p]
-        assert x == weibo_dict.get('photos', [])
-
+        assert model.photos == weibo_dict.get('photos')
         edited = model.photos_edited or []
         edited_update = weibo_dict.get('photos_edited', [])
         assert edited_update[:len(edited)] == edited
@@ -488,7 +485,12 @@ class WeiboCache(BaseModel):
         try:
             mblog = await get_mblog_from_weico(weibo_id)
         except WeiboNotFoundError as e:
-            console.log(e, style='error')
+            if cache := cls.get_or_none(id=weibo_id):
+                console.log(e, style='error')
+                console.log(
+                    f'weibo is invisible, loading from cache: {weibo_id}',
+                    style='error')
+                return cache
             raise
         return await cls.upsert(mblog)
 

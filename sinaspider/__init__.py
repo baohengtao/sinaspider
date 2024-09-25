@@ -15,7 +15,7 @@ ReprHighlighter.highlights += [
 
 custom_theme = Theme({
     "info": "dim cyan",
-    "warning": "bold bright_yellow on dark_orange",
+    "warning": "bold bright_yellow on dark_goldenrod",
     "error": "bold bright_red on dark_red",
     "notice": "bold magenta",
     "repr.social": 'bold bright_red on dark_red',
