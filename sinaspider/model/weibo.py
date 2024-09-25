@@ -153,6 +153,12 @@ class Weibo(BaseModel):
             console.log(f'+{k}: {v}', style='green')
             if (ori := model_dict[k]) is not None:
                 console.log(f'-{k}: {ori}', style='red')
+        for k, v in model_dict.items():
+            if v is None or k in weibo_dict:
+                continue
+            if k not in ['latitude', 'longitude']:
+                console.log(f'{k}:{v} not in weibo_dict', style='warning')
+
         if model.try_update_at:
             weibo_dict['try_update_at'] = None
             weibo_dict['try_update_msg'] = None

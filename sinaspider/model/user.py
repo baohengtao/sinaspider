@@ -109,6 +109,19 @@ class User(BaseModel):
             console.log(f'+{k}: {v}', style='green bold on dark_green')
             if (ori := model_dict[k]) is not None:
                 console.log(f'-{k}: {ori}', style='red bold on dark_red')
+
+        for k, v in model_dict.items():
+            if v is None or k in user_dict:
+                continue
+            if k in ['username', 'bilateral', 'description', 'IP']:
+                continue
+            if k in ['verified_reason', 'verified_type_ext', 'followed_by']:
+                user_dict[k] = None
+                console.log(
+                    f'-{k}: {model_dict[k]}', style='red bold on dark_red')
+            else:
+                console.log(f'{k}:{v} not in user_dict', style='warning')
+
         return cls.update(user_dict).where(cls.id == user_id).execute()
 
     def __str__(self):
