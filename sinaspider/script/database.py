@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from typer import Typer
 from sinaspider import console
 from sinaspider.exceptions import WeiboNotFoundError
 from sinaspider.helper import (
+    download_file_pair,
     download_files,
     download_single_file,
     encode_wb_id, fetcher
@@ -46,11 +48,9 @@ async def weibo(download_dir: Path = default_path, no_watermark: bool = False):
             console.log(
                 f'Downloading {len(medias)} files to dir {download_dir}')
 
-            async def amedias():
-                for media in medias:
-                    yield media
-
-            await download_files(amedias())
+            tasks = [asyncio.create_task(
+                download_file_pair(img)) for img in medias]
+            await asyncio.gather(*tasks)
 
 
 @app.command()

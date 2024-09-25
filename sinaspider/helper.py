@@ -14,6 +14,12 @@ import pendulum
 from baseconv import base62
 from exiftool import ExifToolHelper
 from geopy.distance import geodesic
+from humanize import naturalsize
+from makelive import is_live_photo_pair, live_id, make_live_photo
+from makelive.makelive import (
+    add_asset_id_to_image_file,
+    add_asset_id_to_quicktime_file
+)
 from rich.prompt import Confirm
 
 from sinaspider import console
@@ -207,17 +213,55 @@ def write_xmp(img: Path, tags: dict):
 semaphore = asyncio.Semaphore(8)
 
 
+async def download_file_pair(medias: list[dict]):
+    if len(medias) == 1:
+        await download_single_file(**medias[0])
+        return
+    img_info, mov_info = medias
+    img_xmp = img_info.pop('xmp_info')
+    mov_xmp = mov_info.pop('xmp_info')
+    try:
+        img_path = await download_single_file(**img_info)
+        mov_path = await download_single_file(**mov_info)
+    except Exception:
+        if (img_path := img_info['filepath']).exists():
+            img_path.unlink()
+        if (mov_path := mov_info['filepath']).exists():
+            mov_path.unlink()
+        raise
+    img_size = naturalsize(img_path.stat().st_size)
+    mov_size = naturalsize(mov_path.stat().st_size)
+    if not is_live_photo_pair(img_path, mov_path):
+        assert not (live_id(img_path) and live_id(mov_path))
+        console.log(
+            f'not live photo pair: {img_path} {mov_path}, fixing...',
+            style='warning')
+        if assert_id := live_id(img_path):
+            add_asset_id_to_quicktime_file(mov_path, assert_id)
+        elif assert_id := live_id(mov_path):
+            add_asset_id_to_image_file(img_path, assert_id)
+        else:
+            make_live_photo(img_path, mov_path)
+    if (x := naturalsize(img_path.stat().st_size)) != img_size:
+        console.log(f'{img_path.name} size changed from {img_size} to {x}')
+    if (x := naturalsize(mov_path.stat().st_size)) != mov_size:
+        console.log(f'{mov_path.name} size changed from {mov_size} to {x}')
+    assert is_live_photo_pair(img_path, mov_path)
+    write_xmp(img_path, img_xmp)
+    write_xmp(mov_path, mov_xmp)
+
+
 async def download_single_file(
         url: str,
         filepath: Path,
         filename: str,
         xmp_info: dict = None
-):
+) -> Path | None:
     filepath.mkdir(parents=True, exist_ok=True)
     img = filepath / filename
     if img.exists():
         console.log(f'{img} already exists..skipping...', style='info')
-        return
+        return img
     if match := re.search(r'[\?&]Expires=(\d+)(&|$)', url):
         expires = pendulum.from_timestamp(int(match.group(1)), tz='local')
         if expires < pendulum.now():
@@ -238,7 +282,7 @@ async def download_single_file(
 
         if r.status_code == 404:
             console.log(
-                f"{url}, {xmp_info}, {r.status_code}", style="error")
+                f"{url}, {xmp_info or img}, {r.status_code}", style="error")
             return
         elif r.status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
@@ -261,13 +305,13 @@ async def download_single_file(
         if xmp_info:
             write_xmp(img, xmp_info)
         console.log(f'successfully downloaded: {img}...', style="dim")
-        break
+        return img
     else:
         raise ValueError(f'cannot download {url} for {img}')
 
 
-async def download_files(imgs: AsyncIterable[dict]):
-    tasks = [asyncio.create_task(download_single_file(**img)) async for img in imgs]
+async def download_files(imgs: AsyncIterable[list[dict]]):
+    tasks = [asyncio.create_task(download_file_pair(img)) async for img in imgs]
     await asyncio.gather(*tasks)
 
 

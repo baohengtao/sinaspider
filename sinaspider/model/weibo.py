@@ -23,11 +23,7 @@ from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.exceptions import HistLocationError, WeiboNotFoundError
-from sinaspider.helper import (
-    fetcher, normalize_wb_id,
-    parse_url_extension,
-    round_loc
-)
+from sinaspider.helper import fetcher, normalize_wb_id, round_loc
 from sinaspider.page import Page
 from sinaspider.parser import parse_weibo
 
@@ -255,28 +251,35 @@ class Weibo(BaseModel):
         for sn, urls in enumerate(photos, start=1):
             if self.photos_extra and (urls not in self.photos_extra):
                 continue
-            for i, url in enumerate(urls.split()):
-                aux = '_video' if i == 1 else ''
-                if i == 0 and no_watermark:
-                    url = url.replace('/large/', '/oslarge/')
-                if self.photos and sn > len(self.photos):
-                    aux += '_edited'
-                ext = parse_url_extension(url)
-                yield {
-                    "url": url,
-                    "filename": f"{prefix}_{sn}{aux}{ext}",
-                    "xmp_info": self.gen_meta(sn=sn, url=url),
-                    "filepath": filepath,
-                }
-        for sn, url in enumerate(self.videos or [], start=len(photos)+1):
-            ext = parse_url_extension(url) or '.mp4'
-            assert ext == '.mp4'
-            yield {
+            if ' ' not in urls:
+                urls += ' '
+            url, live = urls.split(' ')
+            if no_watermark:
+                url = url.replace('/large/', '/oslarge/')
+            aux = '_live' if live else ''
+            aux += '_edited' if sn > len(photos or []) else ''
+            medias = [{
                 "url": url,
-                "filename": f"{prefix}_{sn}_video{ext}",
+                "filename": f"{prefix}_{sn}{aux}.jpg",
+                "xmp_info": self.gen_meta(sn=sn, url=url),
+                "filepath": filepath,
+            }]
+            if live:
+                medias.append({
+                    "url": live,
+                    "filename": f"{prefix}_{sn}{aux}.mov",
+                    "xmp_info": self.gen_meta(sn=sn, url=live),
+                    "filepath": filepath,
+                })
+            yield medias
+
+        for sn, url in enumerate(self.videos or [], start=len(photos)+1):
+            yield [{
+                "url": url,
+                "filename": f"{prefix}_{sn}_video.mp4",
                 "xmp_info": self.gen_meta(url=url, sn=sn),
                 "filepath": filepath,
-            }
+            }]
 
     def gen_meta(self, sn: str | int = '', url: str = "") -> dict:
         if photos := ((self.photos or [])+(self.photos_edited or [])
