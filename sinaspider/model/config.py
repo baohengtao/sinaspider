@@ -322,12 +322,8 @@ class UserConfig(BaseModel):
             for fid in added:
                 console.log(f'https://weibo.com/u/{fid}')
 
-        self.update_friends()
-
-    def update_friends(self):
-        fids = {f.friend_id for f in self.user.friends}
         query = (UserConfig.select()
-                 .where(UserConfig.user_id.in_(fids))
+                 .where(UserConfig.user_id.in_(fids_updated))
                  .where(UserConfig.weibo_fetch)
                  .where(UserConfig.weibo_fetch_at.is_null(False))
                  )

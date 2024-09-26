@@ -8,7 +8,7 @@ from typer import Option, Typer
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import normalize_user_id
-from sinaspider.model import Friend, User, UserConfig
+from sinaspider.model import User, UserConfig
 
 from .helper import default_path, logsaver_decorator, run_async
 
@@ -77,26 +77,3 @@ async def liked_loop(download_dir: Path = default_path,
         if stop_time and stop_time < pendulum.now():
             console.log(f'stop since {fetching_duration} minutes passed')
             break
-
-
-@app.command()
-@logsaver_decorator
-@run_async
-async def friends(max_user: int = None):
-    uids = {f.user_id for f in Friend}
-    query = (UserConfig.select()
-             .where(UserConfig.weibo_fetch)
-             .where(UserConfig.weibo_fetch_at.is_null(False)))
-    config: UserConfig
-    for config in (query
-                   .limit(max_user)
-                   .where(UserConfig.user_id.not_in(uids))
-                   ):
-        # try:
-        #     config = UserConfig.from_id(config.user_id)
-        # except UserNotFoundError:
-        #     pass
-        await config.fetch_friends()
-        console.log(config, '\n')
-    for config in query:
-        config.update_friends()
