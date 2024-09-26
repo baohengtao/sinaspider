@@ -47,6 +47,8 @@ class UserConfig(BaseModel):
     blocked = BooleanField(default=False)
     weibo_cache_at = DateTimeTZField(default=None, null=True)
     statuses_count = IntegerField()
+    saved_statuses_count = IntegerField(default=0)
+    saved_medias_count = IntegerField(default=0)
 
     class Meta:
         table_name = "userconfig"
@@ -145,15 +147,17 @@ class UserConfig(BaseModel):
             console.log(weibo)
             weibo.highlight_social()
             console.log()
-        console.log(f'{i} weibos cached for {self.username}')
-        media_count = [len(list(weibo.medias())) for weibo in self.user.weibos]
-        console.log(
-            f'{self.username} have {len(media_count)} weibos '
-            f'with {sum(media_count)} media files', style='notice')
         self.weibo_cache_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
-        if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
-            self.post_at = weibos[0].created_at
+        weibos: list[Weibo] = self.user.weibos.order_by(
+            Weibo.created_at.desc())
+        self.post_at = weibos[0].created_at if weibos else None
+        self.saved_statuses_count = len(weibos)
+        self.saved_medias_count = sum(w.medias_num for w in weibos)
+        console.log(f'{i} weibos cached for {self.username}')
+        console.log(
+            f'{self.username} have {self.saved_statuses_count} weibos '
+            f'with {self.saved_medias_count} media files', style='notice')
         self.save()
 
     async def fetch_weibo(self, download_dir: Path):
@@ -184,8 +188,11 @@ class UserConfig(BaseModel):
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
         self.weibo_cache_at = None
-        if weibos := self.user.weibos.order_by(Weibo.created_at.desc()):
-            self.post_at = weibos[0].created_at
+        weibos: list[Weibo] = self.user.weibos.order_by(
+            Weibo.created_at.desc())
+        self.post_at = weibos[0].created_at if weibos else None
+        self.saved_statuses_count = len(weibos)
+        self.saved_medias_count = sum(w.medias_num for w in weibos)
         self.save()
 
     async def _save_weibo(
