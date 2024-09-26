@@ -90,8 +90,10 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
             v = 1000000
         weibo[key] = v
     weibo = {k: v for k, v in weibo.items() if v not in ['', [], None]}
-    weibo['has_media'] = bool(weibo.get('videos') or weibo.get(
-        'photos') or weibo.get('photos_edited'))
+    medias_num = 0
+    for k in ['videos', 'photos', 'photos_edited']:
+        medias_num += len(weibo.get(k, []))
+    weibo['medias_num'] = medias_num
 
     return weibo
 

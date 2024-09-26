@@ -55,7 +55,7 @@ class Weibo(BaseModel):
     pic_num = IntegerField()
     edit_count = IntegerField(null=True)
     edit_at = DateTimeTZField(null=True)
-    has_media = BooleanField()
+    medias_num = IntegerField()
     region_name = TextField(null=True)
     update_status = TextField(null=True)
     latitude = DoubleField(null=True)
@@ -164,8 +164,9 @@ class Weibo(BaseModel):
 
         cls.update(weibo_dict).where(cls.id == wid).execute()
         weibo = Weibo.get_by_id(wid)
-        if weibo.has_media:
-            assert weibo.photos_extra or list(weibo.medias())
+        if not weibo.photos_extra:
+            assert len(list(weibo.medias())) == weibo.medias_num
+        if weibo.medias_num:
             await weibo.update_location()
             loc_info = [weibo.location, weibo.location_id,
                         weibo.latitude, weibo.longitude]

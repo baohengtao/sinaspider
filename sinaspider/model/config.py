@@ -470,7 +470,7 @@ class UserConfig(BaseModel):
         days = 30
         posts = len(self.user.weibos
                     .where(Weibo.created_at > update_at.subtract(days=days))
-                    .where(Weibo.has_media))
+                    .where(Weibo.medias_num > 0))
         interval = days / (posts + 1)
 
         if not self.is_friend and not self.following:
