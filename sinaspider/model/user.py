@@ -113,7 +113,7 @@ class User(BaseModel):
         for k, v in model_dict.items():
             if v is None or k in user_dict:
                 continue
-            if k in ['username', 'bilateral', 'description', 'IP']:
+            if k in ['username', 'bilateral', 'description', 'IP', 'redirect']:
                 continue
             if k in ['verified_reason', 'verified_type_ext', 'followed_by']:
                 user_dict[k] = None

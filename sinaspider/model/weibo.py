@@ -143,7 +143,7 @@ class Weibo(BaseModel):
                 continue
             if k == 'videos':
                 if [x.split('?')[0] for x in v] == [
-                        x.split('?')[0] for x in model.videos]:
+                        x.split('?')[0] for x in (model.videos or [])]:
                     continue
 
             console.log(f'+{k}: {v}', style='green')
