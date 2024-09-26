@@ -420,12 +420,12 @@ class UserConfig(BaseModel):
                 })
                 xmp_info["File:FileCreateDate"] = xmp_info['XMP:DateCreated']
 
-                yield {
+                yield [{
                     "url": url,
                     "filename": f"{prefix}_{sn}.jpg",
                     "xmp_info": xmp_info,
                     "filepath": filepath
-                }
+                }]
             bulk.append(weibo)
         if early_stopping and not self.liked_fetch_at:
             console.log(
