@@ -110,7 +110,7 @@ class Weibo(BaseModel):
             return weibo
         if model.location is None:
             if 'location' in weibo_dict:
-                assert locations[0] is None
+                assert locations[0] is None or 'web' in model.mblog_from
         else:
             assert model.location_id == weibo_dict['location_id']
         assert model.region_name == weibo_dict.get('region_name')

@@ -258,9 +258,9 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
 
     rs, ls = [], []
     for r, l in zip(regions, locations):
-        if r not in rs:
+        if r is not None and r not in rs:
             rs.append(r)
-        if l not in ls:
+        if l is not None and l not in ls:
             ls.append(l)
     if len(rs) > 1:
         console.log(
