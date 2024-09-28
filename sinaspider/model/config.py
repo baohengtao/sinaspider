@@ -212,7 +212,7 @@ class UserConfig(BaseModel):
             self.weibo_fetch_at or pendulum.from_timestamp(0))
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        async for mblog in self.get_homepage(since.subtract(months=1)):
+        async for mblog in self.get_homepage(since.subtract(months=3)):
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             if not insert_at or insert_at < pendulum.now().subtract(minutes=50):

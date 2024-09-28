@@ -51,12 +51,6 @@ class WeiboHist:
             console.log(f'photos in weibo: {final_photos}')
             console.log('<'*50, style='warning')
 
-        if len(photos) > len(final_photos):
-            console.log(
-                '🎉 the pic num increase from '
-                f'{len(final_photos)} to {len(photos)}',
-                style='notice')
-
         photos, edited = photos[:ori_num], photos[ori_num:]
         info = dict(photos=photos, photos_edited=edited)
         assert self.weibo_dict | info == info | self.weibo_dict

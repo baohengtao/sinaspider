@@ -75,7 +75,7 @@ class Weibo(BaseModel):
     @classmethod
     async def from_id(cls, wb_id: int | str, update: bool = False) -> Self:
         wb_id = normalize_wb_id(wb_id)
-        if update or not cls.get_or_none(id=wb_id):
+        if update or not cls.get_or_none(id=wb_id) or WeiboCache.get_or_none(id=wb_id):
             try:
                 cache = await WeiboCache.from_id(wb_id, update=update)
                 weibo_dict = await cache.parse()
@@ -203,7 +203,7 @@ class Weibo(BaseModel):
                 raise ValueError(f'cannot found coord for {self.url}')
 
         if coord and location:
-            if (err := geodesic(coord, location.coordinate).meters) > 1:
+            if (err := geodesic(coord, location.coordinate).meters) > 100:
                 console.log(
                     f'the distance between coord and location is {err}m',
                     style='notice')
@@ -594,12 +594,12 @@ class WeiboCache(BaseModel):
         if weibo_dict.pop('location_title', None) and (
                 not weibo_dict.get('location')):
             assert not self.hist_mblogs
-            if web:
-                weibo_dict['location'] = (await parse_weibo(web)).get('location')
-            elif loc := Location.get_or_none(id=weibo_dict['location_id']):
+            # if web:
+            #     weibo_dict['location'] = (await parse_weibo(web)).get('location')
+            if loc := Location.get_or_none(id=weibo_dict['location_id']):
                 assert loc.name
                 weibo_dict['location'] = loc.name
-            if not weibo_dict.get('location'):
+            else:
                 self.hist_mblogs = await get_hist_mblogs(self.id, self.edit_count)
                 self.save()
                 return await self.parse(weico_first)
