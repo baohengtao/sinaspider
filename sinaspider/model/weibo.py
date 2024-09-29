@@ -188,15 +188,19 @@ class Weibo(BaseModel):
             return
         coord = await self.get_coordinate()
         if location := await Location.from_id(self.location_id):
-            if location.name != self.location:
-                if location.name:
-                    console.log(
-                        'location name changed from'
-                        f'{location.name} to {self.location}',
-                        style='warning')
-                location.name = self.location
-                location.save()
-                console.log(location)
+            if not (location.named_at and location.named_at > self.created_at):
+                if location.name != self.location:
+                    if location.name:
+                        console.log(
+                            'location name changed from '
+                            f'{location.name} to {self.location}',
+                            style='warning')
+                    location.name = self.location
+                    location.named_at = self.created_at
+                    location.save()
+                    console.log(location)
+            assert location.name == self.location
+
         elif not coord:
             console.log(
                 f'no coord and location found: {self.url}', style='error')
@@ -384,6 +388,7 @@ class Location(BaseModel):
     url = TextField()
     url_m = TextField()
     version = TextField()
+    named_at = DateTimeTZField(null=True)
 
     def __str__(self):
         return super().__repr__()
@@ -596,19 +601,18 @@ class WeiboCache(BaseModel):
         if self.updated_at:
             weibo_dict['updated_at'] = self.updated_at
         weibo_dict['added_at'] = self.added_at
-        if weibo_dict.pop('location_title', None) and (
-                not weibo_dict.get('location')):
-            assert not self.hist_mblogs
-            # if web:
-            #     weibo_dict['location'] = (await parse_weibo(web)).get('location')
-            if loc := Location.get_or_none(id=weibo_dict['location_id']):
-                assert loc.name
-                weibo_dict['location'] = loc.name
-            else:
+        if lid := weibo_dict.get('location_id'):
+            if loc := Location.get_or_none(id=lid):
+                if ((loc.named_at and loc.named_at > weibo_dict['created_at'])
+                        or not weibo_dict.get('location')):
+                    weibo_dict['location'] = loc.name
+            elif not weibo_dict.get('location'):
+                assert weibo_dict.get('location_title')
+                assert not self.hist_mblogs
                 self.hist_mblogs = await get_hist_mblogs(self.id, self.edit_count)
                 self.save()
                 return await self.parse(weico_first)
-            assert weibo_dict['location']
+            weibo_dict.pop('location_title', None)
 
         if loc := weibo_dict.get('location'):
             text = weibo_dict.get('text', '').removesuffix('📍')
