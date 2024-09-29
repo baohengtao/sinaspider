@@ -235,14 +235,7 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
 
         if 'location' not in location:
             assert all('location' not in loc for loc in locations)
-
-            console.log(
-                '>>>>no location found, using title instead<<<<<',
-                style='warning')
-            console.log(location)
-            console.log(
-                '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
-                style='warning')
+            console.log(f'no location found, using title instead: {location}')
 
     else:
         for region in regions:
@@ -251,28 +244,18 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
         location = locations[0]
         assert locations == [None] * len(locations)
 
-    rs, ls = [], []
-    for r, l in zip(regions, locations):
-        if r is not None and r not in rs:
-            rs.append(r)
-        if l is not None and l not in ls:
-            ls.append(l)
+    rs = {r for r in regions if r is not None}
     if len(rs) > 1:
-        console.log(
-            '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
-            style='warning')
         console.log(f'multi region found: {rs},  {region} is chosen')
+
+    ls = {loc['location_id']: loc for loc in locations
+          if loc is not None and loc['location_id'] != location['location_id']}
+    if ls:
+        ls = [" ".join(map(str, loc.values())) for loc in ls.values()]
         console.log(
-            '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
-            style='warning')
-    if len(ls) > 1:
-        console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
-                    style='warning')
-        console.log(ls)
-        console.log(
-            f'multi location found,  {location} is chosen')
-        console.log('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
-                    style='warning')
+            'multi location found:\n'
+            f'choosen: {" ".join(map(str, location.values()))}\n'
+            f'ignored: {ls}')
 
     return dict(locations=locations, selected_location=location,
                 regions=regions, selected_region=region
@@ -288,7 +271,7 @@ def merge_hist_location(weibo: dict) -> dict:
         return weibo
 
     # compare region
-    if weibo.get('region_name') != regions[-1]:
+    if (x := weibo.get('region_name')) and x != regions[-1]:
         console.log(
             '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
             style='warning')

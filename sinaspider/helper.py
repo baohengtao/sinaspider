@@ -403,19 +403,11 @@ def round_loc(lat: float | str, lng: float | str,
     return rounded location with err small than tolerance meter
     """
     lat, lng = float(lat), float(lng)
-    while True:
-        for precision in itertools.count(start=1):
-            lat_, lng_ = round(lat, precision), round(lng, precision)
-            if (err := geodesic((lat, lng), (lat_, lng_)).meters) < tolerance:
-                break
-        if err:
-            console.log(
-                f'round loction: {lat, lng} -> {lat_, lng_} '
-                f'with precision {precision} (err: {err}m)')
-            lat, lng = lat_, lng_
-        else:
-            break
-    return lat_, lng_
+
+    for precision in itertools.count(start=1):
+        lat_, lng_ = round(lat, precision), round(lng, precision)
+        if geodesic((lat, lng), (lat_, lng_)).meters < tolerance:
+            return lat_, lng_
 
 
 async def parse_loc_src(loc_src: str) -> str:
@@ -430,14 +422,10 @@ async def parse_loc_src(loc_src: str) -> str:
            f'containerid={containerid}')
     js = await fetcher.get_json(api)
     cards = js['data']['cards'][0]['card_group']
-    name = cards[0]['group'][0]['item_title']
     params = cards[1]['scheme'].split('?')[-1].split('&')
     params = dict(p.split('=') for p in params)
     if not (location_id := params.get('extparam')):
         containerid = params['containerid']
         location_id = re.match(
             '2310360016([\w-]+)_pic', containerid).group(1)
-    console.log(f'parsing {loc_src}', style='warning')
-    console.log(
-        f'location_id: {location_id}, short_name: {name}', style='warning')
     return location_id

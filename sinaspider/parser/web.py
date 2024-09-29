@@ -103,7 +103,6 @@ def _get_video_info(info) -> str | None:
     if page_info.get('type') != "video":
         return
     if (urls := page_info['urls']) is None:
-        console.log('cannot get video url', style='error')
         return
     for key in ['mp4_1080p_mp4', 'mp4_720p_mp4',
                 'mp4_hd_mp4', 'mp4_sd_mp4', 'mp4_ld_mp4']:
@@ -149,9 +148,6 @@ async def text_info(text) -> dict:
                 child.decompose()
     location, location_id = None, None
     if location_collector:
-        if len(location_collector) > 1:
-            console.log(
-                f'multi location found: {location_collector}', style='warning')
         location, href = location_collector[-1]
         pattern1 = r'^http://weibo\.(?:com|cn)/p/100101([\w\.\_-]+)$'
         pattern2 = (r'^https://m\.weibo\.cn/p/index\?containerid='

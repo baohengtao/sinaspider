@@ -217,7 +217,6 @@ class Weibo(BaseModel):
                 console.log(
                     f'{self.location}: the distance between coord and location is {err}m',
                     style='notice')
-        console.log()
         lat, lng = coord or location.coordinate
         if self.latitude == lat and self.longitude == lng:
             return
