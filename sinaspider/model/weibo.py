@@ -110,7 +110,7 @@ class Weibo(BaseModel):
             return weibo
         if model.location is None:
             if 'location' in weibo_dict:
-                assert locations[0] is None or 'web' in model.mblog_from
+                assert 'web' in model.mblog_from or locations[0] is None
         else:
             assert model.location_id == weibo_dict['location_id']
 
@@ -408,11 +408,27 @@ class Location(BaseModel):
         """
         if not cls.get_or_none(id=location_id):
             if info := (await cls.get_location_info_v2(location_id)
-                        or await cls.get_location_info_v1p5(location_id)):
+                        or await cls.get_location_info_v1p5(location_id)
+                        or cls.get_location_info_from_database(location_id)):
                 cls.insert(info).execute()
             else:
                 return
         return cls.get_by_id(location_id)
+
+    @staticmethod
+    def get_location_info_from_database(location_id):
+        if weibo := Weibo.get_or_none(location_id=location_id):
+            assert weibo.location
+            return dict(
+                id=location_id,
+                short_name=weibo.location.split('·', maxsplit=1)[-1],
+                name=weibo.location,
+                named_at=weibo.created_at,
+                latitude=weibo.latitude,
+                longitude=weibo.longitude,
+                url=f'https://weibo.com/p/100101{location_id}',
+                url_m=f'https://m.weibo.cn/p/index?containerid=2306570042{location_id}',
+                version='database')
 
     @staticmethod
     async def get_location_info_v2(location_id):
@@ -602,7 +618,7 @@ class WeiboCache(BaseModel):
             weibo_dict['updated_at'] = self.updated_at
         weibo_dict['added_at'] = self.added_at
         if lid := weibo_dict.get('location_id'):
-            if loc := Location.get_or_none(id=lid):
+            if (loc := await Location.from_id(location_id=lid)) and loc.name:
                 if ((loc.named_at and loc.named_at > weibo_dict['created_at'])
                         or not weibo_dict.get('location')):
                     weibo_dict['location'] = loc.name
