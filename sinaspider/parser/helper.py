@@ -304,10 +304,10 @@ def merge_hist_location(weibo: dict) -> dict:
             assert 'web' in mblog_from
             if 'location' not in locations[-1]:
                 console.log(
-                    '>>>>>>>>>>>location not found but geo is in there<<<<<<<<<<<<<<',
+                    '>>>>>>>>>>>location not found but geo is in there>>>>>>>>>>>>>',
                     style='warning')
                 console.log(locations[-1])
-                console.log('>'*60, style='warning')
+                console.log('<'*60, style='warning')
             else:
                 console.log(
                     'location not parsed but it should be in weibo',

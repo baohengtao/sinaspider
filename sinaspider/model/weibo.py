@@ -131,8 +131,9 @@ class Weibo(BaseModel):
             assert not model.photos_extra
             assert 'photos_extra' not in weibo_dict
             weibo_dict['photos_extra'] = extra
-        # compare other key
+        assert weibo_dict['added_at'] >= model.added_at
 
+        # compare other key
         for k, v in weibo_dict.items():
             assert v or v == 0
             if v == model_dict[k]:
@@ -154,7 +155,7 @@ class Weibo(BaseModel):
         for k, v in model_dict.items():
             if v is None or k in weibo_dict:
                 continue
-            if k in ['source', 'text', 'videos', 'at_users', 'topics']:
+            if k in ['source', 'text', 'videos', 'at_users', 'topics', 'updated_at']:
                 console.log(f'-{k}: {v}', style='red')
                 weibo_dict[k] = None
             elif k not in ['latitude', 'longitude']:
@@ -214,7 +215,7 @@ class Weibo(BaseModel):
         if coord and location:
             if (err := geodesic(coord, location.coordinate).meters) > 100:
                 console.log(
-                    f'the distance between coord and location is {err}m',
+                    f'{self.location}: the distance between coord and location is {err}m',
                     style='notice')
         console.log()
         lat, lng = coord or location.coordinate
