@@ -43,13 +43,8 @@ class WeiboHist:
         photos, ori_num = get_photos_info_from_hist(self.hist_mblogs)
 
         if not set(final_photos).issubset(set(photos)):
-            console.log(
-                '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
-                style='warning')
-            console.log('photos not match: ')
-            console.log(f'photos in hist which is used is: {photos}')
-            console.log(f'photos in weibo: {final_photos}')
-            console.log('<'*50, style='warning')
+            photos_no_live = {x.split()[0] for x in photos}
+            assert set(final_photos).issubset(photos_no_live)
 
         photos, edited = photos[:ori_num], photos[ori_num:]
         info = dict(photos=photos, photos_edited=edited)

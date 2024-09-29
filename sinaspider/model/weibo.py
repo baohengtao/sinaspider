@@ -99,7 +99,7 @@ class Weibo(BaseModel):
         weibo_dict['username'] = User.get_by_id(
             weibo_dict['user_id']).username
         locations = weibo_dict.pop('locations', None)
-        weibo_dict.pop('regions', None)
+        regions = weibo_dict.pop('regions', None)
         if weibo_dict['pic_num'] > 0:
             assert weibo_dict.get('photos') or weibo_dict.get('photos_edited')
 
@@ -113,7 +113,9 @@ class Weibo(BaseModel):
                 assert locations[0] is None or 'web' in model.mblog_from
         else:
             assert model.location_id == weibo_dict['location_id']
-        assert model.region_name == weibo_dict.get('region_name')
+
+        if model.region_name != weibo_dict.get('region_name'):
+            assert regions[0] is None and model.region_name in regions
 
         model_dict = model_to_dict(model, recurse=False)
         model_dict['user_id'] = model_dict.pop('user')
@@ -152,7 +154,10 @@ class Weibo(BaseModel):
         for k, v in model_dict.items():
             if v is None or k in weibo_dict:
                 continue
-            if k not in ['latitude', 'longitude']:
+            if k in ['source', 'text', 'videos', 'at_users', 'topics']:
+                console.log(f'-{k}: {v}', style='red')
+                weibo_dict[k] = None
+            elif k not in ['latitude', 'longitude']:
                 console.log(f'{k}:{v} not in weibo_dict', style='warning')
 
         if model.try_update_at:
