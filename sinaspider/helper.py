@@ -228,11 +228,15 @@ async def download_file_pair(medias: list[dict]):
         img_path = await download_single_file(**img_info)
         mov_path = await download_single_file(**mov_info)
     except Exception:
-        if (img_path := img_info['filepath']).exists():
+        if (img_path := img_info['filepath']/img_info['filename']).exists():
             img_path.unlink()
-        if (mov_path := mov_info['filepath']).exists():
+        if (mov_path := mov_info['filepath']/mov_info['filename']).exists():
             mov_path.unlink()
         raise
+    if mov_path is None:
+        console.log(f'live mov download failed: {mov_info}', style='error')
+        write_xmp(img_path, img_xmp)
+        return
     img_size = naturalsize(img_path.stat().st_size)
     mov_size = naturalsize(mov_path.stat().st_size)
     if not is_live_photo_pair(img_path, mov_path):
@@ -285,9 +289,14 @@ async def download_single_file(
                 continue
 
         if r.status_code == 404:
-            console.log(
-                f"{url}, {xmp_info or img}, {r.status_code}", style="error")
-            return
+            if i < 5:
+                console.log(f'{url} 404 ERROR, has tried {i} time(s)',
+                            style='error')
+                continue
+            else:
+                console.log(
+                    f"failed downloading {url}, {xmp_info or img}, {r.status_code}", style="error")
+                return
         elif r.status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
             await asyncio.sleep(15)
@@ -295,14 +304,29 @@ async def download_single_file(
             continue
 
         mime_type = mime_detector.from_buffer(r.content)
-        suffix = mimetypes.guess_extension(mime_type)
+        if mime_type != 'application/octet-stream':
+            suffix = mimetypes.guess_extension(mime_type)
+        else:
+            suffix = img.suffix
         if suffix == '.gif':
-            if r.url.path.endswith('.gif'):
-                img = img.with_suffix('.gif')
-            else:
-                console.log(
-                    f"{img} shouldn't be gif, retrying...", style="error")
-                continue
+            assert r.url.path.endswith('.gif')
+            if not url.endswith('.gif'):
+                assert r.url.path.endswith(
+                    ('/images/default_d_h_large.gif',
+                     '/images/default_d_w_large.gif',
+                     '/images/default_w_large.gif',
+                     '/images/default_h_large.gif')), r.url.path
+                if i < 5:
+                    console.log(
+                        f"{url} shouldn't be gif, but redirected to {r.url} "
+                        f"(has tried {i} time(s))",
+                        style='error')
+                    continue
+                else:
+                    console.log(
+                        f'{img}: seems be deleted ({url})', style='error')
+            img = img.with_suffix('.gif')
+
         elif img.suffix != suffix:
             console.log(f"{img}: suffix should be {suffix}", style="warning")
             img = img.with_suffix(suffix)
