@@ -28,8 +28,12 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
     else:
         assert pic_num == len(info['pic_ids'])
 
-    assert info['isLongText'] == (
-        ('longText' in info) or (info['pic_num'] > 9))
+    if info['isLongText'] != (
+            ('longText' in info) or (info['pic_num'] > 9)):
+        assert info['isLongText']
+        console.log(
+            'is long text but longText not in info and pic_num <= 9',
+            style='warning')
     if 'longText' in info:
         info['text'] = info['longText']['content']
         info |= info['longText']

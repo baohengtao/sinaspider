@@ -56,14 +56,14 @@ async def weibo(download_dir: Path = default_path, no_watermark: bool = False):
 @app.command()
 @logsaver_decorator
 @run_async
-async def update_missing():
+async def update_missing(update: bool = False):
     from sinaspider.model import WeiboMissed
 
     from .helper import LogSaver
     logsaver = LogSaver('update_missing', default_path)
     WeiboMissed.add_missing()
     WeiboMissed.add_missing_from_weiboliked()
-    while True:
+    while update:
         await WeiboMissed.update_missing()
         logsaver.save_log()
 

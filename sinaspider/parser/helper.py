@@ -34,7 +34,7 @@ class WeiboHist:
         self.weibo_dict |= location_info
         try:
             self.weibo_dict = merge_hist_location(self.weibo_dict)
-        except AssertionError:
+        except (AssertionError, KeyError):
             raise HistLocationError(self.weibo_dict)
         return self.weibo_dict
 
@@ -287,14 +287,10 @@ def merge_hist_location(weibo: dict) -> dict:
     else:
         lx = locations[-1]
         assert weibo['location_id'] == lx['location_id']
-        if 'web' in mblog_from:
-            assert weibo['location'] == lx['location']
-        elif 'location' in lx:
-
-            assert (weibo.get('location') == lx['location'] or
-                    weibo['location_title'] == lx['location'].split('·', 1)[-1])
-        else:
-            assert weibo['location_title'] == lx['location_title']
+        if weibo.get('location') != lx.get('location'):
+            assert 'weico' in mblog_from
+            x = lx.get('location', '').split('·', maxsplit=1)[-1]
+            assert weibo['location_title'] in [lx['location_title'], x]
 
     weibo['region_name'] = weibo.pop('selected_region')
     if location := weibo.pop('selected_location'):
