@@ -215,8 +215,7 @@ class Weibo(BaseModel):
         if coord and location:
             if (err := geodesic(coord, location.coordinate).meters) > 100:
                 console.log(
-                    f'{self.location}: the distance between coord and location is {err}m',
-                    style='notice')
+                    f'{self.location}: the distance between coord and location is {err}m')
         lat, lng = coord or location.coordinate
         if self.latitude == lat and self.longitude == lng:
             return

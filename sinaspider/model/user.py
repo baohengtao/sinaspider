@@ -93,7 +93,7 @@ class User(BaseModel):
                     edu.append(s)
             user_dict['education'] = edu
 
-        if birth := user_dict.pop('birthday', None):
+        if birth := user_dict.pop('birthday', model.birthday):
             if not model.birthday or model.birthday >= birth:
                 user_dict['birthday'] = birth
                 user_dict['age'] = pendulum.parse(birth).diff().in_years()
@@ -113,7 +113,8 @@ class User(BaseModel):
         for k, v in model_dict.items():
             if v is None or k in user_dict:
                 continue
-            if k in ['username', 'bilateral', 'description', 'IP', 'redirect']:
+            if k in ['username', 'bilateral', 'description',
+                     'IP', 'redirect', 'education']:
                 continue
             if k in ['verified_reason', 'verified_type_ext', 'followed_by']:
                 user_dict[k] = None
