@@ -77,8 +77,6 @@ def get_photos_info(info: dict) -> list[str]:
 
     for p in photos:
         if p[0].endswith('.gif'):
-            if p[1] and ('https://video.weibo.com/media/play?fid=' not in p[1]):
-                assert "://g.us.sinaimg.cn/" in p[1]
             p[1] = ''
         else:
             p[1] = p[1].replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
