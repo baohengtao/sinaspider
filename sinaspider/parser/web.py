@@ -65,6 +65,7 @@ async def parse_weibo_from_web(weibo_info: dict, hist_mblogs=None):
         id=(id_ := int(info.pop('id'))),
         bid=(bid := encode_wb_id(id_)),
         user_id=(user_id := user['id']),
+        nickname=user['screen_name'],
         username=user.get('remark') or user['screen_name'],
         created_at=created_at,
         region_name=region_name,

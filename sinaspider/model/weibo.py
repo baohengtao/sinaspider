@@ -36,6 +36,7 @@ class Weibo(BaseModel):
     bid = TextField(unique=True)
     user = ForeignKeyField(User, backref="weibos")
     username = TextField()
+    nickname = TextField()
     created_at = DateTimeTZField()
     text = TextField(null=True)
     url = TextField()
@@ -114,6 +115,7 @@ class Weibo(BaseModel):
         else:
             assert model.location_id == weibo_dict['location_id']
 
+        weibo_dict['nickname'] = model.nickname
         if model.region_name != weibo_dict.get('region_name'):
             assert regions[0] is None and model.region_name in regions
 

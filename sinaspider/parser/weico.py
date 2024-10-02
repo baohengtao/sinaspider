@@ -58,6 +58,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         id=(id_ := int(info['id'])),
         bid=(bid := encode_wb_id(id_)),
         user_id=(user_id := user['id']),
+        nickname=user['screen_name'],
         username=user.get('remark') or user['screen_name'],
         created_at=created_at,
         text=text.strip(),
