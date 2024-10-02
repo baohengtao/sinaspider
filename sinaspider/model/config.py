@@ -202,17 +202,20 @@ class UserConfig(BaseModel):
         Save weibo to database and return media info
         :return: generator of medias to downloads
         """
+        revisit_dir = download_dir / 'Revisit' / self.username
         user_root = 'Timeline' if self.weibo_fetch_at and self.photos_num else 'NewInit'
         if user_root == 'NewInit' and self.weibo_fetch_at:
             if not (download_dir / user_root / self.username).exists():
                 user_root = 'New'
         download_dir = download_dir / user_root / self.username
+        if user_root.startswith('New'):
+            revisit_dir = download_dir
 
         since = pendulum.instance(
             self.weibo_fetch_at or pendulum.from_timestamp(0))
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        async for mblog in self.get_homepage(since.subtract(months=3)):
+        async for mblog in self.get_homepage(since.subtract(months=6)):
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
@@ -235,7 +238,8 @@ class UserConfig(BaseModel):
                     weibo.photos_extra = None
                     weibo.save()
 
-            if medias := list(weibo.medias(download_dir, extra=has_fetched)):
+            save_path = download_dir if weibo.created_at >= since else revisit_dir
+            if medias := list(weibo.medias(save_path, extra=has_fetched)):
                 if has_fetched:
                     console.log(weibo)
                     console.log(f'🎉 {len(medias)} new edited imgs found',

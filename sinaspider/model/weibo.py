@@ -266,7 +266,7 @@ class Weibo(BaseModel):
             if no_watermark:
                 url = url.replace('/large/', '/oslarge/')
             aux = '_live' if live else ''
-            aux += '_edited' if sn > len(photos or []) else ''
+            aux += '_edited' if sn > len(self.photos or []) else ''
             medias = [{
                 "url": url,
                 "filename": f"{prefix}_{sn}{aux}.jpg",
