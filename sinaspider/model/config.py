@@ -28,6 +28,7 @@ class UserConfig(BaseModel):
     age = IntegerField(null=True)
     weibo_fetch = BooleanField(null=True)
     weibo_fetch_at = DateTimeTZField(null=True)
+    weibo_refetch_at = DateTimeTZField(null=True)
     weibo_next_fetch = DateTimeTZField(null=True)
     liked_fetch = BooleanField(default=False)
     liked_fetch_at = DateTimeTZField(null=True)
@@ -160,7 +161,7 @@ class UserConfig(BaseModel):
             f'with {self.saved_medias_count} media files', style='notice')
         self.save()
 
-    async def fetch_weibo(self, download_dir: Path):
+    async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
         if self.weibo_fetch is False:
             return
         await fetcher.toggle_art(self.following)
@@ -173,6 +174,7 @@ class UserConfig(BaseModel):
             msg = f"weibo_fetch:{self.weibo_fetch_at:%y-%m-%d}"
         else:
             msg = f'weibo_fetch:{self.weibo_fetch}'
+            refetch = True
         if self.liked_fetch_at:
             msg += f" liked_fetch: {self.liked_fetch_at:%y-%m-%d}"
         else:
@@ -182,7 +184,7 @@ class UserConfig(BaseModel):
         console.log(f"Media Saving: {download_dir}")
 
         now = pendulum.now()
-        imgs = self._save_weibo(download_dir)
+        imgs = self._save_weibo(download_dir, refetch=refetch)
         await download_files(imgs)
         console.log(f"{self.username}的微博🧣获取完毕\n")
         self.weibo_fetch_at = now
@@ -193,11 +195,14 @@ class UserConfig(BaseModel):
         self.post_at = weibos[0].created_at if weibos else None
         self.saved_statuses_count = len(weibos)
         self.saved_medias_count = sum(w.medias_num for w in weibos)
+        if refetch:
+            self.weibo_refetch_at = now
         self.save()
 
     async def _save_weibo(
             self,
-            download_dir: Path) -> AsyncIterator[dict]:
+            download_dir: Path,
+            refetch=False) -> AsyncIterator[dict]:
         """
         Save weibo to database and return media info
         :return: generator of medias to downloads
@@ -215,7 +220,9 @@ class UserConfig(BaseModel):
             self.weibo_fetch_at or pendulum.from_timestamp(0))
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        async for mblog in self.get_homepage(since.subtract(months=6)):
+        hompepage_since = pendulum.from_timestamp(
+            0) if refetch else since.subtract(months=6)
+        async for mblog in self.get_homepage(hompepage_since):
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
@@ -230,7 +237,9 @@ class UserConfig(BaseModel):
                     f'find weibo created before {since:%Y-%m-%d} '
                     'but not fetched', style='notice')
 
-            has_fetched = insert_at and (weibo.created_at < since)
+            has_fetched = insert_at and weibo.created_at < since
+            if refetch and has_fetched:
+                has_fetched = weibo.added_at < pendulum.now().subtract(days=1)
             if not has_fetched:
                 console.log(weibo)
                 weibo.highlight_social()
