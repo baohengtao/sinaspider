@@ -271,14 +271,14 @@ class Weibo(BaseModel):
             aux += '_edited' if sn > len(self.photos or []) else ''
             medias = [{
                 "url": url,
-                "filename": f"{prefix}_{sn}{aux}.jpg",
+                "filename": f"{prefix}_{sn}{aux}_img.jpg",
                 "xmp_info": self.gen_meta(sn=sn, url=url),
                 "filepath": filepath,
             }]
             if live:
                 medias.append({
                     "url": live,
-                    "filename": f"{prefix}_{sn}{aux}.mov",
+                    "filename": f"{prefix}_{sn}{aux}_vid.mov",
                     "xmp_info": self.gen_meta(sn=sn, url=live),
                     "filepath": filepath,
                 })
@@ -418,7 +418,11 @@ class Location(BaseModel):
 
     @staticmethod
     def get_location_info_from_database(location_id):
-        if weibo := Weibo.get_or_none(location_id=location_id):
+        query = (Weibo.select()
+                 .where(Weibo.location_id == location_id)
+                 .where(Weibo.latitude.is_null(False))
+                 )
+        if weibo := query.first():
             assert weibo.location
             return dict(
                 id=location_id,

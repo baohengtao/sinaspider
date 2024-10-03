@@ -124,7 +124,7 @@ def _get_video_url(page_info) -> str | None:
             console.log('no video found', style='error')
             return
         else:
-            assert video_url and fmt == 'mp4'
+            assert video_url and fmt in ['mp4', 'm3u8']
 
     elif object_type == 'story':
         slide = page_info['slide_cover']
@@ -133,8 +133,9 @@ def _get_video_url(page_info) -> str | None:
         slide = slide['slide_videos'][0]
         video_url = slide['url']
     if video_url:
-        assert page_info['page_title'].endswith(
-            ('微博视频', '秒拍视频', '微博故事', '美拍')), page_info
+        ends = ('微博视频', '秒拍视频', '微博故事', '美拍')
+        if not (title := page_info['page_title']).endswith(ends):
+            console.log(f'unknown page_title: {title}', style='error')
         return video_url.replace('http://', 'https://')
     types = [
         'webpage', 'audio', 'book', 'hudongvote', 'cardlist',

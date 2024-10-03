@@ -116,7 +116,8 @@ class User(BaseModel):
             if k in ['username', 'bilateral', 'description',
                      'IP', 'redirect', 'education']:
                 continue
-            if k in ['verified_reason', 'verified_type_ext', 'followed_by']:
+            if k in ['verified_reason', 'verified_type_ext',
+                     'followed_by', '感情状况',]:
                 user_dict[k] = None
                 console.log(
                     f'-{k}: {model_dict[k]}', style='red bold on dark_red')

@@ -233,9 +233,11 @@ async def download_file_pair(medias: list[dict]):
         if (mov_path := mov_info['filepath']/mov_info['filename']).exists():
             mov_path.unlink()
         raise
-    if mov_path is None:
+    if mov_path is None or mov_path.suffix not in {'.mov', '.mp4'}:
         console.log(f'live mov download failed: {mov_info}', style='error')
         write_xmp(img_path, img_xmp)
+        if mov_path:
+            write_xmp(mov_path, mov_xmp)
         return
     img_size = naturalsize(img_path.stat().st_size)
     mov_size = naturalsize(mov_path.stat().st_size)
