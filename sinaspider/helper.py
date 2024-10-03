@@ -242,7 +242,7 @@ async def download_file_pair(medias: list[dict]):
     img_size = naturalsize(img_path.stat().st_size)
     mov_size = naturalsize(mov_path.stat().st_size)
     if not is_live_photo_pair(img_path, mov_path):
-        assert not (live_id(img_path) and live_id(mov_path))
+        # assert not (live_id(img_path) and live_id(mov_path))
         console.log(
             f'not live photo pair: {img_path} {mov_path}, fixing...',
             style='warning')

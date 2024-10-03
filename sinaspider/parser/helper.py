@@ -172,6 +172,8 @@ def get_location_from_mblog(mblog, from_hist=True):
     assert len(annotations) <= 1
     if annotations:
         annotations = annotations[0]['place']
+        if set(annotations) == {'place'}:
+            annotations = annotations['place']
         if annotations == {'spot_type': '0'}:
             annotations = None
         else:
@@ -208,10 +210,9 @@ def parse_location_info_from_hist(hist_mblogs) -> dict | None:
         mblog) for mblog in hist_mblogs]
     locations = [get_location_from_mblog(mblog) for mblog in hist_mblogs]
     for i in range(len(hist_mblogs)):
-        if locations[i]:
-            assert not locations_from_url[i]
-        else:
-            locations[i] = locations_from_url[i]
+        x, y = locations[i] or {}, locations_from_url[i] or {}
+        assert x | y == y | x
+        locations[i] = (x | y) or None
 
     rl = None
     has_geo = False
@@ -281,7 +282,9 @@ def merge_hist_location(weibo: dict) -> dict:
     # compare location
     mblog_from = weibo['mblog_from']
     if not weibo.get('location') and not weibo.get('location_title'):
-        assert not locations[-1] or 'web' in mblog_from
+        if 'weico' in mblog_from:
+            x = locations[-1] or {}
+            assert not x.get('location') and not x.get('location_title')
     else:
         lx = locations[-1]
         assert weibo['location_id'] == lx['location_id']
