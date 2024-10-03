@@ -280,18 +280,22 @@ async def download_single_file(
             return
     for i in range(10):
         async with semaphore:
+            if i:
+                period = 30
+                await asyncio.sleep(period)
             try:
                 r = await client.get(url)
             except httpx.HTTPError as e:
-                period = 30
-                console.log(f'download img {img} failed with {e!r} ({url})...'
-                            f' retry in {period} seconds...(has tried {i} time(s))',
-                            style='error')
-                await asyncio.sleep(period)
+                if i > 0:
+                    console.log(f'download img {img} failed with {e!r} ({url})...'
+                                f' retry in {period} seconds...(has tried {i} time(s))',
+                                style='error')
                 continue
 
         if r.status_code == 404:
-            if i < 5:
+            if i == 0:
+                continue
+            elif i < 5:
                 console.log(f'{url} 404 ERROR, has tried {i} time(s)',
                             style='error')
                 continue
@@ -301,7 +305,6 @@ async def download_single_file(
                 return
         elif r.status_code != 200:
             console.log(f"{url}, {r.status_code}", style="error")
-            await asyncio.sleep(15)
             console.log(f'retrying download for {url}...')
             continue
 
@@ -318,7 +321,9 @@ async def download_single_file(
                      '/images/default_d_w_large.gif',
                      '/images/default_w_large.gif',
                      '/images/default_h_large.gif')), r.url.path
-                if i < 5:
+                if i == 0:
+                    continue
+                elif i < 5:
                     console.log(
                         f"{url} shouldn't be gif, but redirected to {r.url} "
                         f"(has tried {i} time(s))",
