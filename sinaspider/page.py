@@ -257,10 +257,10 @@ class Page:
 
     async def _get_single_page_weico(self, page: int) -> AsyncIterator[dict]:
 
-        s = "99312000" if fetcher.art_login else "b59fafff"
+        s = "88888888" if fetcher.art_login else "33333333"
         url = ('https://api.weibo.cn/2/profile/statuses/tab?c=weicoabroad&'
                f'containerid=230413{self.id}_-_WEIBO_SECOND_PROFILE_WEIBO&'
-               f'from=12CC293010&page=%s&s={s}'
+               f'from=12DC193010&page=%s&s={s}'
                )
         cards = (await fetcher.get_json(url % page))['cards']
         mblogs = list(_yield_from_cards(cards))
@@ -424,6 +424,8 @@ class Page:
         mblogs = [mblog async for mblog in self._get_single_page_weico(page)]
         while mblogs:
             if (mblog := mblogs.pop()) is None:
+                continue
+            if mblog.get('title', {}).get('text') == '置顶':
                 continue
             cache = await WeiboCache.upsert(mblog)
             info = await cache.parse()
