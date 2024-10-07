@@ -140,7 +140,7 @@ def _get_video_url(page_info) -> str | None:
     types = [
         'webpage', 'audio', 'book', 'hudongvote', 'cardlist',
         'adFeedEvent', 'article', 'group', 'event',
-        'movie', None, 'user', 'wenda']
+        'movie', None, 'user', 'wenda', 'live']
     if object_type not in types:
         console.log(f'unknown object_type: {object_type}', style='error')
     assert not page_info['page_title'].endswith('视频')

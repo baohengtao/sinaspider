@@ -292,11 +292,11 @@ async def download_single_file(
                                 style='error')
                 continue
 
-        if r.status_code == 404:
+        if r.status_code in [404, 403]:
             if i == 0:
                 continue
-            elif i < 5:
-                console.log(f'{url} 404 ERROR, has tried {i} time(s)',
+            elif i < 3:
+                console.log(f'{url} {r.status_code} ERROR, has tried {i} time(s)',
                             style='error')
                 continue
             else:
@@ -320,7 +320,8 @@ async def download_single_file(
                     ('/images/default_d_h_large.gif',
                      '/images/default_d_w_large.gif',
                      '/images/default_w_large.gif',
-                     '/images/default_h_large.gif')), r.url.path
+                     '/images/default_h_large.gif',
+                     '/images/default_s_large.gif',)), r.url.path
                 if i == 0:
                     continue
                 elif i < 5:
