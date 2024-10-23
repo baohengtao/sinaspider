@@ -654,9 +654,14 @@ async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
                 )
     all_cards = []
     for page in itertools.count(1):
-        js = await fetcher.get_json(edit_url % page)
-        if 'cards' not in js:
-            raise ValueError(js)
+        for _ in range(3):
+            js = await fetcher.get_json(edit_url % page)
+            if 'cards' in js:
+                break
+            assert js['errmsg'] == '微博已删除'
+            continue
+        else:
+            raise WeiboNotFoundError(js, weibo_id)
         all_cards += js['cards']
         assert len(all_cards) <= edit_count + 1
         if (len(all_cards) == edit_count + 1) or not js['cards']:

@@ -265,8 +265,12 @@ class Page:
         cards = (await fetcher.get_json(url % page))['cards']
         mblogs = list(_yield_from_cards(cards))
         if not mblogs:
-            assert len(cards) == 1
-            assert cards[0]['name'] == '暂无微博'
+            if len(cards) == 2:
+                assert cards[0]['card_group'][0]['desc'] == '发布微博'
+                console.log('seems fetching weibos of self', style='error')
+            else:
+                assert len(cards) == 1
+            assert cards[-1]['name'] == '暂无微博'
             console.log(
                 f"seems reached end at page {page} for {url % page}",
                 style='warning'
