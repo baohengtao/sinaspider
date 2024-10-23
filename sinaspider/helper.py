@@ -281,7 +281,7 @@ async def download_single_file(
     for i in range(10):
         async with semaphore:
             if i:
-                period = 30
+                period = 60
                 await asyncio.sleep(period)
             try:
                 r = await client.get(url)
@@ -357,7 +357,14 @@ async def download_single_file(
 
 
 async def download_files(imgs: AsyncIterable[list[dict]]):
-    tasks = [asyncio.create_task(download_file_pair(img)) async for img in imgs]
+    tasks = []
+    async for img in imgs:
+        task = asyncio.create_task(download_file_pair(img))
+        tasks.append(task)
+        for x in [1000, 100, 10, 1]:
+            if len(tasks) % x == 0:
+                await asyncio.sleep(0.1*x)
+                break
     await asyncio.gather(*tasks)
 
 
