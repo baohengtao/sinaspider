@@ -344,7 +344,7 @@ class Weibo(BaseModel):
         from photosinfo.model import Girl
         text = (self.text or '').lower().replace('night', '')
         has_ins = re.findall(r'(?<![a-z])(ins|ig|instagram)(?![a-z])', text)
-        has_red = re.findall(r'小红书|📕', text)
+        has_red = re.findall(r'(?<![a-z])xhs(?![a-z])|小红书|📕', text)
         has_awe = re.findall(r'(?<![a-z])dy(?![a-z])|抖音', text)
         if not (has_ins or has_red or has_awe):
             return False
