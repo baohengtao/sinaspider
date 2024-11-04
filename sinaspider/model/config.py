@@ -238,8 +238,8 @@ class UserConfig(BaseModel):
                     'but not fetched', style='notice')
 
             has_fetched = insert_at and weibo.created_at < since
-            if refetch and has_fetched:
-                has_fetched = weibo.added_at < pendulum.now().subtract(hours=6)
+            # if refetch and has_fetched:
+            #     has_fetched = insert_at < pendulum.now().subtract(hours=6)
             if not has_fetched:
                 console.log(weibo)
                 weibo.highlight_social()

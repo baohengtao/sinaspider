@@ -195,6 +195,7 @@ class Fetcher:
 fetcher = Fetcher()
 client = httpx.AsyncClient(follow_redirects=True)
 et = ExifToolHelper()
+semaphore = asyncio.Semaphore(40)
 
 
 def write_xmp(img: Path, tags: dict):
@@ -206,15 +207,7 @@ def write_xmp(img: Path, tags: dict):
         0]['File:FileTypeExtension'].lower()
     if (suffix := f'.{ext}') != img.suffix:
         raise ValueError(f'{img} suffix is not right: {suffix}')
-        # new_img = img.with_suffix(suffix)
-        # console.log(
-        #     f'{img}: suffix is not right, moving to {new_img}...',
-        #     style='error')
-        # img = img.rename(new_img)
     et.set_tags(img, tags, params=params)
-
-
-semaphore = asyncio.Semaphore(8)
 
 
 async def download_file_pair(medias: list[dict]):
@@ -287,6 +280,7 @@ async def download_single_file(
             try:
                 r = await client.get(url)
             except httpx.PoolTimeout:
+                await client.aclose()
                 raise
             except httpx.HTTPError as e:
                 if i > 0:
