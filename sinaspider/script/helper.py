@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import time
 from functools import wraps
@@ -9,6 +10,7 @@ import pendulum
 from rich.terminal_theme import MONOKAI
 
 from sinaspider import console
+from sinaspider.exceptions import DownloadFilesFailed
 from sinaspider.helper import fetcher
 from sinaspider.model import PG_BACK
 
@@ -32,7 +34,16 @@ def logsaver_decorator(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            return func(*args, **kwargs)
+            try:
+                return func(*args, **kwargs)
+            except DownloadFilesFailed as e:
+                filename = f'failed_imgs_{pendulum.now().strftime("%Y%m%d%H%M%S")}.json'
+                json_file = default_path / filename
+                console.log(
+                    f'save failed imgs to {json_file}', style='error')
+                json_file.write_text(json.dumps(
+                    e.imgs, indent=4, ensure_ascii=False))
+                raise e.errs[0]
         except Exception:
             with console.capture():
                 console.print_exception(show_locals=True)

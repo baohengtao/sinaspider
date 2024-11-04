@@ -13,3 +13,10 @@ class HistLocationError(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
         self.weibo_dict = args[0]
+
+
+class DownloadFilesFailed(Exception):
+    def __init__(self, imgs, errs) -> None:
+        super().__init__()
+        self.imgs = imgs
+        self.errs = errs

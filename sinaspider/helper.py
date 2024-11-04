@@ -25,7 +25,7 @@ from makelive.makelive import (
 from rich.prompt import Confirm
 
 from sinaspider import console
-from sinaspider.exceptions import UserNotFoundError
+from sinaspider.exceptions import DownloadFilesFailed, UserNotFoundError
 
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.disabled = True
@@ -245,7 +245,7 @@ async def download_file_pair(medias: list[dict]):
         # assert not (live_id(img_path) and live_id(mov_path))
         console.log(
             f'not live photo pair: {img_path} {mov_path}, fixing...',
-            style='warning')
+            style='info')
         if assert_id := live_id(img_path):
             add_asset_id_to_quicktime_file(mov_path, assert_id)
         elif assert_id := live_id(mov_path):
@@ -276,7 +276,8 @@ async def download_single_file(
         expires = pendulum.from_timestamp(int(match.group(1)), tz='local')
         if expires < pendulum.now():
             console.log(
-                f"{url} expires at {expires}, skip...", style="warning")
+                f"{filename}: {url} expires at {expires}, skip...",
+                style="warning")
             return
     for i in range(10):
         async with semaphore:
@@ -285,6 +286,8 @@ async def download_single_file(
                 await asyncio.sleep(period)
             try:
                 r = await client.get(url)
+            except httpx.PoolTimeout:
+                raise
             except httpx.HTTPError as e:
                 if i > 0:
                     console.log(f'download img {img} failed with {e!r} ({url})...'
@@ -357,15 +360,49 @@ async def download_single_file(
 
 
 async def download_files(imgs: AsyncIterable[list[dict]]):
-    tasks = []
-    async for img in imgs:
-        task = asyncio.create_task(download_file_pair(img))
-        tasks.append(task)
-        for x in [1000, 100, 10, 1]:
-            if len(tasks) % x == 0:
-                await asyncio.sleep(0.1*x)
-                break
-    await asyncio.gather(*tasks)
+    tasks = {}
+    try:
+        async for img in imgs:
+            task = asyncio.create_task(download_file_pair(img))
+            tasks[task] = img
+    except Exception:
+        raise
+    finally:
+        failed_imgs = []
+        errors = []
+        pending = list(tasks)
+        i = 0
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                task: asyncio.Future
+                i += 1
+                if i % 50 == 0:
+                    console.log(f'{i}/{len(tasks)} imgs downloaded')
+                if e := task.exception():
+                    failed_img = tasks[task]
+                    for x in failed_img:
+                        x['filepath'] = str(x['filepath'])
+                    failed_imgs.append(failed_img)
+                    errors.append(e)
+                    console.log(
+                        f'EXCEPTION: {e!r} for {failed_img}', style='error')
+
+        # for i, task in enumerate(asyncio.as_completed(tasks)):
+        #     if i % 50 == 0:
+        #         console.log(f'{i}/{len(tasks)} imgs downloaded')
+        #     try:
+        #         await task
+        #     except Exception as e:
+        #         failed_img = tasks[task]
+        #         failed_imgs.append(failed_img)
+        #         errors.append(e)
+        #         console.log(
+        #             f'EXCEPTION: {e!r} for {failed_img}', style='error')
+
+        console.log(f'{len(tasks)} imgs downloaded')
+        if failed_imgs:
+            raise DownloadFilesFailed(failed_imgs, errors)
 
 
 async def normalize_user_id(user_id: str | int) -> int:
