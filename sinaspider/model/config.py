@@ -105,7 +105,9 @@ class UserConfig(BaseModel):
         return visible
 
     async def get_homepage(
-            self, since: pendulum.DateTime) -> AsyncIterator[dict]:
+            self, since: pendulum.DateTime | None) -> AsyncIterator[dict]:
+        if since is None:
+            since = pendulum.from_timestamp(0)
         async for mblog in self.page.homepage_weico():
             is_pinned = mblog.pop('is_pinned')
             created_at = pendulum.from_format(
@@ -120,27 +122,37 @@ class UserConfig(BaseModel):
                     f"{since:%y-%m-%d}之前, 获取完毕")
                 return
 
-    async def caching_weibo_for_new(self):
+    async def caching_weibo_for_new(self, refetch: bool = False):
         assert self.is_caching and self.weibo_fetch
-        since = self.weibo_fetch_at or pendulum.from_timestamp(0)
-        console.rule(
-            f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
+        since = self.weibo_fetch_at if not refetch else None
+        msg = f"caching {self.username}'s homepage"
+        if since:
+            msg += f" (cached at {since:%y-%m-%d})"
+        else:
+            msg += " (New user)"
+        console.rule(msg)
         console.log(self.user)
 
         now, i = pendulum.now(), 0
         async for mblog in self.get_homepage(since):
-            if Weibo.get_or_none(id=mblog['id']):
-                continue
-            i += 1
+            if not (has_fetched := Weibo.get_or_none(id=mblog['id'])):
+                i += 1
             weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
             weibo_dict['username'] = self.username
             weibo = await Weibo.upsert(weibo_dict)
             if weibo.photos_extra:
+                assert has_fetched
+                console.log(weibo)
+                console.log(
+                    f'find {len(weibo.photos_extra)} extra photos\n', style='notice')
                 weibo.photos_extra = None
                 weibo.save()
-            console.log(weibo)
-            weibo.highlight_social()
-            console.log()
+            elif not has_fetched:
+                console.log(weibo)
+                weibo.highlight_social()
+                console.log()
+        if since is None:
+            self.weibo_refetch_at = now
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
         weibos: list[Weibo] = self.user.weibos.order_by(
@@ -161,7 +173,7 @@ class UserConfig(BaseModel):
         await self.set_visibility()
         await self.fetch_friends()
         if self.is_caching:
-            await self.caching_weibo_for_new()
+            await self.caching_weibo_for_new(refetch=refetch)
             return
         if self.weibo_fetch_at:
             msg = f"weibo_fetch:{self.weibo_fetch_at:%y-%m-%d}"
@@ -212,15 +224,13 @@ class UserConfig(BaseModel):
             self.weibo_fetch_at or pendulum.from_timestamp(0))
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        hompepage_since = pendulum.from_timestamp(
-            0) if refetch else since.subtract(months=6)
+        hompepage_since = None if refetch else since.subtract(months=6)
         async for mblog in self.get_homepage(hompepage_since):
             weibo = Weibo.get_or_none(id=mblog['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
-            if not insert_at or insert_at < pendulum.now().subtract(minutes=50):
-                weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
-                weibo_dict['username'] = self.username
-                weibo = await Weibo.upsert(weibo_dict)
+            weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
+            weibo_dict['username'] = self.username
+            weibo = await Weibo.upsert(weibo_dict)
 
             weibo_ids.append(weibo.id)
 
