@@ -26,7 +26,7 @@ class UserConfig(BaseModel):
     username = CharField()
     nickname = CharField(null=True)
     age = IntegerField(null=True)
-    weibo_fetch = BooleanField(null=True)
+    weibo_fetch = BooleanField(default=True)
     weibo_fetch_at = DateTimeTZField(null=True)
     weibo_refetch_at = DateTimeTZField(null=True)
     weibo_next_fetch = DateTimeTZField(null=True)
@@ -46,7 +46,7 @@ class UserConfig(BaseModel):
     is_friend = BooleanField(default=False)
     bilateral = ArrayField(field_class=TextField, null=True)
     blocked = BooleanField(default=False)
-    weibo_cache_at = DateTimeTZField(default=None, null=True)
+    is_caching = BooleanField(default=True)
     statuses_count = IntegerField()
     saved_statuses_count = IntegerField(default=0)
     saved_medias_count = IntegerField(default=0)
@@ -76,7 +76,7 @@ class UserConfig(BaseModel):
         return cls.get(user_id=user_id)
 
     async def set_visibility(self) -> bool:
-        if not (self.weibo_fetch_at or self.weibo_cache_at):
+        if not self.weibo_fetch_at:
             self.visible = None
         if self.visible is True:
             return True
@@ -99,7 +99,6 @@ class UserConfig(BaseModel):
         else:
             if Confirm.ask('Reset weibo fetch/cache at to None?'):
                 self.weibo_fetch_at = None
-                self.weibo_cache_at = None
                 self.save()
             raise ValueError(
                 f"conflict: {self.username}当前微博全部可见，请检查")
@@ -122,14 +121,8 @@ class UserConfig(BaseModel):
                 return
 
     async def caching_weibo_for_new(self):
-        if self.weibo_fetch is not None:
-            assert self.weibo_cache_at is None
-            assert self.weibo_fetch or self.weibo_fetch_at
-            return
-        else:
-            assert self.weibo_fetch_at is None
-
-        since = self.weibo_cache_at or pendulum.from_timestamp(0)
+        assert self.is_caching and self.weibo_fetch
+        since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.rule(
             f"caching {self.username}'s homepage (cached at {since:%y-%m-%d})")
         console.log(self.user)
@@ -148,7 +141,7 @@ class UserConfig(BaseModel):
             console.log(weibo)
             weibo.highlight_social()
             console.log()
-        self.weibo_cache_at = now
+        self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
         weibos: list[Weibo] = self.user.weibos.order_by(
             Weibo.created_at.desc())
@@ -167,7 +160,7 @@ class UserConfig(BaseModel):
         await fetcher.toggle_art(self.following)
         await self.set_visibility()
         await self.fetch_friends()
-        if self.weibo_fetch is None:
+        if self.is_caching:
             await self.caching_weibo_for_new()
             return
         if self.weibo_fetch_at:
@@ -189,7 +182,6 @@ class UserConfig(BaseModel):
         console.log(f"{self.username}的微博🧣获取完毕\n")
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
-        self.weibo_cache_at = None
         weibos: list[Weibo] = self.user.weibos.order_by(
             Weibo.created_at.desc())
         self.post_at = weibos[0].created_at if weibos else None
@@ -482,11 +474,11 @@ class UserConfig(BaseModel):
         return liked_fetch_at.add(days=days)
 
     def get_weibo_next_fetch(self) -> pendulum.DateTime:
-        if not (update_at := self.weibo_fetch_at or self.weibo_cache_at):
+        if not self.weibo_fetch_at:
             return
         if self.blocked:
             return
-        update_at = pendulum.instance(update_at)
+        update_at = pendulum.instance(self.weibo_fetch_at)
         days = 30
         posts = len(self.user.weibos
                     .where(Weibo.created_at > update_at.subtract(days=days))
@@ -503,13 +495,8 @@ class UserConfig(BaseModel):
 
         for config in cls:
             config: cls
-            if config.weibo_fetch is None:
-                assert config.weibo_fetch_at is None
-            elif config.weibo_fetch is True:
-                assert not (config.weibo_cache_at and config.weibo_fetch_at)
-            else:
-                assert config.weibo_fetch_at and not config.weibo_cache_at
-
+            if not config.weibo_fetch:
+                assert config.weibo_fetch_at and not config.is_caching
             config.username = config.user.username
             if girl := Girl.get_or_none(username=config.username):
                 config.photos_num = girl.sina_num

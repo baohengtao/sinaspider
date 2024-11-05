@@ -35,26 +35,24 @@ async def user(download_dir: Path = default_path):
         config = await UserConfig.from_id(user_id)
         console.log(config, '\n')
         config.weibo_fetch = Confirm.ask(
-            f"是否获取{config.username}的微博？", default=bool(config.weibo_fetch_at))
-        if not config.weibo_fetch:
-            if config.weibo_fetch_at is None and config.following:
-                config.weibo_fetch = None
-                console.log(
-                    f'set {config.username} weibo_fetch to None '
-                    'since it not fetched yet', style='notice')
+            f"是否获取{config.username}的微博？", default=config.weibo_fetch)
+        if config.weibo_fetch and config.is_caching:
+            if not Confirm.ask(
+                    "current is caching, keep caching?", default=True):
+                config.weibo_fetch_at = None
+                config.is_caching = False
         config.save()
         console.log(f'用户{config.username}更新完成')
         if config.weibo_fetch and not config.following:
             console.log(f'用户{config.username}未关注，记得关注🌸', style='notice')
-        elif config.weibo_fetch is False and config.following:
+        elif not config.weibo_fetch and config.following:
             console.log(f'用户{config.username}已关注，记得取关🔥', style='notice')
         if config.weibo_fetch is False and Confirm.ask('是否删除该用户？', default=False):
             config.delete_instance()
             console.log('用户已删除')
             if config.following:
                 console.log('记得取消关注', style='warning')
-        elif config.weibo_fetch is not False and Confirm.ask(
-                '是否现在抓取', default=(config.weibo_fetch is None)):
+        elif config.weibo_fetch and Confirm.ask('是否现在抓取', default=False):
             await config.fetch_weibo(download_dir)
 
 
@@ -98,7 +96,6 @@ async def user_add(max_user: int = 20,
 
     await fetcher.toggle_art(True)
     nov = [u for u in UserConfig.select()
-           .where(UserConfig.weibo_cache_at.is_null())
            .where(UserConfig.weibo_fetch_at.is_null())
            if u.visible is not True and not (await u.set_visibility())]
 
@@ -127,21 +124,17 @@ async def user_loop(download_dir: Path = default_path,
     UserConfig.update_table()
     logsaver = LogSaver('user_loop', download_dir)
     query = (UserConfig.select()
-             .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
-             .where(UserConfig.weibo_fetch_at.is_null(False)
-                    | UserConfig.weibo_cache_at.is_null(False))
+             .where(UserConfig.weibo_fetch)
+             .where(UserConfig.weibo_fetch_at.is_null(False))
              .where(~UserConfig.blocked)
              .order_by(UserConfig.following | UserConfig.is_friend,
-                       fn.COALESCE(UserConfig.weibo_fetch_at,
-                                   UserConfig.weibo_cache_at),
+                       UserConfig.weibo_fetch_at,
                        UserConfig.id)
              )
 
-    cond1 = (UserConfig.weibo_fetch & UserConfig.weibo_fetch_at.is_null())
-    cond2 = (UserConfig.weibo_fetch.is_null() &
-             UserConfig.weibo_cache_at.is_null())
     query_new = (UserConfig.select()
-                 .where(cond1 | cond2))
+                 .where(UserConfig.weibo_fetch)
+                 .where(UserConfig.weibo_fetch_at.is_null()))
 
     assert not query_new.where(~UserConfig.following)
     if new_user:

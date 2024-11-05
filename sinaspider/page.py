@@ -173,11 +173,11 @@ class SinaBot:
             if not (config := UserConfig.get_or_none(user_id=uid)):
                 continue
             config: UserConfig
-            if not (fetch_at := config.weibo_fetch_at or config.weibo_cache_at):
+            if not (fetch_at := config.weibo_fetch_at):
                 continue
             created_at = pendulum.from_format(
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            if (config.weibo_fetch is not False) and fetch_at < created_at:
+            if config.weibo_fetch and fetch_at < created_at:
                 config: UserConfig
                 for _ in range(3):
                     config = await UserConfig.from_id(uid)

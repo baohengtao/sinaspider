@@ -31,12 +31,11 @@ async def timeline(days: float = Option(...),
     download_dir: image saving directory
     """
     query = (UserConfig.select()
-             .where(UserConfig.weibo_fetch | UserConfig.weibo_fetch.is_null())
-             .where(UserConfig.weibo_fetch_at.is_null(False)
-                    | UserConfig.weibo_cache_at.is_null(False))
+             .where(UserConfig.weibo_fetch)
+             .where(UserConfig.weibo_fetch_at.is_null(False))
              .where(UserConfig.weibo_next_fetch < pendulum.now())
              .where(~UserConfig.blocked)
-             .order_by(UserConfig.weibo_fetch_at, UserConfig.weibo_cache_at)
+             .order_by(UserConfig.weibo_fetch_at)
              )
     bot = await SinaBot.create(art_login=False)
     bot_art = await SinaBot.create(art_login=True)
@@ -78,10 +77,7 @@ async def timeline(days: float = Option(...),
                 await config.fetch_liked(download_dir)
 
         while start_time.diff().in_minutes() < WORKING_TIME:
-            c1 = UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None)
-            c2 = UserConfig.get_or_none(
-                weibo_cache_at=None, weibo_fetch_at=None)
-            if config := (c1 or c2):
+            if config := UserConfig.get_or_none(weibo_fetch=True, weibo_fetch_at=None):
                 assert config.following
                 config = await config.from_id(config.user_id)
                 await config.fetch_weibo(download_dir)
