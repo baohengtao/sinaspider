@@ -170,28 +170,28 @@ class SinaBot:
         async for status in Page.timeline(
                 since=since, friend_circle=friend_circle):
             uid = status['user']['id']
-            if not (uc := UserConfig.get_or_none(user_id=uid)):
+            if not (config := UserConfig.get_or_none(user_id=uid)):
                 continue
-            uc: UserConfig
-            if not (fetch_at := uc.weibo_fetch_at or uc.weibo_cache_at):
+            config: UserConfig
+            if not (fetch_at := config.weibo_fetch_at or config.weibo_cache_at):
                 continue
             created_at = pendulum.from_format(
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            if (uc.weibo_fetch is not False) and fetch_at < created_at:
-                uc: UserConfig
+            if (config.weibo_fetch is not False) and fetch_at < created_at:
+                config: UserConfig
                 for _ in range(3):
-                    uc = await UserConfig.from_id(uid)
-                    if uc.following == self.art_login:
-                        await uc.fetch_weibo(download_dir)
+                    config = await UserConfig.from_id(uid)
+                    if config.following == self.art_login:
+                        await config.fetch_weibo(download_dir)
                         break
                 else:
-                    raise ValueError(f'{uc.username} not following')
-                if uc.liked_next_fetch:
+                    raise ValueError(f'{config.username} not following')
+                if config.liked_next_fetch:
                     console.log(
-                        f'latest liked fetch at {uc.liked_fetch_at:%y-%m-%d}, '
-                        f'next fetching time is {uc.liked_next_fetch:%y-%m-%d}')
-                    # if pendulum.now() > uc.liked_next_fetch:
-                    #     uc.fetch_liked(download_dir)
+                        f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
+                        f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
+                    # if pendulum.now() > config.liked_next_fetch:
+                    #     config.fetch_liked(download_dir)
 
 
 class Page:

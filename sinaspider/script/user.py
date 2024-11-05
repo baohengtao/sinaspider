@@ -23,39 +23,39 @@ app = Typer()
 async def user(download_dir: Path = default_path):
     """Add user to database of users whom we want to fetch from"""
     while user_id := Prompt.ask('请输入用户名:smile:').strip():
-        if uc := UserConfig.get_or_none(username=user_id):
-            user_id = uc.user_id
+        if config := UserConfig.get_or_none(username=user_id):
+            user_id = config.user_id
         try:
             user_id = await normalize_user_id(user_id)
         except UserNotFoundError as e:
             console.log(e, style='error')
             continue
-        if uc := UserConfig.get_or_none(user_id=user_id):
-            console.log(f'用户{uc.username}已在列表中')
-        uc = await UserConfig.from_id(user_id)
-        console.log(uc, '\n')
-        uc.weibo_fetch = Confirm.ask(
-            f"是否获取{uc.username}的微博？", default=bool(uc.weibo_fetch_at))
-        if not uc.weibo_fetch:
-            if uc.weibo_fetch_at is None and uc.following:
-                uc.weibo_fetch = None
+        if config := UserConfig.get_or_none(user_id=user_id):
+            console.log(f'用户{config.username}已在列表中')
+        config = await UserConfig.from_id(user_id)
+        console.log(config, '\n')
+        config.weibo_fetch = Confirm.ask(
+            f"是否获取{config.username}的微博？", default=bool(config.weibo_fetch_at))
+        if not config.weibo_fetch:
+            if config.weibo_fetch_at is None and config.following:
+                config.weibo_fetch = None
                 console.log(
-                    f'set {uc.username} weibo_fetch to None '
+                    f'set {config.username} weibo_fetch to None '
                     'since it not fetched yet', style='notice')
-        uc.save()
-        console.log(f'用户{uc.username}更新完成')
-        if uc.weibo_fetch and not uc.following:
-            console.log(f'用户{uc.username}未关注，记得关注🌸', style='notice')
-        elif uc.weibo_fetch is False and uc.following:
-            console.log(f'用户{uc.username}已关注，记得取关🔥', style='notice')
-        if uc.weibo_fetch is False and Confirm.ask('是否删除该用户？', default=False):
-            uc.delete_instance()
+        config.save()
+        console.log(f'用户{config.username}更新完成')
+        if config.weibo_fetch and not config.following:
+            console.log(f'用户{config.username}未关注，记得关注🌸', style='notice')
+        elif config.weibo_fetch is False and config.following:
+            console.log(f'用户{config.username}已关注，记得取关🔥', style='notice')
+        if config.weibo_fetch is False and Confirm.ask('是否删除该用户？', default=False):
+            config.delete_instance()
             console.log('用户已删除')
-            if uc.following:
+            if config.following:
                 console.log('记得取消关注', style='warning')
-        elif uc.weibo_fetch is not False and Confirm.ask(
-                '是否现在抓取', default=(uc.weibo_fetch is None)):
-            await uc.fetch_weibo(download_dir)
+        elif config.weibo_fetch is not False and Confirm.ask(
+                '是否现在抓取', default=(config.weibo_fetch is None)):
+            await config.fetch_weibo(download_dir)
 
 
 @app.command()
