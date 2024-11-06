@@ -6,6 +6,7 @@ import mimetypes
 import random
 import re
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import AsyncIterable
 from urllib.parse import unquote
@@ -211,6 +212,7 @@ def write_xmp(img: Path, tags: dict):
 
 
 async def download_file_pair(medias: list[dict]):
+    medias = deepcopy(medias)
     if len(medias) == 1:
         await download_single_file(**medias[0])
         return
