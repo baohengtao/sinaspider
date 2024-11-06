@@ -97,9 +97,6 @@ class UserConfig(BaseModel):
             self.visible = visible
             self.save()
         else:
-            if Confirm.ask('Reset weibo fetch/cache at to None?'):
-                self.weibo_fetch_at = None
-                self.save()
             raise ValueError(
                 f"conflict: {self.username}当前微博全部可见，请检查")
         return visible
@@ -170,7 +167,14 @@ class UserConfig(BaseModel):
         if self.weibo_fetch is False:
             return
         await fetcher.toggle_art(self.following)
-        await self.set_visibility()
+        visible_changed = False
+        try:
+            await self.set_visibility()
+        except ValueError as e:
+            console.log(e, style='error')
+            visible_changed = True
+            if not (refetch := Confirm.ask('refetch?')):
+                raise
         await self.fetch_friends()
         if self.is_caching:
             await self.caching_weibo_for_new(refetch=refetch)
@@ -201,6 +205,12 @@ class UserConfig(BaseModel):
         self.saved_medias_count = sum(w.medias_num for w in weibos)
         if refetch:
             self.weibo_refetch_at = now
+        if visible_changed:
+            assert refetch and not self.visible
+            if Confirm.ask('set visibility to True?'):
+                self.visible = True
+            else:
+                raise
         self.save()
 
     async def _save_weibo(
