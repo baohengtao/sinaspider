@@ -193,8 +193,35 @@ class Fetcher:
         self._visit_count += 1
 
 
+class HttpClient:
+    def __init__(self):
+        self._client = httpx.AsyncClient(follow_redirects=True)
+        self._lock = asyncio.Lock()
+
+    async def _recreate_client(self, old_client):
+        async with self._lock:
+            if self._client is old_client:
+                console.log('recreating client...', style='error')
+                self._client = httpx.AsyncClient(follow_redirects=True)
+                await old_client.aclose()
+
+    async def get(self, url):
+        recreated = False
+        while True:
+            client = self._client
+            try:
+                return await client.get(url)
+            except httpx.PoolTimeout:
+                await self._recreate_client(client)
+            except Exception:
+                if not client.is_closed:
+                    raise
+            assert not recreated
+            recreated = True
+
+
 fetcher = Fetcher()
-client = httpx.AsyncClient(follow_redirects=True)
+client = HttpClient()
 et = ExifToolHelper()
 semaphore = asyncio.Semaphore(40)
 
@@ -281,9 +308,6 @@ async def download_single_file(
                 await asyncio.sleep(period)
             try:
                 r = await client.get(url)
-            except httpx.PoolTimeout:
-                await client.aclose()
-                raise
             except httpx.HTTPError as e:
                 if i > 0:
                     console.log(f'download img {img} failed with {e!r} ({url})...'
