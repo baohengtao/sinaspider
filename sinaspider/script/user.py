@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pendulum
-from peewee import fn
 from rich.prompt import Confirm, Prompt
 from typer import Option, Typer
 

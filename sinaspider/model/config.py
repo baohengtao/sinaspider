@@ -292,6 +292,8 @@ class UserConfig(BaseModel):
                     for media in medias:
                         yield media
                 console.log()
+        else:
+            console.log('no additional weibo found', style='warning')
 
     async def fetch_liked(self, download_dir: Path):
         if not self.liked_fetch:
@@ -416,7 +418,7 @@ class UserConfig(BaseModel):
                 break
             try:
                 weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
-            except KeyError as e:
+            except (KeyError, AssertionError) as e:
                 console.log(
                     f'{e}: cannot parse https://weibo.com/{uid}/{wid}, '
                     'skipping...', style='error')

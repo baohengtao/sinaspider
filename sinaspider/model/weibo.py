@@ -176,10 +176,6 @@ class Weibo(BaseModel):
             assert len(list(weibo.medias())) == weibo.medias_num
         if weibo.medias_num:
             await weibo.update_location()
-            loc_info = [weibo.location, weibo.location_id,
-                        weibo.latitude, weibo.longitude]
-            if not all(loc_info):
-                assert loc_info == [None] * 4
         else:
             assert not list(weibo.medias())
 
@@ -212,7 +208,9 @@ class Weibo(BaseModel):
                 lng, lat = tuple(map(float, self.location_id.split('_')))
                 coord = round_loc(lat, lng)
             else:
-                raise ValueError(f'cannot found coord for {self.url}')
+                console.log(
+                    f'cannot found coord for {self.url}', style='error')
+                return
 
         if coord and location:
             if (err := geodesic(coord, location.coordinate).meters) > 100:
@@ -344,7 +342,7 @@ class Weibo(BaseModel):
         from photosinfo.model import Girl
         text = (self.text or '').lower().replace('night', '')
         has_ins = re.findall(r'(?<![a-z])(ins|ig|instagram)(?![a-z])', text)
-        has_red = re.findall(r'(?<![a-z])xhs(?![a-z])|小红书|📕', text)
+        has_red = re.findall(r'(?<![a-z])xhs(?![a-z])|小红书|🍠|📕', text)
         has_awe = re.findall(r'(?<![a-z])dy(?![a-z])|抖音', text)
         if not (has_ins or has_red or has_awe):
             return False

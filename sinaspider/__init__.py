@@ -10,7 +10,7 @@ from rich.theme import Theme
 ReprHighlighter.highlights += [
     r"(?P<social>(?<![a-zA-Z])(ins|ig|instagram|IG|INS|Ins|dy|xhs)"
     r"(?![a-zA-Z]))",
-    r"(?P<social>(小红书|📕|抖音))",
+    r"(?P<social>(小红书|📕|抖音|🍠))",
 ]
 
 custom_theme = Theme({

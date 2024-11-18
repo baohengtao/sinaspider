@@ -19,7 +19,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
     info = deepcopy(mblog)
     assert 'weico' in info['mblog_from']
     assert 'retweeted_status' not in info
-    assert info.pop('idstr') == info.pop('mid') == str(info['id'])
+    assert info.pop('idstr') == str(info['id'])
 
     if (pic_num := info['pic_num']) < len(info['pic_ids']):
         console.log(
