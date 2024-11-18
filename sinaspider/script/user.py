@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 
 import pendulum
@@ -7,7 +8,7 @@ from typer import Option, Typer
 from sinaspider import console
 from sinaspider.exceptions import UserNotFoundError
 from sinaspider.helper import fetcher, normalize_user_id
-from sinaspider.model import UserConfig
+from sinaspider.model import UserConfig, WeiboCache
 from sinaspider.page import SinaBot
 from sinaspider.script.helper import LogSaver
 
@@ -47,7 +48,18 @@ async def user(download_dir: Path = default_path):
         elif not config.weibo_fetch and config.following:
             console.log(f'用户{config.username}已关注，记得取关🔥', style='notice')
         if config.weibo_fetch is False and Confirm.ask('是否删除该用户？', default=False):
-            config.delete_instance()
+            u = config.user
+            for n in itertools.chain(u.weibos, u.config, u.artist):
+                console.log(n, '\n')
+            if Confirm.ask(f'是否删除{u.username}({u.id})？', default=False):
+                for n in itertools.chain(u.weibos, u.config, u.artist, u.friends,
+                                         u.weibos_liked, u.weibos_missed):
+                    n.delete_instance()
+                u.delete_instance()
+            if caches := WeiboCache.select().where(WeiboCache.user_id == u.id):
+                if Confirm.ask(f'find {len(caches)} weibo caches, delete?'):
+                    for cache in caches:
+                        cache.delete_instance()
             console.log('用户已删除')
             if config.following:
                 console.log('记得取消关注', style='warning')
