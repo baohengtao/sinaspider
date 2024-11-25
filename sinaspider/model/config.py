@@ -110,7 +110,8 @@ class UserConfig(BaseModel):
             created_at = pendulum.from_format(
                 mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             if created_at >= since:
-                yield mblog
+                weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
+                yield weibo_dict
             elif is_pinned:
                 console.log("略过置顶微博...")
             else:
@@ -131,10 +132,9 @@ class UserConfig(BaseModel):
         console.log(self.user)
 
         now, i = pendulum.now(), 0
-        async for mblog in self.get_homepage(since):
-            if not (has_fetched := Weibo.get_or_none(id=mblog['id'])):
+        async for weibo_dict in self.get_homepage(since):
+            if not (has_fetched := Weibo.get_or_none(id=weibo_dict['id'])):
                 i += 1
-            weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
             weibo_dict['username'] = self.username
             weibo = await Weibo.upsert(weibo_dict)
             if weibo.photos_extra:
@@ -235,10 +235,9 @@ class UserConfig(BaseModel):
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
         hompepage_since = None if refetch else since.subtract(months=6)
-        async for mblog in self.get_homepage(hompepage_since):
-            weibo = Weibo.get_or_none(id=mblog['id'])
+        async for weibo_dict in self.get_homepage(hompepage_since):
+            weibo = Weibo.get_or_none(id=weibo_dict['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
-            weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
             weibo_dict['username'] = self.username
             weibo = await Weibo.upsert(weibo_dict)
 
