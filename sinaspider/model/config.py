@@ -102,10 +102,16 @@ class UserConfig(BaseModel):
         return visible
 
     async def get_homepage(
-            self, since: pendulum.DateTime | None) -> AsyncIterator[dict]:
+            self, since: pendulum.DateTime | None,
+            from_weico: bool = False
+    ) -> AsyncIterator[dict]:
         if since is None:
             since = pendulum.from_timestamp(0)
-        async for mblog in self.page.homepage_weico():
+        if from_weico:
+            mblogs = self.page.homepage_weico()
+        else:
+            mblogs = self.page.homepage_web()
+        async for mblog in mblogs:
             is_pinned = mblog.pop('is_pinned')
             created_at = pendulum.from_format(
                 mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
