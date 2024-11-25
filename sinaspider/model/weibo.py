@@ -558,6 +558,15 @@ class WeiboCache(BaseModel):
         weibo_id = mblog['id']
         user_id = mblog['user']['id']
         edit_count = mblog.get('edit_count', 0)
+        if 'web' in mblog_from:
+            cache = cls.get_or_none(id=weibo_id)
+            if cache and cache.edit_count == edit_count:
+                if cache.timeline_weico or cache.page_weico:
+                    if need_page:
+                        assert cache.page_weico
+                    if not (await cache.parse()).get('videos'):
+                        return cache
+            return await cls.from_id(weibo_id, update=True)
         if cache := WeiboCache.get_or_none(id=weibo_id):
             assert cache.user_id == user_id
             if cache.edit_count:
@@ -584,13 +593,14 @@ class WeiboCache(BaseModel):
             row['hist_mblogs'] = await get_hist_mblogs(weibo_id, edit_count)
 
         if need_page:
-            console.log(
-                f'fetching weibo page: https://weibo.com/{user_id}/{weibo_id}')
             if 'weico' in mblog_from:
                 row['page_weico'] = await get_mblog_from_weico(weibo_id)
             else:
                 row['page_web'] = await get_mblog_from_web(weibo_id)
         if cache:
+            if cache.edit_count < edit_count:
+                cache.timeline_web = cache.timeline_weico = None
+                cache.page_web = cache.page_weico = None
             update_model_from_dict(cache, row)
             cache.updated_at = pendulum.now()
             cache.save()
