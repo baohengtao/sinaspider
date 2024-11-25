@@ -11,9 +11,7 @@ from geopy.distance import geodesic
 from playhouse.postgres_ext import (
     ArrayField,
     BigIntegerField,
-    BooleanField,
-    DateTimeTZField,
-    DoubleField,
+    BooleanField, DoubleField,
     ForeignKeyField,
     IntegerField, JSONField,
     TextField
@@ -27,7 +25,7 @@ from sinaspider.helper import fetcher, normalize_wb_id, round_loc
 from sinaspider.page import Page
 from sinaspider.parser import parse_weibo
 
-from .base import BaseModel
+from .base import BaseModel, DateTimeTZField
 from .user import Artist, User
 
 

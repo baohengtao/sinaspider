@@ -5,7 +5,6 @@ import pendulum
 from playhouse.postgres_ext import (
     ArrayField, BooleanField,
     CharField,
-    DateTimeTZField,
     ForeignKeyField,
     IntegerField, TextField
 )
@@ -16,7 +15,7 @@ from sinaspider import console
 from sinaspider.helper import download_files, fetcher
 from sinaspider.page import Page
 
-from .base import BaseModel
+from .base import BaseModel, DateTimeTZField
 from .user import Friend, User
 from .weibo import Weibo, WeiboCache, WeiboLiked
 
@@ -236,8 +235,7 @@ class UserConfig(BaseModel):
         if user_root.startswith('New'):
             revisit_dir = download_dir
 
-        since = pendulum.instance(
-            self.weibo_fetch_at or pendulum.from_timestamp(0))
+        since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
         hompepage_since = None if refetch else since.subtract(months=6)
@@ -484,37 +482,37 @@ class UserConfig(BaseModel):
             return
         if self.liked_fetch_at is None:
             return
-        liked_fetch_at = pendulum.instance(self.liked_fetch_at)
         query = (WeiboLiked.select()
                  .where(WeiboLiked.user == self.user)
                  .order_by(WeiboLiked.created_at.desc())
                  )
         if not query:
-            return liked_fetch_at.add(months=6)
+            return self.liked_fetch_at.add(months=6)
         count = 0
         for liked in query:
             count += liked.pic_num
             if count > 200:
                 break
-        duration = (liked_fetch_at - liked.created_at) * 200 / count
+        duration = (self.liked_fetch_at - liked.created_at) * 200 / count
         days = max(min(duration.in_days(), 180), 15)
-        return liked_fetch_at.add(days=days)
+        return self.liked_fetch_at.add(days=days)
 
     def get_weibo_next_fetch(self) -> pendulum.DateTime:
         if not self.weibo_fetch_at:
             return
         if self.blocked:
             return
-        update_at = pendulum.instance(self.weibo_fetch_at)
         days = 30
-        posts = len(self.user.weibos
-                    .where(Weibo.created_at > update_at.subtract(days=days))
-                    .where(Weibo.medias_num > 0))
+        posts = (self.user.weibos
+                 .where(Weibo.created_at >
+                        self.weibo_fetch_at.subtract(days=days))
+                 .where(Weibo.medias_num > 0)
+                 .count())
         interval = days / (posts + 1)
 
         if not self.is_friend and not self.following:
             interval = min(interval, 2)
-        return update_at.add(days=interval)
+        return self.weibo_fetch_at.add(days=interval)
 
     @classmethod
     def update_table(cls):

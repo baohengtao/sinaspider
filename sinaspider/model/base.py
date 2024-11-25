@@ -2,11 +2,20 @@
 from datetime import datetime
 from typing import Self
 
+import pendulum
 from peewee import Model
+from playhouse.postgres_ext import DateTimeTZField as RawDateTimeTZField
 from playhouse.postgres_ext import PostgresqlExtDatabase
 from playhouse.shortcuts import model_to_dict
 
 database = PostgresqlExtDatabase("sinaspider", host="localhost")
+
+
+class DateTimeTZField(RawDateTimeTZField):
+    def python_value(self, value):
+        if value is not None:
+            return pendulum.instance(value)
+        return value
 
 
 class BaseModel(Model):

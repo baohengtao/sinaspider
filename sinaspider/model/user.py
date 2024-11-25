@@ -6,7 +6,6 @@ from playhouse.postgres_ext import (
     ArrayField,
     BigIntegerField,
     BooleanField, CharField,
-    DateTimeTZField,
     ForeignKeyField,
     IntegerField, TextField
 )
@@ -15,7 +14,7 @@ from playhouse.shortcuts import model_to_dict
 from sinaspider import console
 from sinaspider.parser import UserParser
 
-from .base import BaseModel
+from .base import BaseModel, DateTimeTZField
 
 
 class User(BaseModel):
