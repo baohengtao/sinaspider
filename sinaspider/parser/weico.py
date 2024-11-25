@@ -115,7 +115,7 @@ def _get_video_url(page_info) -> str | None:
                 'mp4_720p_mp4', 'mp4_720p_url',
                 'mp4_hd_mp4', 'mp4_hd_url',
                 'mp4_sd_mp4', 'mp4_sd_url',
-                'mp4_ld_mp4', 'mp4_ld_url']
+                'mp4_ld_mp4', 'mp4_ld_url', 'h5_url']
         for key in keys:
             if video_url := media_info.get(key):
                 break
