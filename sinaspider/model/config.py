@@ -37,7 +37,7 @@ class UserConfig(BaseModel):
     description = CharField(null=True)
     education = ArrayField(field_class=TextField, null=True)
     homepage = CharField()
-    visible = BooleanField(null=True)
+    visible = BooleanField(default=False)
     photos_num = IntegerField(null=True)
     followed_by = ArrayField(field_class=TextField, null=True)
     IP = TextField(null=True)
@@ -90,6 +90,7 @@ class UserConfig(BaseModel):
                 mblog['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             if created_at >= since:
                 weibo_dict = await (await WeiboCache.upsert(mblog)).parse()
+                weibo_dict['is_pinned'] = is_pinned
                 yield weibo_dict
             elif is_pinned:
                 console.log("略过置顶微博...")
@@ -101,7 +102,7 @@ class UserConfig(BaseModel):
 
     async def caching_weibo_for_new(self, refetch: bool = False):
         assert self.is_caching and self.weibo_fetch
-        since = self.weibo_fetch_at if not refetch else None
+        since = self.weibo_fetch_at if (self.visible and not refetch) else None
         msg = f"caching {self.username}'s homepage"
         if since:
             msg += f" (cached at {since:%y-%m-%d})"
@@ -111,22 +112,41 @@ class UserConfig(BaseModel):
         console.log(self.user)
 
         now, i = pendulum.now(), 0
-        async for weibo_dict in self.get_homepage(since):
+        visible_changed = []
+        async for weibo_dict in self.get_homepage(since, from_weico=refetch):
             if not (has_fetched := Weibo.get_or_none(id=weibo_dict['id'])):
                 i += 1
             weibo_dict['username'] = self.username
+            if not weibo_dict.pop('is_pinned') and not self.visible:
+                if (weibo_dict['created_at'].diff().in_months() > 7
+                        and not weibo_dict.get('videos')):
+                    if not refetch:
+                        console.log(weibo_dict)
+                        console.log('seems visible changed, refetching...',
+                                    style='error')
+                        await self.caching_weibo_for_new(refetch=True)
+                        return
+                    visible_changed.append(weibo_dict)
             weibo = await Weibo.upsert(weibo_dict)
             if weibo.photos_extra:
                 assert has_fetched
                 console.log(weibo)
                 console.log(
-                    f'find {len(weibo.photos_extra)} extra photos\n', style='notice')
+                    f'find {len(weibo.photos_extra)} extra photos\n',
+                    style='notice')
                 weibo.photos_extra = None
                 weibo.save()
             elif not has_fetched:
                 console.log(weibo)
                 weibo.highlight_social()
                 console.log()
+        if visible_changed:
+            assert self.visible is False
+            console.log(f'find {len(visible_changed)} weibos before 180 days')
+            console.log(visible_changed[0])
+            if not Confirm.ask('visible changed to True?'):
+                raise ValueError('visible changed, abort')
+            self.visible = True
         if since is None:
             self.weibo_refetch_at = now
         self.weibo_fetch_at = now
@@ -143,6 +163,8 @@ class UserConfig(BaseModel):
         self.save()
 
     async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
+        if not self.weibo_fetch_at:
+            refetch = True
         if self.weibo_fetch is False:
             return
         await fetcher.toggle_art(self.following)
@@ -198,13 +220,20 @@ class UserConfig(BaseModel):
         since = self.weibo_fetch_at or pendulum.from_timestamp(0)
         console.log(f'fetch weibo from {since:%Y-%m-%d}\n')
         weibo_ids = []
-        hompepage_since = None if refetch else since.subtract(months=6)
-        async for weibo_dict in self.get_homepage(hompepage_since):
+        if refetch or not self.visible:
+            hompepage_since = None
+        else:
+            hompepage_since = since.subtract(months=6)
+        async for weibo_dict in self.get_homepage(hompepage_since, refetch):
             weibo = Weibo.get_or_none(id=weibo_dict['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             weibo_dict['username'] = self.username
+            if not weibo_dict.pop('is_pinned') and not self.visible:
+                if (weibo_dict['created_at'].diff().in_months() > 7
+                        and not weibo_dict.get('videos')):
+                    console.log(weibo_dict)
+                    raise ValueError('visiblity changed!')
             weibo = await Weibo.upsert(weibo_dict)
-
             weibo_ids.append(weibo.id)
 
             if weibo.created_at < since and not insert_at:
