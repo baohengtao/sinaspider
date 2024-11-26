@@ -186,8 +186,16 @@ class UserConfig(BaseModel):
         console.log(f"Media Saving: {download_dir}")
 
         now = pendulum.now()
-        imgs = self._save_weibo(download_dir, refetch=refetch)
-        await download_files(imgs)
+        try:
+            imgs = self._save_weibo(download_dir, refetch=refetch)
+            await download_files(imgs)
+        except ValueError as e:
+            console.log(e, style='error')
+            if not Confirm.ask('visible changed?'):
+                raise
+            self.visible = refetch = True
+            imgs = self._save_weibo(download_dir, refetch=refetch)
+            await download_files(imgs)
         console.log(f"{self.username}的微博🧣获取完毕\n")
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
