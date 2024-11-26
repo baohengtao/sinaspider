@@ -74,32 +74,6 @@ class UserConfig(BaseModel):
             cls.insert(to_insert).execute()
         return cls.get(user_id=user_id)
 
-    async def set_visibility(self) -> bool:
-        if not self.weibo_fetch_at:
-            self.visible = None
-        if self.visible is True:
-            return True
-        visible = await self.page.get_visibility()
-        if visible is False:
-            console.log(f"{self.username} 只显示半年内的微博", style="notice")
-            self.visible = visible
-            self.save()
-            return visible
-        assert visible is True
-        console.log(
-            f"conflict: {self.username}当前微博全部可见，请检查", style='error')
-        console.log(self)
-        if not Confirm.ask(f'{self.username}当前微博全部可见?'):
-            raise ValueError(f"conflict: {self.username}当前微博全部可见，请检查")
-
-        if self.visible is None:
-            self.visible = visible
-            self.save()
-        else:
-            raise ValueError(
-                f"conflict: {self.username}当前微博全部可见，请检查")
-        return visible
-
     async def get_homepage(
             self, since: pendulum.DateTime | None,
             from_weico: bool = False
@@ -172,14 +146,6 @@ class UserConfig(BaseModel):
         if self.weibo_fetch is False:
             return
         await fetcher.toggle_art(self.following)
-        visible_changed = False
-        try:
-            await self.set_visibility()
-        except ValueError as e:
-            console.log(e, style='error')
-            visible_changed = True
-            if not (refetch := Confirm.ask('refetch?')):
-                raise
         await self.fetch_friends()
         if self.is_caching:
             await self.caching_weibo_for_new(refetch=refetch)
@@ -210,12 +176,6 @@ class UserConfig(BaseModel):
         self.saved_medias_count = sum(w.medias_num for w in weibos)
         if refetch:
             self.weibo_refetch_at = now
-        if visible_changed:
-            assert refetch and not self.visible
-            if Confirm.ask('set visibility to True?'):
-                self.visible = True
-            else:
-                raise
         self.save()
 
     async def _save_weibo(

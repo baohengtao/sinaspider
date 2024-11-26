@@ -105,24 +105,6 @@ async def user_add(max_user: int = 20,
                         'from special following list...')
             await bot.set_special_follow(u.user_id, False)
 
-    await fetcher.toggle_art(True)
-    nov = [u for u in UserConfig.select()
-           .where(UserConfig.weibo_fetch_at.is_null())
-           if u.visible is not True and not (await u.set_visibility())]
-
-    to_cache = []
-    for u in nov:
-
-        if not Confirm.ask(
-                f'{u.username} only 180 days visible, '
-                'caching now?', default=True):
-            continue
-        to_cache.append(u)
-        console.log(u, '\n')
-
-    for u in to_cache:
-        await u.fetch_weibo(download_dir)
-
 
 @app.command(help="Loop through users in database and fetch weibos")
 @logsaver_decorator
