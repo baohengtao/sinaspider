@@ -570,11 +570,10 @@ class WeiboCache(BaseModel):
             if cache.edit_count:
                 assert cache.hist_mblogs
             assert edit_count >= cache.edit_count
-            if cache.edit_count == edit_count and getattr(cache, mblog_from):
-                if need_page:
-                    assert getattr(
-                        cache, mblog_from.replace('timeline', 'page'))
-                if not need_page or not (await cache.parse()).get('videos'):
+            if cache.edit_count == edit_count:
+                if (await cache.parse()).get('videos'):
+                    cache.page_weico = None
+                if cache.page_weico or not need_page:
                     setattr(cache, mblog_from, mblog)
                     cache.updated_at = pendulum.now()
                     cache.save()
