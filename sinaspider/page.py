@@ -213,6 +213,7 @@ class Page:
         for page in itertools.count(start=1):
             params = {'since_id': since_id} if since_id else None
             data = (await fetcher.get_json(url, params=params))['data']
+            created_at = None
 
             for weibo_info in _yield_from_cards(data['cards']):
                 if weibo_info['source'] == '生日动态':
@@ -227,12 +228,15 @@ class Page:
                 weibo_info['mblog_from'] = 'timeline_web'
                 assert weibo_info['id'] not in ids
                 ids.append(weibo_info['id'])
+                created_at = pendulum.from_format(
+                    weibo_info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 yield weibo_info
             else:
-                console.log(
-                    f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+                msg = f'页面 {page} 获取完毕'
+                if created_at:
+                    msg += ' ' + created_at.format('YYYY-MM-DD HH:mm:ss')
+                console.log(f"++++++++ {msg} ++++++++\n")
             if not (since_id := data['cardlistInfo'].get('since_id')):
-                assert params is None or data['cards'][0]['name'] == '暂无微博'
                 console.log(
                     f"seems reached end at page {page} for {url, params}",
                     style='warning'
@@ -248,12 +252,18 @@ class Page:
         """
 
         for page in itertools.count(start=max(start_page, 1)):
+            created_at = None
             async for weibo_info in self._get_single_page_weico(page):
                 if weibo_info is None:
                     return
+                created_at = pendulum.from_format(
+                    weibo_info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
                 yield weibo_info
+            msg = f'页面 {page} 获取完毕'
+            if created_at:
+                msg += ' ' + created_at.format('YYYY-MM-DD HH:mm:ss')
             console.log(
-                f"++++++++ 页面 {page} 获取完毕 ++++++++++\n")
+                f"++++++++ 页面 {msg} 获取完毕 ++++++++++\n")
 
     async def _get_single_page_weico(self, page: int) -> AsyncIterator[dict]:
 
