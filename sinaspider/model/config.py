@@ -165,6 +165,9 @@ class UserConfig(BaseModel):
     async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
         if not self.weibo_fetch_at:
             refetch = True
+        elif self.weibo_refetch_at:
+            if self.weibo_refetch_at.diff().in_days() > 45:
+                refetch = True
         if self.weibo_fetch is False:
             return
         await fetcher.toggle_art(self.following)
@@ -177,10 +180,12 @@ class UserConfig(BaseModel):
         else:
             msg = f'weibo_fetch:{self.weibo_fetch}'
             refetch = True
-        if self.liked_fetch_at:
-            msg += f" liked_fetch: {self.liked_fetch_at:%y-%m-%d}"
-        else:
-            msg += f" liked_fetch: {self.liked_fetch}"
+        # if self.liked_fetch_at:
+        #     msg += f" liked_fetch: {self.liked_fetch_at:%y-%m-%d}"
+        # else:
+        #     msg += f" liked_fetch: {self.liked_fetch}"
+        if refetch:
+            msg += ' refetch'
         console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")
@@ -230,6 +235,8 @@ class UserConfig(BaseModel):
         weibo_ids = []
         if refetch or not self.visible:
             hompepage_since = None
+        elif self.weibo_refetch_at:
+            hompepage_since = since.subtract(months=1)
         else:
             hompepage_since = since.subtract(months=6)
         async for weibo_dict in self.get_homepage(hompepage_since, refetch):
