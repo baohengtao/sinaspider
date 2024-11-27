@@ -239,6 +239,7 @@ class UserConfig(BaseModel):
             hompepage_since = since.subtract(months=1)
         else:
             hompepage_since = since.subtract(months=6)
+        saved_cnt = 0
         async for weibo_dict in self.get_homepage(hompepage_since, refetch):
             weibo = Weibo.get_or_none(id=weibo_dict['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
@@ -257,10 +258,9 @@ class UserConfig(BaseModel):
                     'but not fetched', style='notice')
 
             has_fetched = insert_at and weibo.created_at < since
-            # if refetch and has_fetched:
-            #     has_fetched = insert_at < pendulum.now().subtract(hours=6)
             if not has_fetched:
                 console.log(weibo)
+                saved_cnt += 1
                 weibo.highlight_social()
                 if weibo.photos_extra:
                     weibo.photos_extra = None
@@ -281,6 +281,8 @@ class UserConfig(BaseModel):
             assert weibo.photos_extra is None
             if medias or not has_fetched:
                 console.log()
+        console.log(f'{saved_cnt} new weibos saved!',
+                    style='bold green on dark_green')
         if self.weibo_fetch_at:
             return
         if weibos := self.user.weibos.where(Weibo.id.not_in(weibo_ids)):
