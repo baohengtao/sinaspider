@@ -106,6 +106,17 @@ async def user_add(max_user: int = 20,
             console.log(f'removing {u.username} ({u.homepage}) '
                         'from special following list...')
             await bot_art.set_special_follow(u.user_id, False)
+    if not all_user:
+        return
+    bot = await SinaBot.create(art_login=False)
+    friend_ids = [x['id'] async for x in bot.get_friends_list()]
+    for u in UserConfig.select().where(UserConfig.user_id.in_(friend_ids)):
+        assert not u.following
+    following_ids = [x['id'] async for x in bot.get_following_list()]
+    UserConfig.update(following_main=True).where(
+        UserConfig.user_id.in_(following_ids)).execute()
+    UserConfig.update(following_main=False).where(
+        UserConfig.user_id.not_in(following_ids)).execute()
 
 
 @app.command(help="Loop through users in database and fetch weibos")

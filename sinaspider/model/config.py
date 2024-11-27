@@ -33,7 +33,8 @@ class UserConfig(BaseModel):
     liked_fetch_at = DateTimeTZField(null=True)
     liked_next_fetch = DateTimeTZField(null=True)
     post_at = DateTimeTZField(null=True)
-    following = BooleanField(null=True)
+    following = BooleanField(default=True)
+    following_main = BooleanField(default=False)
     description = CharField(null=True)
     education = ArrayField(field_class=TextField, null=True)
     homepage = CharField()
@@ -170,7 +171,7 @@ class UserConfig(BaseModel):
                 refetch = True
         if self.weibo_fetch is False:
             return
-        await fetcher.toggle_art(self.following)
+        await fetcher.toggle_art(self.following or not self.following_main)
         await self.fetch_friends()
         if self.is_caching:
             await self.caching_weibo_for_new(refetch=refetch)
