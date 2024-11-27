@@ -71,25 +71,27 @@ async def user(download_dir: Path = default_path):
 @logsaver_decorator
 @run_async
 async def user_add(max_user: int = 20,
-                   all_user: bool = Option(False, '--all-user', '-a'),
-                   download_dir: Path = default_path):
-    if all_user:
-        max_user = None
+                   all_user: bool = Option(False, '--all-user', '-a')):
+    max_user: int | None = None if all_user else max_user
     UserConfig.update_table()
-    bot = await SinaBot.create(art_login=True)
+    bot_art = await SinaBot.create(art_login=True)
     uids = {u.user_id for u in UserConfig.select().where(UserConfig.following)}
-    uids_following = [u['id'] async for u in bot
+    uids_following = [u['id'] async for u in bot_art
                       .get_following_list(max_user=max_user)]
     to_add = [uid for uid in uids_following if uid not in uids]
     if max_user is None:
-        if uids := uids - set(uids_following):
-            raise ValueError(f'there are uids {uids} not in following list')
+        for u in uids - set(uids_following):
+            try:
+                await UserConfig.from_id(u)
+            except UserNotFoundError:
+                console.log(UserConfig.get(user_id=u))
+                console.log('user not exist\n', style='error')
     console.log(f'{len(to_add)} users will be added')
     for u in to_add[::-1]:
         console.log(f'adding {u} to UserConfig...')
         console.log(await UserConfig.from_id(u), '\n')
 
-    special_fol = {u['id']: u['remark'] async for u in bot.get_following_list(
+    special_fol = {u['id']: u['remark'] async for u in bot_art.get_following_list(
         special_following=True)}
     for u in UserConfig:
         if remark := special_fol.get(u.user_id):
@@ -99,11 +101,11 @@ async def user_add(max_user: int = 20,
             if u.user_id not in special_fol:
                 console.log(f'adding {u.username} ({u.homepage}) '
                             'to special following list...')
-                await bot.set_special_follow(u.user_id, True)
+                await bot_art.set_special_follow(u.user_id, True)
         elif u.user_id in special_fol:
             console.log(f'removing {u.username} ({u.homepage}) '
                         'from special following list...')
-            await bot.set_special_follow(u.user_id, False)
+            await bot_art.set_special_follow(u.user_id, False)
 
 
 @app.command(help="Loop through users in database and fetch weibos")
