@@ -282,8 +282,7 @@ class UserConfig(BaseModel):
             assert weibo.photos_extra is None
             if medias or not has_fetched:
                 console.log()
-        console.log(f'{saved_cnt} new weibos saved!',
-                    style='bold green on dark_green')
+        console.log(f'{saved_cnt} new weibos saved!', style='notice')
         if self.weibo_fetch_at:
             return
         if weibos := self.user.weibos.where(Weibo.id.not_in(weibo_ids)):
@@ -504,22 +503,23 @@ class UserConfig(BaseModel):
         days = max(min(duration.in_days(), 180), 15)
         return self.liked_fetch_at.add(days=days)
 
+    def get_post_cycle(self) -> int:
+        interval = pendulum.Duration(days=30)
+        start, end = self.weibo_fetch_at-interval, self.weibo_fetch_at
+        count = self.user.weibos.where(
+            Weibo.created_at.between(start, end)).count()
+        cycle = interval / (count + 1)
+        return cycle.in_minutes()
+
     def get_weibo_next_fetch(self) -> pendulum.DateTime:
         if not self.weibo_fetch_at:
             return
         if self.blocked:
             return
-        days = 30
-        posts = (self.user.weibos
-                 .where(Weibo.created_at >
-                        self.weibo_fetch_at.subtract(days=days))
-                 .where(Weibo.medias_num > 0)
-                 .count())
-        interval = days / (posts + 1)
-
+        interval = self.get_post_cycle()
         if not self.is_friend and not self.following:
-            interval = min(interval, 2)
-        return self.weibo_fetch_at.add(days=interval)
+            interval = min(interval, 2*24*60)
+        return self.weibo_fetch_at.add(minutes=interval)
 
     @classmethod
     def update_table(cls):
