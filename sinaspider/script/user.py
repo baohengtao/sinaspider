@@ -124,46 +124,29 @@ async def user_add(max_user: int = 20,
 @run_async
 async def user_loop(download_dir: Path = default_path,
                     max_user: int = 1,
-                    fetching_duration: int = None,
                     new_user: bool = Option(False, "--new-user", "-n"),
                     following: bool = Option(False, "--following", "-f")):
     UserConfig.update_table()
     logsaver = LogSaver('user_loop', download_dir)
     query = (UserConfig.select()
              .where(UserConfig.weibo_fetch)
-             .where(UserConfig.weibo_fetch_at.is_null(False))
              .where(~UserConfig.blocked)
-             .order_by(UserConfig.following | UserConfig.is_friend,
-                       UserConfig.weibo_fetch_at,
-                       UserConfig.id)
-             )
+             .order_by(UserConfig.weibo_fetch_at, UserConfig.id))
 
-    query_new = (UserConfig.select()
-                 .where(UserConfig.weibo_fetch)
-                 .where(UserConfig.weibo_fetch_at.is_null()))
-
-    assert not query_new.where(~UserConfig.following)
     if new_user:
-        users = query_new.where(UserConfig.following)
+        users = query.where(UserConfig.weibo_fetch_at.is_null())
         console.log(f'{len(users)} users has been found')
-        if not fetching_duration:
-            users = users[:max_user]
-            console.log(f'{len(users)} users will be fetched')
-
     else:
+        query = query.where(UserConfig.weibo_fetch_at.is_null(False))
         if following:
             users = query.where(UserConfig.following | UserConfig.is_friend)
         else:
             users = query.where(~UserConfig.following & ~UserConfig.is_friend)
         if x := users.where(UserConfig.weibo_next_fetch < pendulum.now()):
+            max_user = len(x)
             users = x
-        else:
-            users = users[:max_user]
-        console.log(f'{len(users)} will be fetched...')
-    if fetching_duration:
-        stop_time = pendulum.now().add(minutes=fetching_duration)
-    else:
-        stop_time = None
+    users = users[:max_user]
+    console.log(f'{len(users)} user(s) will be fetched...')
     for i, user in enumerate(users, start=1):
         try:
             config = await UserConfig.from_id(user_id=user.user_id)
@@ -179,6 +162,3 @@ async def user_loop(download_dir: Path = default_path,
         console.log(f'user {i}/{len(users)} completed!')
         if new_user:
             logsaver.save_log(save_manually=True, backup=False)
-        if stop_time and stop_time < pendulum.now():
-            console.log(f'stop since {fetching_duration} minutes passed')
-            break
