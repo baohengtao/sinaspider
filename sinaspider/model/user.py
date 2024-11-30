@@ -21,6 +21,7 @@ class User(BaseModel):
     id = BigIntegerField(primary_key=True, unique=True)
     username = TextField()
     nickname = TextField()
+    remark = TextField(null=True)
     following = BooleanField()
     birthday = TextField(null=True)
     age = IntegerField(null=True)
@@ -79,12 +80,15 @@ class User(BaseModel):
     def upsert(cls, user_dict):
         user_id = user_dict['id']
         if not (model := cls.get_or_none(id=user_id)):
-            if 'username' not in user_dict:
-                user_dict['username'] = user_dict['nickname'].strip('-_ ')
-                assert user_dict['username']
+            user_dict['username'] = user_dict.get(
+                'remark') or user_dict['nickname'].strip('-_ ')
+            assert user_dict['username']
             if birth := user_dict.get('birthday'):
                 user_dict['age'] = pendulum.parse(birth).diff().in_years()
             return cls.insert(user_dict).execute()
+        if remark := user_dict.get('remark'):
+            if model.username != remark:
+                raise ValueError('remark not equal username')
         model_dict = model_to_dict(model)
         if edu := user_dict.pop('education', []):
             for s in (model_dict['education'] or []):
