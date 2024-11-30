@@ -18,7 +18,7 @@ if not (d := Path('/Volumes/Art')).exists():
     d = Path.home()/'Pictures'
 default_path = d / 'Sinaspider'
 
-pg_back = PG_BACK(default_path/'_pg_backup')
+pg_back = PG_BACK(default_path/'.pg_backup')
 
 
 def print_command():

@@ -68,9 +68,6 @@ class UserParser:
             user_info['followed_by'] = followed_by
         self._user = self._normalize(user_info)
 
-        assert 'nickname' not in self._user
-        self._user['nickname'] = self._user.pop('screen_name')
-
         return self._user.copy()
 
     @staticmethod
@@ -80,10 +77,12 @@ class UserParser:
         assert 'homepage' not in user
         assert 'username' not in user
         assert 'age' not in user
+        assert 'nickname' not in user
+        user['nickname'] = user.pop('screen_name')
         if remark := user.pop('remark', ''):
             user['username'] = remark
         user['homepage'] = f'https://weibo.com/u/{user["id"]}'
-        console.log(f"{remark or user['screen_name']} 信息已从网络获取.")
+        console.log(f"{remark or user['nickname']} 信息已从网络获取.")
         for v in user.values():
             assert v or v == 0
         return user
