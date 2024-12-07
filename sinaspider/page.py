@@ -165,7 +165,7 @@ class SinaBot:
     async def get_timeline(self, download_dir: Path,
                            since: pendulum.DateTime,
                            friend_circle=False):
-        from sinaspider.model import UserConfig
+        from sinaspider.model import UserConfig, Weibo
         await fetcher.toggle_art(self.art_login)
         async for status in Page.timeline(
                 since=since, friend_circle=friend_circle):
@@ -178,6 +178,7 @@ class SinaBot:
             created_at = pendulum.from_format(
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
             if created_at <= config.weibo_fetch_at:
+                assert Weibo.get_or_none(id=status['id'])
                 continue
             for _ in range(3):
                 config = await UserConfig.from_id(uid)
@@ -330,6 +331,9 @@ class Page:
             for status in data['statuses']:
                 if 'retweeted_status' in status:
                     assert friend_circle
+                    continue
+                source = BeautifulSoup(status['source'], 'lxml').text.strip()
+                if source in ['生日动态', '会员特权专用']:
                     continue
                 created_at = pendulum.from_format(
                     status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
