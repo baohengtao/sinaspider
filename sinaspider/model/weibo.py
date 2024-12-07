@@ -475,7 +475,7 @@ class Location(BaseModel):
             lng, lat = map(float, re.search(pattern, pic).groups())
             lat, lng = round_loc(lat, lng)
             short_name = cards[1]['group'][0]['item_title']
-            address = cards[3]['title'] if len(cards) >= 4 else None
+            address = cards[3].get('title') if len(cards) >= 4 else None
             version = 'v1.5'
         else:
             scheme = cards[0]['scheme']

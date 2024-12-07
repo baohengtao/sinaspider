@@ -171,9 +171,9 @@ def get_location_from_mblog(mblog, from_hist=True):
         'annotations', []) if 'place' in a]
     if annotations:
         annotations, *rest = annotations
-        for a in rest:
-            assert annotations == a
         annotations = annotations['place']
+        for a in rest:
+            assert annotations == a['place']
         if set(annotations) == {'place'}:
             annotations = annotations['place']
         if annotations == {'spot_type': '0'}:
