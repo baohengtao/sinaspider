@@ -24,12 +24,12 @@ class SinaBot:
     def __init__(self, art_login: bool = True) -> None:
         self.art_login = art_login
 
-    async def set_remark(self, uid, remark):
+    async def set_remark(self, uid: int, remark: str):
         s = '0726b708' if self.art_login else 'c773e7e0'
         url = "https://api.weibo.cn/2/friendships/remark/update"
         data = {
             "uid": uid,
-            "remark": remark,
+            "remark": remark.strip(),
             "c": "weicoabroad",
             "s": s,
         }
@@ -173,25 +173,25 @@ class SinaBot:
             if not (config := UserConfig.get_or_none(user_id=uid)):
                 continue
             config: UserConfig
-            if not (fetch_at := config.weibo_fetch_at):
+            if not (config.weibo_fetch and config.weibo_fetch_at):
                 continue
             created_at = pendulum.from_format(
                 status['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')
-            if config.weibo_fetch and fetch_at < created_at:
-                config: UserConfig
-                for _ in range(3):
-                    config = await UserConfig.from_id(uid)
-                    if config.following == self.art_login:
-                        await config.fetch_weibo(download_dir)
-                        break
-                else:
-                    raise ValueError(f'{config.username} not following')
-                if config.liked_next_fetch:
-                    console.log(
-                        f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
-                        f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
-                    # if pendulum.now() > config.liked_next_fetch:
-                    #     config.fetch_liked(download_dir)
+            if created_at <= config.weibo_fetch_at:
+                continue
+            for _ in range(3):
+                config = await UserConfig.from_id(uid)
+                if config.following == self.art_login:
+                    await config.fetch_weibo(download_dir)
+                    break
+            else:
+                raise ValueError(f'{config.username} not following')
+            if config.liked_next_fetch:
+                console.log(
+                    f'latest liked fetch at {config.liked_fetch_at:%y-%m-%d}, '
+                    f'next fetching time is {config.liked_next_fetch:%y-%m-%d}')
+                # if pendulum.now() > config.liked_next_fetch:
+                #     config.fetch_liked(download_dir)
 
 
 class Page:

@@ -144,7 +144,7 @@ class UserConfig(BaseModel):
         if visible_changed:
             assert self.visible is False
             console.log(f'find {len(visible_changed)} weibos before 180 days')
-            console.log(visible_changed[0])
+            console.log(visible_changed[-1])
             if not Confirm.ask('visible changed to True?'):
                 raise ValueError('visible changed, abort')
             self.visible = True
