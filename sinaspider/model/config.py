@@ -205,16 +205,8 @@ class UserConfig(BaseModel):
         console.log(f"Media Saving: {download_dir}")
 
         now = pendulum.now()
-        try:
-            imgs = self._save_weibo(download_dir, refetch=refetch)
-            await download_files(imgs)
-        except ValueError as e:
-            console.log(e, style='error')
-            if not Confirm.ask('visible changed?'):
-                raise
-            self.visible = refetch = True
-            imgs = self._save_weibo(download_dir, refetch=refetch)
-            await download_files(imgs)
+        imgs = self._save_weibo(download_dir, refetch=refetch)
+        await download_files(imgs)
         console.log(f"{self.username}的微博🧣获取完毕\n")
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
@@ -254,6 +246,7 @@ class UserConfig(BaseModel):
         else:
             hompepage_since = since.subtract(months=6)
         saved_cnt = 0
+        visible_changed = []
         async for weibo_dict in self.get_homepage(hompepage_since, refetch):
             weibo = Weibo.get_or_none(id=weibo_dict['id'])
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
@@ -261,8 +254,15 @@ class UserConfig(BaseModel):
             if not weibo_dict.pop('is_pinned') and not self.visible:
                 if (weibo_dict['created_at'].diff().in_months() > 7
                         and not weibo_dict.get('videos')):
-                    console.log(weibo_dict)
-                    raise ValueError('visiblity changed!')
+                    if not refetch:
+                        console.log(weibo_dict)
+                        console.log('seems visible changed, refetching...',
+                                    style='error')
+                        async for img in self._save_weibo(
+                                save_path, refetch=True):
+                            yield img
+                        return
+                    visible_changed.append(weibo_dict)
             weibo = await Weibo.upsert(weibo_dict)
             weibo_ids.append(weibo.id)
 
@@ -296,6 +296,14 @@ class UserConfig(BaseModel):
             if medias or not has_fetched:
                 console.log()
         console.log(f'{saved_cnt} new weibos saved!', style='notice')
+        if visible_changed:
+            assert refetch is True
+            console.log(f'find {len(visible_changed)} weibos before 180 days')
+            console.log(visible_changed[-1])
+            if not Confirm.ask('visible changed?'):
+                raise ValueError('visiblity changed!')
+            self.visible = True
+            self.weibo_refetch_at = pendulum.now()
         if self.weibo_fetch_at:
             return
         if weibos := self.user.weibos.where(Weibo.id.not_in(weibo_ids)):
