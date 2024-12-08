@@ -179,7 +179,8 @@ class UserConfig(BaseModel):
         if not self.weibo_fetch_at:
             refetch = True
         elif self.weibo_refetch_at:
-            if self.weibo_refetch_at.diff().in_days() > 45:
+            threshold = 120 if self.following_main or self.following else 30
+            if self.weibo_refetch_at.diff().in_days() > threshold:
                 refetch = True
         if self.weibo_fetch is False:
             return
@@ -228,18 +229,18 @@ class UserConfig(BaseModel):
 
     async def _save_weibo(
             self,
-            download_dir: Path,
+            save_path: Path,
             refetch=False) -> AsyncIterator[dict]:
         """
         Save weibo to database and return media info
         :return: generator of medias to downloads
         """
-        revisit_dir = download_dir / 'Revisit' / self.username
+        revisit_dir = save_path / 'Revisit' / self.username
         user_root = 'Timeline' if self.weibo_fetch_at and self.photos_num else 'NewInit'
         if user_root == 'NewInit' and self.weibo_fetch_at:
-            if not (download_dir / user_root / self.username).exists():
+            if not (save_path / user_root / self.username).exists():
                 user_root = 'New'
-        download_dir = download_dir / user_root / self.username
+        download_dir = save_path / user_root / self.username
         if user_root.startswith('New'):
             revisit_dir = download_dir
 
