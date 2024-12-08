@@ -14,10 +14,59 @@ from sinaspider.helper import (
     encode_wb_id, fetcher
 )
 from sinaspider.model import User, UserConfig, Weibo
+from sinaspider.page import SinaBot
 
 from .helper import default_path, logsaver_decorator, run_async
 
 app = Typer()
+
+
+@app.command()
+@logsaver_decorator
+@run_async
+async def remark(main: bool = False):
+    if main:
+        await _remark_main()
+        return
+    bot = await SinaBot.create(art_login=True)
+    user_ids = {u.id for u in User.select().where(User.following)}
+    async for f in bot.get_following_list():
+        user_id, remark = f['id'], f.get('remark') or None
+        user_ids.remove(user_id)
+        user = User.get(user_id)
+        if remark:
+            assert remark == user.remark == user.username
+            continue
+        assert user.nickname == f['screen_name']
+        if user.username == user.nickname.strip('-_'):
+            continue
+        console.log(user)
+        if Confirm.ask(f'set remark to {user.username}', default=False):
+            await bot.set_remark(user.id, user.username)
+            console.log((await UserConfig.from_id(user.id)).user)
+        console.log()
+    assert not user_ids
+
+
+async def _remark_main():
+    from sinaspider.page import SinaBot
+    bot = await SinaBot.create(art_login=False)
+    async for f in bot.get_following_list():
+        user_id, remark = f['id'], f.get('remark') or None
+        if not (user := User.get_or_none(id=user_id)):
+            continue
+        if user.nickname != f['screen_name']:
+            user = await User.from_id(user.id, update=True)
+            assert user.nickname == f['screen_name']
+        if remark:
+            assert remark == user.username
+            continue
+        if user.username == user.nickname.strip('-_'):
+            continue
+        console.log(user)
+        if Confirm.ask(f'set remark to {user.username}', default=False):
+            await bot.set_remark(user.id, user.username)
+        console.log()
 
 
 @app.command(help="fetch weibo by weibo_id")

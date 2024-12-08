@@ -13,7 +13,7 @@ from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.helper import download_files, fetcher
-from sinaspider.page import Page
+from sinaspider.page import Page, SinaBot
 
 from .base import BaseModel, DateTimeTZField
 from .user import Friend, User
@@ -64,6 +64,18 @@ class UserConfig(BaseModel):
 
     @classmethod
     async def from_id(cls, user_id: int) -> Self:
+        user = await User.from_id(user_id, update=True)
+        if model := cls.get_or_none(user_id=user_id):
+            if model.username != (username := user.username):
+                console.log(model)
+                if not Confirm.ask(f'set remark to {username}?'):
+                    raise ValueError('username changed!')
+                if model.following:
+                    bot = await SinaBot.create(art_login=True)
+                    await bot.set_remark(user_id, username)
+                if model.following_main:
+                    bot = await SinaBot.create(art_login=False)
+                    await bot.set_remark(user_id, username)
         user = await User.from_id(user_id, update=True)
         user_dict = model_to_dict(user)
         user_dict['user_id'] = user_dict.pop('id')
