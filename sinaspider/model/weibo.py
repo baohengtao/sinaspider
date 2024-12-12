@@ -531,20 +531,9 @@ class WeiboCache(BaseModel):
             raise
         return await cls.upsert(mblog)
 
-    @staticmethod
-    def preprocess_mblog(mblog):
-        if 'pic_ids' not in mblog:
-            assert 'weico' in mblog['mblog_from']
-            p = [u for u in mblog['url_struct'] if 'pic_ids' in u]
-            assert len(p) == 1
-            p = p[0]
-            assert p | mblog == mblog | p
-            mblog |= p
-        return mblog
-
     @classmethod
     async def upsert(cls, mblog: dict) -> Self:
-        mblog = cls.preprocess_mblog(mblog)
+        mblog = preprocess_mblog(mblog)
         mblog_from = mblog['mblog_from']
         if 'page' not in mblog_from:
             assert len(mblog['pic_ids']) == min(mblog['pic_num'], 9)
@@ -695,6 +684,7 @@ async def get_mblog_from_weico(id):
     if err_msg := mblog.get('errmsg'):
         raise WeiboNotFoundError(err_msg, f'https://m.weibo.cn/detail/{id}')
     mblog['mblog_from'] = 'page_weico'
+    mblog = preprocess_mblog(mblog)
     assert mblog['pic_num'] == len(mblog['pic_ids'])
     return mblog
 
@@ -729,6 +719,22 @@ async def get_mblog_from_web(weibo_id: str | int) -> dict:
     weibo_info['mblog_from'] = "page_web"
 
     return weibo_info
+
+
+def preprocess_mblog(mblog):
+    if 'pic_ids' not in mblog:
+        assert 'weico' in mblog['mblog_from']
+        p = [u for u in mblog['url_struct'] if 'pic_ids' in u]
+        assert len(p) == 1
+        p = p[0]
+        assert p | mblog == mblog | p
+        mblog |= p
+    if (pic_num := mblog['pic_num']) and not mblog['pic_ids']:
+        url = f'https://m.weibo.cn/detail/{mblog["id"]}'
+        console.log(
+            f'no pic_ids but pic_num = {pic_num} for {url}', style='error')
+        mblog['pic_num'] = 0
+    return mblog
 
 
 class WeiboLiked(BaseModel):
