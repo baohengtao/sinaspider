@@ -342,6 +342,7 @@ async def download_single_file(
                 assert r.url.path.endswith(
                     ('/images/default_d_h_large.gif',
                      '/images/default_d_w_large.gif',
+                     '/images/default_d_s_large.gif',
                      '/images/default_w_large.gif',
                      '/images/default_h_large.gif',
                      '/images/default_s_large.gif',)), r.url.path

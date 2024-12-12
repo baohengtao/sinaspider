@@ -121,8 +121,13 @@ def get_location_url_from_mblog(mblog):
     assert len(pos) == 1
     pos = pos[0]
     page_id = pos['page_id']
-    assert page_id.startswith('100101')
-    location_id = page_id.removeprefix('100101')
+    if page_id.startswith('100101'):
+        location_id = page_id.removeprefix('100101')
+        assert not location_id.startswith('SQ')
+    else:
+        assert page_id.startswith('100135')
+        location_id = page_id.removeprefix('100135')
+        assert location_id.startswith('SQ')
     location = pos['url_title']
     return {
         'location': location,
