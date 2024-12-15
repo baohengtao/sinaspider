@@ -81,7 +81,7 @@ class UserParser:
         user['nickname'] = user.pop('screen_name')
         if remark := user.get('remark', ''):
             assert remark.strip() == remark
-        user['homepage'] = f'https://weibo.com/u/{user["id"]}'
+        user['homepage'] = f'https://m.weibo.cn/u/{user["id"]}'
         console.log(f"{remark or user['nickname']} 信息已从网络获取.")
         for v in user.values():
             assert v or v == 0

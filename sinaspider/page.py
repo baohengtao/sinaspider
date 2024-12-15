@@ -423,7 +423,7 @@ class Page:
                     'gender': raw['gender'],
                     'location': raw['location'],
                     'description': raw['description'],
-                    'homepage': f'https://weibo.com/u/{friend_id}',
+                    'homepage': f'https://m.weibo.cn/u/{friend_id}',
                     'statuses_count': raw['statuses_count'],
                     'followers_count': raw['followers_count'],
                     'follow_count': raw['friends_count'],

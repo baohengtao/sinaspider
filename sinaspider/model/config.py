@@ -280,8 +280,8 @@ class UserConfig(BaseModel):
                     weibo.photos_extra = None
                     weibo.save()
 
-            save_path = download_dir if weibo.created_at >= since else revisit_dir
-            if medias := list(weibo.medias(save_path, extra=has_fetched)):
+            filepath = download_dir if weibo.created_at >= since else revisit_dir
+            if medias := list(weibo.medias(filepath, extra=has_fetched)):
                 if has_fetched:
                     console.log(weibo)
                     console.log(f'🎉 {len(medias)} new edited imgs found',
@@ -289,7 +289,7 @@ class UserConfig(BaseModel):
                     weibo.photos_extra = None
                     weibo.save()
                 console.log(
-                    f"Downloading {len(medias)} files to {download_dir}..")
+                    f"Downloading {len(medias)} files to {filepath}..")
                 for media in medias:
                     yield media
             assert weibo.photos_extra is None
@@ -374,7 +374,6 @@ class UserConfig(BaseModel):
             friends = friends.values()
             console.log(f'{len(friends)} friends found! 🥰 ')
             Friend.insert_many(friends).execute()
-            Friend.delete().where(Friend.gender == 'm').execute()
             Friend.update_frequency()
         fids_updated = {f.friend_id for f in self.user.friends}
         if deleted := (fids-fids_updated):
@@ -431,7 +430,8 @@ class UserConfig(BaseModel):
             uid, wid = mblog['user']['id'], int(mblog['id'])
             if not Friend.get_or_none(
                     friend_id=uid,
-                    user_id=self.user_id):
+                    user_id=self.user_id,
+                    gender='f'):
                 continue
             config = UserConfig.get_or_none(user_id=uid)
             if config and config.weibo_fetch:

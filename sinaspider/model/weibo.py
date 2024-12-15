@@ -306,7 +306,7 @@ class Weibo(BaseModel):
             "ImageSupplierName": "Weibo",
             "ImageCreatorName": self.username,
             "BlogTitle": title.strip(),
-            "BlogURL": self.url,
+            "BlogURL": self.url_m if self.created_at.year < 2018 else self.url,
             "Location": self.location,
             "DateCreated": (self.created_at +
                             pendulum.Duration(microseconds=int(sn or 0))),
