@@ -73,7 +73,7 @@ async def user(download_dir: Path = default_path):
 async def user_add(max_user: int = 20,
                    all_user: bool = Option(False, '--all-user', '-a')):
     max_user: int | None = None if all_user else max_user
-    UserConfig.update_table()
+    await UserConfig.update_table()
     bot_art = await SinaBot.create(art_login=True)
     uids = {u.user_id for u in UserConfig.select().where(UserConfig.following)}
     uids_following = [u['id'] async for u in bot_art
@@ -126,7 +126,7 @@ async def user_loop(download_dir: Path = default_path,
                     max_user: int = 1,
                     new_user: bool = Option(False, "--new-user", "-n"),
                     following: bool = Option(False, "--following", "-f")):
-    UserConfig.update_table()
+    await UserConfig.update_table()
     logsaver = LogSaver('user_loop', download_dir)
     query = (UserConfig.select()
              .where(UserConfig.weibo_fetch)

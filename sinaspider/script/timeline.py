@@ -47,7 +47,7 @@ async def timeline(days: float = Option(...),
     config: UserConfig
     while True:
         print_command()
-        UserConfig.update_table()
+        await UserConfig.update_table()
         start_time = pendulum.now()
         console.log(f'Fetching timeline since {since}...')
 

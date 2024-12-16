@@ -543,14 +543,16 @@ class UserConfig(BaseModel):
         return self.weibo_fetch_at.add(minutes=interval)
 
     @classmethod
-    def update_table(cls):
+    async def update_table(cls):
         from photosinfo.model import Girl
 
         for config in cls:
             config: cls
             if not config.weibo_fetch:
                 assert config.weibo_fetch_at and not config.is_caching
-            config.username = config.user.username
+            if config.username != config.user.username:
+                config = await UserConfig.from_id(config.user_id)
+                assert config.username == config.user.username
             if girl := Girl.get_or_none(username=config.username):
                 config.photos_num = girl.sina_num
                 config.folder = girl.folder

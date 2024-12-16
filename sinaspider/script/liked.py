@@ -19,7 +19,7 @@ app = Typer()
 @logsaver_decorator
 @run_async
 async def liked(download_dir: Path = default_path):
-    UserConfig.update_table()
+    await UserConfig.update_table()
     while user_id := Prompt.ask('请输入用户名:smile:'):
         if user := User.get_or_none(username=user_id, redirect=None):
             user_id = user.id
