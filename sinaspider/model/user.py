@@ -132,7 +132,7 @@ class User(BaseModel):
     def __str__(self):
         keys = ['avatar_hd', 'like', 'like_me', 'mbrank', 'mbtype', 'urank',
                 'verified', 'verified_reason', 'verified_type',
-                'verified_type_ext', 'svip', '公司', '工作经历',
+                'verified_type_ext', '公司', '工作经历',
                 '性取向', '感情状况', '标签', '注册时间', '阳光信用']
         model = model_to_dict(self)
         return "\n".join(f"{k}: {v}" for k, v in model.items()

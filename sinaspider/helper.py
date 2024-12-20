@@ -132,7 +132,7 @@ class Fetcher:
                 console.log(f'{method} {url}  was cancelled.', style='error')
                 raise
             except httpx.HTTPError as e:
-                period = 3600 if '/feed/friends' in url else 60
+                period = 10 if isinstance(e, httpx.ConnectError) else 60
                 console.log(
                     f"{e!r}: sleep {period} seconds and "
                     f"retry [link={url}]{url}[/link]...", style='error')
@@ -206,7 +206,6 @@ class HttpClient:
                 await old_client.aclose()
 
     async def get(self, url):
-        recreated = False
         while True:
             client = self._client
             try:
@@ -216,14 +215,12 @@ class HttpClient:
             except Exception:
                 if not client.is_closed:
                     raise
-            assert not recreated
-            recreated = True
 
 
 fetcher = Fetcher()
 client = HttpClient()
 et = ExifToolHelper()
-semaphore = asyncio.Semaphore(40)
+semaphore = asyncio.Semaphore(60)
 
 
 def write_xmp(img: Path, tags: dict):
