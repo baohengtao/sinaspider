@@ -115,18 +115,25 @@ class UserConfig(BaseModel):
 
     async def caching_weibo_for_new(self, refetch: bool = False):
         assert self.is_caching and self.weibo_fetch
-        since = self.weibo_fetch_at if (self.visible and not refetch) else None
-        msg = f"caching {self.username}'s homepage"
-        if since:
-            msg += f" (cached at {since:%y-%m-%d})"
+        if since := self.weibo_fetch_at:
+            msg = f"fetch: {since:%y-%m-%d}"
+            if self.weibo_refetch_at:
+                msg += f" refetch: {self.weibo_refetch_at:%y-%m-%d}"
         else:
-            msg += " (New user)"
-        console.rule(msg)
+            msg = "New user"
+            refetch = True
+        if refetch:
+            msg += " refetch"
+        console.rule(f"caching {self.username}'s homepage ({msg})")
         console.log(self.user)
+        if refetch or not self.visible:
+            homepage_since = None
+        else:
+            homepage_since = since.subtract(months=1)
 
         now, i = pendulum.now(), 0
         visible_changed = []
-        async for weibo_dict in self.get_homepage(since, from_weico=refetch):
+        async for weibo_dict in self.get_homepage(homepage_since, from_weico=refetch):
             if not (has_fetched := Weibo.get_or_none(id=weibo_dict['id'])):
                 i += 1
             weibo_dict['username'] = self.username
@@ -150,6 +157,10 @@ class UserConfig(BaseModel):
                 weibo.photos_extra = None
                 weibo.save()
             elif not has_fetched:
+                if since and weibo.created_at < since:
+                    console.log(
+                        f'find weibo created before {since:%Y-%m-%d} '
+                        'but not fetched', style='notice')
                 console.log(weibo)
                 weibo.highlight_social()
                 console.log()
@@ -160,7 +171,7 @@ class UserConfig(BaseModel):
             if not Confirm.ask('visible changed to True?'):
                 raise ValueError('visible changed, abort')
             self.visible = True
-        if since is None:
+        if homepage_since is None:
             self.weibo_refetch_at = now
         self.weibo_fetch_at = now
         self.weibo_next_fetch = self.get_weibo_next_fetch()
@@ -176,11 +187,16 @@ class UserConfig(BaseModel):
         self.save()
 
     async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
-        if not self.weibo_fetch_at:
-            refetch = True
-        elif self.weibo_refetch_at:
-            threshold = 120 if self.following_main or self.following else 30
-            if self.weibo_refetch_at.diff().in_days() > threshold:
+        if self.weibo_refetch_at:
+            if not self.user.svip:
+                threshold = 20
+            elif self.following_main or self.following:
+                threshold = 60
+            else:
+                threshold = 30
+            if (diff := self.weibo_refetch_at.diff().in_days()) > threshold:
+                console.log(f'{diff} days since last refetch, refetching...',
+                            style='notice')
                 refetch = True
         if self.weibo_fetch is False:
             return
@@ -190,7 +206,9 @@ class UserConfig(BaseModel):
             await self.caching_weibo_for_new(refetch=refetch)
             return
         if self.weibo_fetch_at:
-            msg = f"weibo_fetch:{self.weibo_fetch_at:%y-%m-%d}"
+            msg = f"fetch: {self.weibo_fetch_at:%y-%m-%d}"
+            if self.weibo_refetch_at:
+                msg += f" refetch: {self.weibo_refetch_at:%y-%m-%d}"
         else:
             msg = f'weibo_fetch:{self.weibo_fetch}'
             refetch = True
