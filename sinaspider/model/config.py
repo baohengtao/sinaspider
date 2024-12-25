@@ -76,7 +76,7 @@ class UserConfig(BaseModel):
                 if model.following_main:
                     bot = await SinaBot.create(art_login=False)
                     await bot.set_remark(user_id, username)
-        user = await User.from_id(user_id, update=True)
+                user = await User.from_id(user_id, update=True)
         user_dict = model_to_dict(user)
         user_dict['user_id'] = user_dict.pop('id')
         to_insert = {k: v for k, v in user_dict.items()
@@ -117,13 +117,12 @@ class UserConfig(BaseModel):
         assert self.is_caching and self.weibo_fetch
         if since := self.weibo_fetch_at:
             msg = f"fetch: {since:%y-%m-%d}"
-            if self.weibo_refetch_at:
-                msg += f" refetch: {self.weibo_refetch_at:%y-%m-%d}"
         else:
             msg = "New user"
             refetch = True
         if refetch:
-            msg += " refetch"
+            refetch_at = self.weibo_refetch_at or pendulum.from_timestamp(0)
+            msg += f" refetch: {refetch_at:%y-%m-%d}"
         console.rule(f"caching {self.username}'s homepage ({msg})")
         console.log(self.user)
         if refetch or not self.visible:
@@ -189,11 +188,14 @@ class UserConfig(BaseModel):
     async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
         if self.weibo_refetch_at:
             if not self.user.svip:
-                threshold = 20
+                threshold = min(20, self.saved_statuses_count//10)
+            elif self.is_friend:
+                threshold = 180
             elif self.following_main or self.following:
                 threshold = 60
             else:
                 threshold = 30
+            threshold = max(threshold, self.saved_statuses_count // 50)
             if (diff := self.weibo_refetch_at.diff().in_days()) > threshold:
                 console.log(f'{diff} days since last refetch, refetching...',
                             style='notice')
@@ -207,8 +209,6 @@ class UserConfig(BaseModel):
             return
         if self.weibo_fetch_at:
             msg = f"fetch: {self.weibo_fetch_at:%y-%m-%d}"
-            if self.weibo_refetch_at:
-                msg += f" refetch: {self.weibo_refetch_at:%y-%m-%d}"
         else:
             msg = f'weibo_fetch:{self.weibo_fetch}'
             refetch = True
@@ -217,7 +217,8 @@ class UserConfig(BaseModel):
         # else:
         #     msg += f" liked_fetch: {self.liked_fetch}"
         if refetch:
-            msg += ' refetch'
+            refetch_at = self.weibo_refetch_at or pendulum.from_timestamp(0)
+            msg += f" refetch: {refetch_at:%y-%m-%d}"
         console.rule(f"开始获取 {self.username} 的主页 ({msg})")
         console.log(self.user)
         console.log(f"Media Saving: {download_dir}")

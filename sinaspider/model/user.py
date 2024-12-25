@@ -88,7 +88,8 @@ class User(BaseModel):
             return cls.insert(user_dict).execute()
         if remark := user_dict.get('remark'):
             if model.username != remark:
-                raise ValueError('remark not equal username')
+                console.log(f'remark {remark} not equal {model.username}',
+                            style='error')
         model_dict = model_to_dict(model)
         if edu := user_dict.pop('education', []):
             for s in (model_dict['education'] or []):
