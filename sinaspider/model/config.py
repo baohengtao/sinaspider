@@ -271,7 +271,7 @@ class UserConfig(BaseModel):
             insert_at = weibo and (weibo.updated_at or weibo.added_at)
             weibo_dict['username'] = self.username
             if not weibo_dict.pop('is_pinned') and not self.visible:
-                if (weibo_dict['created_at'].diff().in_months() > 7
+                if (weibo_dict['created_at'].diff().in_months() >= 12
                         and not weibo_dict.get('videos')):
                     if not refetch:
                         console.log(weibo_dict)
