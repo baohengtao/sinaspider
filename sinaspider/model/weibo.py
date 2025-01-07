@@ -558,7 +558,14 @@ class WeiboCache(BaseModel):
             assert cache.user_id == user_id
             if cache.edit_count:
                 assert cache.hist_mblogs
-            assert edit_count >= cache.edit_count
+            if edit_count < cache.edit_count:
+                assert 'edit_count' not in mblog
+                assert mblog.get('edit_at')
+                edit_count = cache.edit_count
+                mblog['edit_count'] = cache.edit_count
+                console.log('edit_count key missing in mblog, '
+                            f'reset to {edit_count}',
+                            style='error')
             if cache.edit_count == edit_count:
                 if (await cache.parse()).get('videos'):
                     cache.page_weico = None
