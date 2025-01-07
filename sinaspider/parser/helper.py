@@ -117,8 +117,10 @@ def get_location_url_from_mblog(mblog):
     url_struct = mblog.get('url_struct', [])
     pos = [u for u in url_struct if u.get('object_type') == 'place']
     if not pos:
-        return None
-    assert len(pos) == 1
+        return
+    if len(pos) != 1:
+        console.log('multi location url found, ignore', style='error')
+        return
     pos = pos[0]
     page_id = pos['page_id']
     if page_id.startswith('100101'):
@@ -192,8 +194,15 @@ def get_location_from_mblog(mblog, from_hist=True):
     # merge annotations to tag_struct or geo
     if tag_struct:
         if annotations:
-            assert tag_struct['location_id'] == annotations['location_id']
-            tag_struct = annotations | tag_struct
+            if tag_struct['location_id'] == annotations['location_id']:
+                tag_struct = annotations | tag_struct
+            else:
+                console.log(
+                    f'location_id not same in tag_struct {tag_struct} '
+                    f'and annotaitons {annotations} ignore tag_struct',
+                    style='error')
+                tag_struct = annotations
+
     elif geo and annotations:
         geo |= annotations
     else:
