@@ -137,7 +137,7 @@ class UserConfig(BaseModel):
                 i += 1
             weibo_dict['username'] = self.username
             if not weibo_dict.pop('is_pinned') and not self.visible:
-                if (weibo_dict['created_at'].diff().in_months() > 12
+                if (weibo_dict['created_at'].diff().in_months() > 36
                         and not weibo_dict.get('videos')):
                     if not refetch:
                         console.log(weibo_dict)
@@ -186,7 +186,7 @@ class UserConfig(BaseModel):
         self.save()
 
     async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
-        if self.weibo_refetch_at:
+        if self.weibo_refetch_at and not refetch:
             if not self.user.svip:
                 threshold = min(20, self.saved_statuses_count//10)
             elif self.is_friend:
@@ -195,7 +195,7 @@ class UserConfig(BaseModel):
                 threshold = 60
             else:
                 threshold = 30
-            threshold = max(threshold, self.saved_statuses_count // 50)
+            threshold = max(10, threshold, self.saved_statuses_count // 50)
             if (diff := self.weibo_refetch_at.diff().in_days()) > threshold:
                 console.log(f'{diff} days since last refetch, refetching...',
                             style='notice')

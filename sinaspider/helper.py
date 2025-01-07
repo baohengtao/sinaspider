@@ -109,7 +109,7 @@ class Fetcher:
         screen_name = await self.login(art_login=on)
         console.log(
             f'fetcher: current logined as {screen_name} (is_art:{on})',
-            style='green on dark_green')
+            style='notice')
 
     async def request(self, method, url: str,
                       art_login: bool | None = None,
