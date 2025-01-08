@@ -186,7 +186,9 @@ class UserConfig(BaseModel):
         self.save()
 
     async def fetch_weibo(self, download_dir: Path, refetch: bool = False):
-        if self.weibo_refetch_at and not refetch:
+        if self.weibo_fetch is False:
+            return
+        if self.weibo_fetch_at and not refetch:
             if not self.user.svip:
                 threshold = min(20, self.saved_statuses_count//10)
             elif self.is_friend:
@@ -200,14 +202,13 @@ class UserConfig(BaseModel):
                 console.log(f'{diff} days since last refetch, refetching...',
                             style='notice')
                 refetch = True
-        if self.weibo_fetch is False:
-            return
         await fetcher.toggle_art(self.following or not self.following_main)
         await self.fetch_friends()
         if self.is_caching:
             await self.caching_weibo_for_new(refetch=refetch)
             return
         if self.weibo_fetch_at:
+            assert self.weibo_refetch_at
             msg = f"fetch: {self.weibo_fetch_at:%y-%m-%d}"
         else:
             msg = f'weibo_fetch:{self.weibo_fetch}'
@@ -260,10 +261,9 @@ class UserConfig(BaseModel):
         weibo_ids = []
         if refetch or not self.visible:
             hompepage_since = None
-        elif self.weibo_refetch_at:
-            hompepage_since = since.subtract(months=1)
         else:
-            hompepage_since = since.subtract(months=6)
+            assert self.weibo_refetch_at
+            hompepage_since = since.subtract(months=1)
         saved_cnt = 0
         visible_changed = []
         async for weibo_dict in self.get_homepage(hompepage_since, refetch):
@@ -559,6 +559,8 @@ class UserConfig(BaseModel):
         interval = self.get_post_cycle()
         if not self.is_friend and not self.following:
             interval = min(interval, 2*24*60)
+        if not self.visible:
+            interval = min(interval, 10)
         return self.weibo_fetch_at.add(minutes=interval)
 
     @classmethod
