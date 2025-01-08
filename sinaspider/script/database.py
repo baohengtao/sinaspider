@@ -1,5 +1,6 @@
 import asyncio
 import itertools
+import json
 from pathlib import Path
 
 from rich.prompt import Confirm, Prompt
@@ -67,6 +68,19 @@ async def _remark_main():
         if Confirm.ask(f'set remark to {user.username}', default=False):
             await bot.set_remark(user.id, user.username)
         console.log()
+
+
+@app.command(help="fetch weibo by weibo_id")
+@logsaver_decorator
+@run_async
+async def from_json(filepath: Path):
+
+    async def get_imgs():
+        for img in json.loads(filepath.read_text()):
+            for x in img:
+                x['filepath'] = Path(x['filepath'])
+            yield img
+    await download_files(get_imgs())
 
 
 @app.command(help="fetch weibo by weibo_id")
