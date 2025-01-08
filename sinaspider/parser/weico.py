@@ -115,16 +115,21 @@ def _get_video_url(page_info) -> str | None:
                 'mp4_720p_mp4', 'mp4_720p_url',
                 'mp4_hd_mp4', 'mp4_hd_url',
                 'mp4_sd_mp4', 'mp4_sd_url',
-                'mp4_ld_mp4', 'mp4_ld_url', 'h5_url']
+                'mp4_ld_mp4', 'mp4_ld_url']
         for key in keys:
             if video_url := media_info.get(key):
                 break
-        if not (fmt := media_info.pop('format')):
-            assert not video_url
+        fmt = media_info.pop('format')
+
+        if not video_url:
+            if h5 := media_info.get('h5_url'):
+                console.log(f'ignore video url {h5}', style='error')
+            else:
+                assert not fmt
             console.log('no video found', style='error')
             return
         else:
-            assert video_url and fmt in ['mp4', 'm3u8']
+            assert fmt in ['mp4', 'm3u8']
 
     elif object_type == 'story':
         slide = page_info['slide_cover']
