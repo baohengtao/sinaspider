@@ -137,6 +137,9 @@ def _get_video_url(page_info) -> str | None:
             return
         slide = slide['slide_videos'][0]
         video_url = slide['url']
+    elif object_type == 'video_collection':
+        console.log('discard video collection', style='error')
+        return
     if video_url:
         ends = ('微博视频', '秒拍视频', '微博故事', '美拍')
         if not (title := page_info['page_title']).endswith(ends):

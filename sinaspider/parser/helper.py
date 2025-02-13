@@ -286,7 +286,7 @@ def merge_hist_location(weibo: dict) -> dict:
         return weibo
 
     # compare region
-    if (x := weibo.get('region_name')) and x != regions[-1]:
+    if (x := weibo.get('region_name')) and regions[-1] not in {'海外', x}:
         console.log(
             '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>',
             style='warning')
@@ -308,8 +308,9 @@ def merge_hist_location(weibo: dict) -> dict:
             assert 'weico' in mblog_from
             x = lx.get('location', '').split('·', maxsplit=1)[-1]
             assert weibo['location_title'] in [lx['location_title'], x]
-
-    weibo['region_name'] = weibo.pop('selected_region')
+    if not weibo['region_name'] or weibo.get('selected_region') != '海外':
+        weibo['region_name'] = weibo.pop('selected_region')
+    weibo.pop('selected_region', None)
     if location := weibo.pop('selected_location'):
         weibo |= location
         weibo.pop('location_title', None)
