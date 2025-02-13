@@ -295,6 +295,11 @@ class Page:
                 weibo_info['source'], 'lxml').text.strip()
             if weibo_info['source'] in ['生日动态', '会员特权专用']:
                 continue
+            if weibo_info['mblog_vip_type'] == 1:
+                console.log('find vip weibo, skip...', style='error')
+                console.log(
+                    f'https://m.weibo.cn/detail/{weibo_info["id"]}', style='warning')
+                continue
             if weibo_info['user']['id'] != self.id:
                 assert (
                     (weibo_info.get('ori_uid') == self.id)

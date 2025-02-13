@@ -10,6 +10,7 @@ from playhouse.postgres_ext import (
     IntegerField, TextField
 )
 from playhouse.shortcuts import model_to_dict
+from rich.prompt import Confirm
 
 from sinaspider import console
 from sinaspider.parser import UserParser
@@ -90,6 +91,9 @@ class User(BaseModel):
             if model.username != remark:
                 console.log(f'remark {remark} not equal {model.username}',
                             style='error')
+                if Confirm.ask(f"change {model.username}'s name to {remark}?"):
+                    model.username = remark
+                    model.save()
         model_dict = model_to_dict(model)
         if edu := user_dict.pop('education', []):
             for s in (model_dict['education'] or []):

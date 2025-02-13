@@ -110,8 +110,11 @@ class Weibo(BaseModel):
         if model.location is None:
             if 'location' in weibo_dict:
                 assert 'web' in model.mblog_from or locations[0] is None
+        elif lid := weibo_dict.get('location_id'):
+            assert model.location_id == lid
         else:
-            assert model.location_id == weibo_dict['location_id']
+            console.log('location in model but not found in dict',
+                        style='error')
 
         weibo_dict['nickname'] = model.nickname
         if model.region_name != weibo_dict.get('region_name'):
