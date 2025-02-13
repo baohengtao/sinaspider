@@ -198,6 +198,7 @@ class SinaBot:
 class Page:
     def __init__(self, user_id: int) -> None:
         self.id = int(user_id)
+        self.total_pages = None
 
     async def homepage_web(self) -> AsyncIterator[dict]:
         """
@@ -256,6 +257,7 @@ class Page:
             created_at = None
             async for weibo_info in self._get_single_page_weico(page):
                 if weibo_info is None:
+                    self.total_pages = page
                     return
                 created_at = pendulum.from_format(
                     weibo_info['created_at'], 'ddd MMM DD HH:mm:ss ZZ YYYY')

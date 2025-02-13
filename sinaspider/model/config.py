@@ -50,6 +50,7 @@ class UserConfig(BaseModel):
     statuses_count = IntegerField()
     saved_statuses_count = IntegerField(default=0)
     saved_medias_count = IntegerField(default=0)
+    total_pages = IntegerField(default=0)
 
     class Meta:
         table_name = "userconfig"
@@ -179,6 +180,8 @@ class UserConfig(BaseModel):
         self.post_at = weibos[0].created_at if weibos else None
         self.saved_statuses_count = len(weibos)
         self.saved_medias_count = sum(w.medias_num for w in weibos)
+        if refetch:
+            self.total_pages = self.page.total_pages
         console.log(f'{i} weibos cached for {self.username}')
         console.log(
             f'{self.username} have {self.saved_statuses_count} weibos '
@@ -190,14 +193,14 @@ class UserConfig(BaseModel):
             return
         if self.weibo_fetch_at and not refetch:
             if not self.user.svip:
-                threshold = min(20, self.saved_statuses_count//10)
+                threshold = max(10, min(20, self.total_pages))
             elif self.is_friend:
                 threshold = 180
             elif self.following_main or self.following:
                 threshold = 60
             else:
                 threshold = 30
-            threshold = max(10, threshold, self.saved_statuses_count // 50)
+            threshold = max(threshold, self.total_pages / 5)
             if (diff := self.weibo_refetch_at.diff().in_days()) > threshold:
                 console.log(f'{diff} days since last refetch, refetching...',
                             style='notice')
@@ -237,6 +240,7 @@ class UserConfig(BaseModel):
         self.saved_medias_count = sum(w.medias_num for w in weibos)
         if refetch:
             self.weibo_refetch_at = now
+            self.total_pages = self.page.total_pages
         self.save()
 
     async def _save_weibo(
