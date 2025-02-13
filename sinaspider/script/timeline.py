@@ -33,7 +33,6 @@ async def timeline(days: float = Option(...),
     query = (UserConfig.select()
              .where(UserConfig.weibo_fetch)
              .where(UserConfig.weibo_fetch_at.is_null(False))
-             .where(UserConfig.weibo_next_fetch < pendulum.now())
              .where(~UserConfig.blocked)
              .order_by(UserConfig.weibo_fetch_at)
              )
@@ -58,10 +57,12 @@ async def timeline(days: float = Option(...),
         since = start_time
 
         if start_time.diff().in_minutes() < WORKING_TIME:
-            console.log('Looping user', style='notice')
-            for config in query.where(UserConfig.following)[:2]:
+            query_t = query.where(UserConfig.weibo_next_fetch < pendulum.now())
+            console.log(
+                f'Looping user ({query_t.count()} users found)', style='notice')
+            for config in query_t.where(UserConfig.following)[:5]:
                 await config.fetch_weibo(download_dir)
-            for config in query.where(~UserConfig.following)[:1]:
+            for config in query_t.where(~UserConfig.following)[:1]:
                 await config.fetch_weibo(download_dir)
 
             for config in (UserConfig.select()
@@ -101,7 +102,8 @@ async def timeline(days: float = Option(...),
             style='info')
         while pendulum.now() < next_start_time:
             # sleeping for  600 seconds while listing for enter key
-            if select.select([sys.stdin], [], [], 600)[0]:
+            sleep_time = min(600, 1+next_start_time.diff().in_seconds())
+            if select.select([sys.stdin], [], [], sleep_time)[0]:
                 match (t := input().lower()):
                     case "s":
                         console.log(
