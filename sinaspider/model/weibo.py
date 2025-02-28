@@ -677,7 +677,7 @@ async def get_hist_mblogs(weibo_id: int | str, edit_count: int) -> list[dict]:
         card = card[0]
         if card['card_type'] != 9:
             continue
-        mblogs.append(card['mblog'])
+        mblogs.append(preprocess_mblog(card['mblog']))
     return dict(mblogs=mblogs, all_cards=all_cards)
 
 
