@@ -5,6 +5,7 @@ import pendulum
 from bs4 import BeautifulSoup
 
 from sinaspider import console
+from sinaspider.exceptions import HistError
 from sinaspider.helper import encode_wb_id
 
 from .helper import (
@@ -50,7 +51,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
     source = BeautifulSoup(
         info.pop('source'), 'lxml').text.strip()
     assert source != '生日动态'
-    pics, videos = get_medias(info)
+    pics, videos, pic_ids_no_url = get_medias(info)
     if video_url := _get_video_url(info.pop('page_info', None)):
         assert not videos
         videos = [video_url]
@@ -66,6 +67,7 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
         region_name=region_name,
         photos=pics,
         videos=videos,
+        pic_ids_no_url=pic_ids_no_url,
         url=f'https://weibo.com/{user_id}/{bid}',
         url_m=f'https://m.weibo.cn/detail/{bid}',
         source=source,
@@ -91,6 +93,8 @@ def parse_weibo_from_weico(mblog: dict, hist_mblogs=None) -> dict:
 
     if hist_mblogs:
         weibo = WeiboHist(weibo, hist_mblogs).parse()
+    elif pic_ids_no_url:
+        raise HistError(weibo)
 
     for key in ['reposts_count', 'comments_count', 'attitudes_count']:
         if (v := info.pop(key)) == '100万+':
@@ -158,12 +162,13 @@ def get_medias(info):
     info = deepcopy(info)
     assert ('mix_media_info' in info) == ('mix_media_ids' in info)
     if 'mix_media_info' not in info:
-        return get_photos_info(info), None
+        return get_photos_info(info), None, None
     assert 'pic_info' not in info
     media_info = info['mix_media_info']['items']
     vids = [m['data'] for m in media_info if m['type'] == 'video']
     pics = [m['data'] for m in media_info if m['type'] != 'video']
-    assert [p['pic_id'] for p in pics] == info['pic_ids']
+    assert [p['pic_id'] for p in pics] == info['pic_ids'][:len(pics)]
+    pic_ids_no_url = info['pic_ids'][len(pics):]
     photos = [[p['largest']['url'], p.get('video', '')] for p in pics]
     videos = [_get_video_url(v) for v in vids]
     for p in photos:
@@ -175,4 +180,4 @@ def get_medias(info):
             p[1] = p[1].replace("livephoto.us.sinaimg.cn", "us.sinaimg.cn")
     photos = [" ".join(p).strip() for p in photos]
 
-    return photos, videos
+    return photos, videos, (info['pic_ids'] if pic_ids_no_url else None)

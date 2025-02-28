@@ -40,6 +40,14 @@ class WeiboHist:
 
     def parse_photos_info(self) -> dict:
         final_photos = self.weibo_dict.pop('photos', [])
+        if pic_ids := self.weibo_dict.pop('pic_ids_no_url', None):
+            assert pic_ids == self.hist_mblogs[-1]['pic_ids']
+            truth = get_photos_info(self.hist_mblogs[-1])
+            assert final_photos == truth[:len(final_photos)]
+            console.log(
+                f'find photos not shown {self.weibo_dict["url"]}: '
+                f'{truth[len(final_photos):]}',
+                style='error')
         photos, ori_num = get_photos_info_from_hist(self.hist_mblogs)
 
         if not set(final_photos).issubset(set(photos)):
