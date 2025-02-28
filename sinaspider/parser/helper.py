@@ -4,7 +4,7 @@ from copy import deepcopy
 import pendulum
 
 from sinaspider import console
-from sinaspider.exceptions import HistLocationError
+from sinaspider.exceptions import HistError
 from sinaspider.helper import round_loc
 
 
@@ -35,7 +35,7 @@ class WeiboHist:
         try:
             self.weibo_dict = merge_hist_location(self.weibo_dict)
         except (AssertionError, KeyError):
-            raise HistLocationError(self.weibo_dict)
+            raise HistError(self.weibo_dict)
         return self.weibo_dict
 
     def parse_photos_info(self) -> dict:

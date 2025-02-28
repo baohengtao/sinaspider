@@ -564,7 +564,7 @@ class UserConfig(BaseModel):
         if not self.is_friend and not self.following:
             interval = min(interval, 2*24*60)
         if not self.visible:
-            interval = min(interval, 10)
+            interval = min(interval, 10*24*60)
         return self.weibo_fetch_at.add(minutes=interval)
 
     @classmethod
